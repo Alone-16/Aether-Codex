@@ -3863,42 +3863,40 @@ async function sendAIMessage(userMsg) {
   const key = getAIKey();
   if (!key) { showAIKeyPrompt(); return; }
 
-  AI_HISTORY.push({ role: 'user', content: userMsg });
+  AI_HISTORY.push({ role: 'user', parts: [{ text: userMsg }] });
   renderAIMessages();
   setAITyping(true);
 
   try {
-    // Build Gemini-format history (exclude system messages)
-    const contents = AI_HISTORY.map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
-    }));
+    // Prepend system context to first message (same pattern as working test)
+    const contents = AI_HISTORY.map((m, i) => {
+      if (i === 0 && m.role === 'user') {
+        return { role: 'user', parts: [{ text: buildAIContext() + '\n\nUser: ' + m.parts[0].text }] };
+      }
+      return { role: m.role, parts: m.parts };
+    });
 
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: buildAIContext() }] },
-          contents,
-          generationConfig: { maxOutputTokens: 1000, temperature: 0.7 }
-        })
+        body: JSON.stringify({ contents })
       }
     );
 
+    const data = await res.json();
+
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || `API error ${res.status}`);
+      throw new Error(data.error?.message || `API error ${res.status}`);
     }
 
-    const data = await res.json();
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
 
     // Check for action
     const actionMatch = reply.match(/<ACTION>([\s\S]*?)<\/ACTION>/);
 
-    AI_HISTORY.push({ role: 'assistant', content: reply });
+    AI_HISTORY.push({ role: 'model', parts: [{ text: reply }] });
     setAITyping(false);
     renderAIMessages();
 
@@ -3911,9 +3909,9 @@ async function sendAIMessage(userMsg) {
     }
   } catch(e) {
     setAITyping(false);
-    AI_HISTORY.push({ role: 'assistant', content: `Sorry, something went wrong: ${e.message}` });
+    AI_HISTORY.push({ role: 'model', parts: [{ text: `Sorry, something went wrong: ${e.message}` }] });
     renderAIMessages();
-    if (e.message.includes('400') || e.message.includes('API_KEY')) {
+    if (e.message.includes('API_KEY') || e.message.includes('400')) {
       toast('Invalid API key — check Settings → AI Assistant', 'var(--cr)');
     }
   }
@@ -4055,10 +4053,10 @@ function renderAIMessages() {
     return;
   }
   msgs.innerHTML = AI_HISTORY
-    .filter(m => m.role !== 'system')
     .map(m => {
       const isUser = m.role === 'user';
-      const clean = m.content.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim();
+      const rawText = m.parts?.[0]?.text || m.content || '';
+      const clean = rawText.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').replace(buildAIContext() + '\n\nUser: ', '').trim();
       return `<div style="display:flex;justify-content:${isUser?'flex-end':'flex-start'};padding:4px 12px">
         <div style="max-width:85%;padding:9px 13px;border-radius:${isUser?'12px 12px 3px 12px':'12px 12px 12px 3px'};background:${isUser?'var(--ac)':'var(--surf2)'};color:${isUser?'#000':'var(--tx)'};font-size:13px;line-height:1.5;border:${isUser?'none':'1px solid var(--brd)'}">
           ${clean.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')}
@@ -4069,7 +4067,7 @@ function renderAIMessages() {
 }
 
 function appendAIMessage(role, content) {
-  AI_HISTORY.push({ role, content });
+  AI_HISTORY.push({ role: role === 'assistant' ? 'model' : role, parts: [{ text: content }] });
   renderAIMessages();
 }
 
