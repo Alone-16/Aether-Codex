@@ -1747,7 +1747,7 @@ function renderSettingsAI(el) {
         </div>
         ${hasKey?`<button onclick="clearAIKey()" style="background:rgba(251,113,133,.08);color:#fb7185;border:1px solid rgba(251,113,133,.2);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;align-self:flex-start">Remove Key</button>`:''}
         <div style="font-size:12px;color:var(--mu);line-height:1.6">
-          Get a free API key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--ac)">console.anthropic.com</a> → API Keys → Create Key.<br>
+          Get a free API key at <a href="https://aistudio.google.com" target="_blank" style="color:var(--ac)">aistudio.google.com</a> → Get API Key → Create API key.<br>
           You'll need to paste it once per device.
         </div>
       </div>
@@ -1756,7 +1756,7 @@ function renderSettingsAI(el) {
 
 function saveAIKeySetting() {
   const val = document.getElementById('ai-key-setting')?.value?.trim();
-  if (!val || !val.startsWith('sk-')) { toast('Invalid key — must start with sk-', 'var(--cr)'); return; }
+  if (!val) { toast('Please enter an API key', 'var(--cr)'); return; }
   setAIKey(val); toast('✓ API key saved', 'var(--cd)');
   renderSettingsAI(document.getElementById('settings-body'));
 }
@@ -3868,21 +3868,24 @@ async function sendAIMessage(userMsg) {
   setAITyping(true);
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        system: buildAIContext(),
-        messages: AI_HISTORY,
-      })
-    });
+    // Build Gemini-format history (exclude system messages)
+    const contents = AI_HISTORY.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: buildAIContext() }] },
+          contents,
+          generationConfig: { maxOutputTokens: 1000, temperature: 0.7 }
+        })
+      }
+    );
 
     if (!res.ok) {
       const err = await res.json();
@@ -3890,11 +3893,10 @@ async function sendAIMessage(userMsg) {
     }
 
     const data = await res.json();
-    const reply = data.content?.[0]?.text || 'Sorry, I could not generate a response.';
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
 
     // Check for action
     const actionMatch = reply.match(/<ACTION>([\s\S]*?)<\/ACTION>/);
-    const cleanReply = reply.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim();
 
     AI_HISTORY.push({ role: 'assistant', content: reply });
     setAITyping(false);
@@ -3911,7 +3913,7 @@ async function sendAIMessage(userMsg) {
     setAITyping(false);
     AI_HISTORY.push({ role: 'assistant', content: `Sorry, something went wrong: ${e.message}` });
     renderAIMessages();
-    if (e.message.includes('401') || e.message.includes('authentication')) {
+    if (e.message.includes('400') || e.message.includes('API_KEY')) {
       toast('Invalid API key — check Settings → AI Assistant', 'var(--cr)');
     }
   }
@@ -4014,11 +4016,11 @@ function toggleAI() {
 }
 
 function showAIKeyPrompt() {
-  appendAIMessage('assistant', `👋 Hi! To use me, you need to paste your **Claude API key**.
+  appendAIMessage('assistant', `👋 Hi! To use me, paste your **Gemini API key**.
 
-Get one free at [console.anthropic.com](https://console.anthropic.com) → API Keys → Create Key.
+Get one free at [aistudio.google.com](https://aistudio.google.com) → Get API Key → Create API key in new project.
 
-Then go to **Settings → AI Assistant** to paste it, or type it below:`);
+Go to **Settings → AI Assistant** to paste it, or type it below:`);
   // Show key input inline
   const msgs = document.getElementById('ai-messages');
   if (!msgs) return;
@@ -4034,7 +4036,7 @@ Then go to **Settings → AI Assistant** to paste it, or type it below:`);
 
 function saveAIKeyFromInput() {
   const val = document.getElementById('ai-key-inp')?.value?.trim();
-  if (!val || !val.startsWith('sk-')) { toast('Invalid key — must start with sk-', 'var(--cr)'); return; }
+  if (!val) { toast('Please enter an API key', 'var(--cr)'); return; }
   setAIKey(val);
   AI_HISTORY = [];
   renderAIMessages();
