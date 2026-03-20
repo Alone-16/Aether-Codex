@@ -18,7 +18,17 @@
 /* ═══ RESET ═══ */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
-body{font-family:var(--fb);background:var(--bg);color:var(--tx);font-size:14px;-webkit-font-smoothing:antialiased;transition:background .35s,color .35s}
+:root{--base-font:14px}
+body{font-family:var(--fb);background:var(--bg);color:var(--tx);font-size:var(--base-font);-webkit-font-smoothing:antialiased;transition:background .35s,color .35s}
+
+/* ── LIGHT THEME OVERRIDE ── */
+
+/* ── DENSITY ── */
+[data-density="compact"] .row{min-height:36px}
+[data-density="compact"] .row-info{padding:6px 8px 6px 10px}
+[data-density="compact"] .row-title{font-size:13px}
+[data-density="compact"] .dc{padding:10px 12px}
+[data-density="compact"] .ni{width:40px;height:40px}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--brd2);border-radius:2px}
 button{cursor:pointer;font-family:inherit;border:none;background:none}
 input,select,textarea{font-family:inherit;color:var(--tx)}
@@ -34,7 +44,7 @@ input,select,textarea{font-family:inherit;color:var(--tx)}
 .ni:hover{background:var(--surf2);color:var(--tx)}
 .ni.active{background:rgba(var(--ac-rgb),.12);color:var(--ac);box-shadow:inset 0 0 0 1px rgba(var(--ac-rgb),.25)}
 .ni .ni-ico{font-size:18px;line-height:1}
-.ni .ni-lbl{font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.ni .ni-lbl{font-size:7px;font-weight:600;text-transform:uppercase;letter-spacing:.2px;white-space:nowrap;text-align:center;line-height:1}
 .ni.active::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:24px;background:var(--ac);border-radius:0 2px 2px 0;box-shadow:var(--glow)}
 .ni[data-tip]::after{content:attr(data-tip);position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);background:var(--surf3);color:var(--tx);padding:5px 10px;border-radius:5px;font-size:12px;font-weight:600;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;border:1px solid var(--brd2);z-index:999;font-family:var(--fb)}
 .ni:hover[data-tip]::after{opacity:1}
@@ -331,7 +341,7 @@ textarea.fin{resize:vertical;min-height:60px}
     <div class="ni" data-r="music" data-tip="Music" onclick="nav('music')"><span class="ni-ico">♪</span><span class="ni-lbl">Music</span></div>
     <div class="sb-bot">
       <div class="sb-sep"></div>
-      <div class="ni" data-r="settings" data-tip="Settings" onclick="nav('settings')"><span class="ni-ico">⚙</span><span class="ni-lbl">Set</span></div>
+      <div class="ni" data-r="settings" data-tip="Settings" onclick="nav('settings')"><span class="ni-ico">⚙</span><span class="ni-lbl">Settings</span></div>
     </div>
   </nav>
 
@@ -350,7 +360,7 @@ textarea.fin{resize:vertical;min-height:60px}
         <button class="nb-btn" onclick="exportData()">⬇ <span>Export</span></button>
         <button class="nb-btn" onclick="importFile()">⬆ <span>Import</span></button>
         <button class="nb-btn ac" id="add-btn" onclick="openAdd()">+ <span>Add</span></button>
-        <button class="nb-ico" onclick="toggleTheme()" id="theme-btn">☀</button>
+        <button class="nb-ico" onclick="toggleAI()" id="ai-btn" title="AI Assistant" style="font-size:16px">✦</button>
       </div>
     </nav>
     <div id="filterbar" style="display:none">
@@ -430,8 +440,7 @@ function pcol(s){return SC[s]||'var(--ac)'}
 // ═══════════════════════════════
 //  THEME
 // ═══════════════════════════════
-function applyTheme(t){document.documentElement.setAttribute('data-theme-mode',t);ls.setStr(K.THEME,t);document.getElementById('theme-btn').textContent=t==='dark'?'☀':'🌙'}
-function toggleTheme(){applyTheme(ls.str(K.THEME)==='dark'?'light':'dark')}
+// Theme toggle removed - always dark mode
 
 // ═══════════════════════════════
 //  GENRE THEME (Media)
@@ -1390,14 +1399,437 @@ function renderSectionStub(id,c){
     </div>`;
 }
 
-function renderSettings(c){
-  c.innerHTML=`<div style="font-family:var(--fd);font-size:18px;font-weight:700;margin-bottom:16px">⚙ Settings</div>
-    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);padding:18px;max-width:460px;font-size:13px;color:var(--tx2)">
-      Full settings page coming in Phase 8.<br><br>
-      <strong style="color:var(--tx)">Connected:</strong> Media section with ${DATA.length} entries<br>
-      <strong style="color:var(--tx)">Drive sync:</strong> Coming in final integration<br>
-      <strong style="color:var(--tx)">Version:</strong> ${DATA_VERSION}
+// ═══════════════════════════════════════════════════════
+//  SETTINGS STATE
+// ═══════════════════════════════════════════════════════
+const SETTINGS_KEY = 'ac_v4_settings';
+
+function loadSettings() {
+  return ls.get(SETTINGS_KEY) || {
+    sectionOrder: ['home','media','games','books','music'],
+    sectionEnabled: { home:true, media:true, games:true, books:true, music:true },
+    density: 'comfortable',
+    fontSize: 'medium',
+    autoBackupDays: 10,
+    idleTimeout: 5,
+    theme: 'dark',
+  };
+}
+function saveSettings(s) { ls.set(SETTINGS_KEY, s); }
+
+let SETTINGS = loadSettings();
+let SETTINGS_DRAG_IDX = null;
+let SETTINGS_TAB = 'sections';
+
+// Apply settings on load
+function applySettings() {
+  const s = SETTINGS;
+  // Font size via CSS variable
+  const sizeMap = { small:'12px', medium:'14px', large:'16px' };
+  document.documentElement.style.setProperty('--base-font', sizeMap[s.fontSize||'medium']);
+  // Density via data attribute
+  document.documentElement.setAttribute('data-density', s.density||'comfortable');
+  // Rebuild sidebar order
+  rebuildSidebar();
+}
+
+function rebuildSidebar() {
+  const order = SETTINGS.sectionOrder || ['home','media','games','books','music'];
+  const enabled = SETTINGS.sectionEnabled || {};
+  const sidebarMeta = {
+    home:  { icon:'⌂', label:'Home' },
+    media: { icon:'◉', label:'Media' },
+    games: { icon:'◈', label:'Games' },
+    books: { icon:'◎', label:'Books' },
+    music: { icon:'♪', label:'Music' },
+  };
+  // Desktop sidebar
+  const sb = document.getElementById('sidebar');
+  if (!sb) return;
+  // Keep logo and sep, rebuild nav items
+  const logo = sb.querySelector('.sb-logo');
+  const sep  = sb.querySelector('.sb-sep');
+  const bot  = sb.querySelector('.sb-bot');
+  // Remove existing nav items
+  sb.querySelectorAll('.ni:not(.sb-bot .ni)').forEach(el => el.remove());
+  // Re-insert in order
+  const frag = document.createDocumentFragment();
+  order.filter(id => enabled[id] !== false).forEach(id => {
+    const m = sidebarMeta[id]; if (!m) return;
+    const el = document.createElement('div');
+    el.className = 'ni' + (CURRENT === id ? ' active' : '');
+    el.dataset.r = id;
+    el.dataset.tip = m.label;
+    el.innerHTML = `<span class="ni-ico">${m.icon}</span><span class="ni-lbl">${m.label}</span>`;
+    el.onclick = () => nav(id);
+    if (CURRENT === id) {
+      el.classList.add('active');
+      el.style.setProperty('--ac-active', 'var(--ac)');
+    }
+    frag.appendChild(el);
+  });
+  // Insert before .sb-bot
+  sb.insertBefore(frag, bot);
+  // Also rebuild mobile sidebar
+  const mobSb = document.getElementById('mob-sb');
+  if (mobSb) {
+    const mobLogo = mobSb.querySelector('.mob-logo');
+    const mobSep  = mobSb.querySelector('.mob-sep');
+    mobSb.querySelectorAll('.mob-ni').forEach(el => el.remove());
+    const mobFrag = document.createDocumentFragment();
+    order.filter(id => enabled[id] !== false).forEach(id => {
+      const m = sidebarMeta[id]; if (!m) return;
+      const el = document.createElement('div');
+      el.className = 'mob-ni' + (CURRENT === id ? ' active' : '');
+      el.dataset.r = id;
+      el.innerHTML = `<span>${m.icon}</span>${m.label}`;
+      el.onclick = () => nav(id);
+      mobFrag.appendChild(el);
+    });
+    // Insert sep then settings
+    mobSb.appendChild(mobFrag);
+    if (mobSep) mobSb.appendChild(mobSep.cloneNode());
+    const settingsEl = document.createElement('div');
+    settingsEl.className = 'mob-ni' + (CURRENT === 'settings' ? ' active' : '');
+    settingsEl.innerHTML = '<span>⚙</span>Settings';
+    settingsEl.onclick = () => nav('settings');
+    mobSb.appendChild(settingsEl);
+  }
+}
+
+// ─── SETTINGS RENDER ───
+function renderSettings(c) {
+  const tabs = ['sections','drive','storage','ai','security'];
+  const tabLabels = ['Sections','Drive','Storage','AI Assistant','Security'];
+
+  c.innerHTML = `
+    <div style="font-family:var(--fd);font-size:20px;font-weight:700;margin-bottom:20px;color:var(--tx)">⚙ Settings</div>
+    <div style="display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap">
+      ${tabs.map((t,i) => `<button class="stab${SETTINGS_TAB===t?' active':''}" onclick="setSettingsTab('${t}')">${tabLabels[i]}</button>`).join('')}
+    </div>
+    <div id="settings-body" style="max-width:560px"></div>`;
+  renderSettingsBody();
+}
+
+function setSettingsTab(t) { SETTINGS_TAB = t; renderSettingsBody(); }
+
+function renderSettingsBody() {
+  const el = document.getElementById('settings-body'); if (!el) return;
+  if      (SETTINGS_TAB === 'sections')   renderSettingsSections(el);
+  else if (SETTINGS_TAB === 'drive')      renderSettingsDrive(el);
+  else if (SETTINGS_TAB === 'storage')    renderSettingsStorage(el);
+  else if (SETTINGS_TAB === 'ai')         renderSettingsAI(el);
+  else if (SETTINGS_TAB === 'security')   renderSettingsSecurity(el);
+  // Update active tab
+  document.querySelectorAll('.stab').forEach(t => {
+    const tabs = ['sections','drive','storage','appearance','security'];
+    t.classList.toggle('active', t.textContent.toLowerCase() === (tabs.find(x => x === SETTINGS_TAB) || ''));
+  });
+}
+
+// ── SECTIONS TAB ──
+function renderSettingsSections(el) {
+  const order   = [...(SETTINGS.sectionOrder || ['home','media','games','books','music'])];
+  const enabled = SETTINGS.sectionEnabled || {};
+  const meta = {
+    home:  { icon:'⌂', color:'#34d399', desc:'Master dashboard' },
+    media: { icon:'◉', color:'#e879a0', desc:'Anime, K-Drama, Manhwa & more' },
+    games: { icon:'◈', color:'#f59e0b', desc:'PC & Mobile game tracker' },
+    books: { icon:'◎', color:'#a78bfa', desc:'Novels, Audiobooks & Manga' },
+    music: { icon:'♪', color:'#fb923c', desc:'Music library & YouTube sync' },
+  };
+
+  el.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:14px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Section Order</div>
+        <div style="font-size:12px;color:var(--mu)">Drag to reorder · toggle to show/hide · click Save to apply</div>
+      </div>
+      <div id="section-order-list" style="padding:8px">
+        ${order.map((id, i) => {
+          const m = meta[id]; if (!m) return '';
+          const isEnabled = enabled[id] !== false;
+          const isHome = id === 'home';
+          return `<div class="settings-section-row" draggable="${!isHome}" data-id="${id}" data-idx="${i}"
+            ondragstart="ssDragStart(event,${i})" ondragover="ssDragOver(event,${i})" ondrop="ssDrop(event,${i})"
+            ondragleave="this.classList.remove('ss-drag-over')"
+            style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--surf2);border:1px solid var(--brd);border-radius:7px;margin-bottom:4px;transition:all .15s;${!isHome?'cursor:grab':''}">
+            <span style="font-size:12px;color:var(--mu);cursor:grab;user-select:none">${isHome?'📌':'⠿'}</span>
+            <span style="font-size:18px">${m.icon}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--tx)">${id.charAt(0).toUpperCase()+id.slice(1)}</div>
+              <div style="font-size:11px;color:var(--mu)">${m.desc}</div>
+            </div>
+            ${!isHome ? `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--tx2)">
+              <input type="checkbox" ${isEnabled?'checked':''} onchange="toggleSection('${id}',this.checked)"
+                style="width:14px;height:14px;accent-color:var(--ac);cursor:pointer">
+              ${isEnabled?'Enabled':'Hidden'}
+            </label>` : `<span style="font-size:11px;color:var(--mu);padding:2px 8px;background:var(--surf3);border-radius:4px">Always on</span>`}
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="padding:10px 16px;border-top:1px solid var(--brd);display:flex;justify-content:flex-end">
+        <button onclick="saveSectionOrder()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">Save Order</button>
+      </div>
     </div>`;
+
+  // Add drag-over style
+  if (!document.getElementById('settings-drag-style')) {
+    const style = document.createElement('style');
+    style.id = 'settings-drag-style';
+    style.textContent = `.ss-drag-over{border-color:var(--ac)!important;background:rgba(var(--ac-rgb),.08)!important}`;
+    document.head.appendChild(style);
+  }
+}
+
+let SS_DRAG_IDX = null;
+let SS_DRAG_ORDER = null;
+
+function ssDragStart(e, i) {
+  SS_DRAG_IDX = i;
+  SS_DRAG_ORDER = [...(SETTINGS.sectionOrder || ['home','media','games','books','music'])];
+  e.currentTarget.style.opacity = '.4';
+}
+function ssDragOver(e, i) {
+  e.preventDefault();
+  if (SS_DRAG_IDX === i || SS_DRAG_IDX === null) return;
+  document.querySelectorAll('.settings-section-row').forEach(r => r.classList.remove('ss-drag-over'));
+  e.currentTarget.classList.add('ss-drag-over');
+}
+function ssDrop(e, i) {
+  e.preventDefault();
+  document.querySelectorAll('.settings-section-row').forEach(r => {
+    r.classList.remove('ss-drag-over');
+    r.style.opacity = '1';
+  });
+  if (SS_DRAG_IDX === null || SS_DRAG_IDX === i) return;
+  const order = [...(SETTINGS.sectionOrder || ['home','media','games','books','music'])];
+  // Never move home from position 0
+  if (order[SS_DRAG_IDX] === 'home' || order[i] === 'home') return;
+  const item = order.splice(SS_DRAG_IDX, 1)[0];
+  order.splice(i, 0, item);
+  SETTINGS.sectionOrder = order;
+  SS_DRAG_IDX = null;
+  renderSettingsSections(document.getElementById('settings-body'));
+}
+
+function toggleSection(id, enabled) {
+  if (!SETTINGS.sectionEnabled) SETTINGS.sectionEnabled = {};
+  SETTINGS.sectionEnabled[id] = enabled;
+  renderSettingsSections(document.getElementById('settings-body'));
+}
+
+function saveSectionOrder() {
+  saveSettings(SETTINGS);
+  rebuildSidebar();
+  toast('✓ Section order saved', 'var(--cd)');
+}
+
+// ── DRIVE TAB ──
+function renderSettingsDrive(el) {
+  const connected = _isConnected();
+  const lastSync  = ls.str(K.DSYNC) ? new Date(parseInt(ls.str(K.DSYNC))).toLocaleString() : 'Never';
+  const lastSaved = ls.str(K.SAVED) ? new Date(parseInt(ls.str(K.SAVED))).toLocaleString() : 'Never';
+
+  el.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Google Drive</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--tx)">Status</div>
+            <div style="font-size:12px;color:${connected?'#4ade80':'#fb7185'};margin-top:2px">${connected?'✓ Connected':'✗ Not connected'}</div>
+          </div>
+          <button onclick="driveAction()" style="background:${connected?'rgba(251,113,133,.1)':'rgba(var(--ac-rgb),.12)'};color:${connected?'#fb7185':'var(--ac)'};border:1px solid ${connected?'rgba(251,113,133,.25)':'rgba(var(--ac-rgb),.3)'};border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
+            ${connected?'Disconnect':'Connect'}
+          </button>
+        </div>
+        <div style="height:1px;background:var(--brd)"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+          <div><div style="color:var(--mu);margin-bottom:2px">Last Synced</div><div style="color:var(--tx2)">${lastSync}</div></div>
+          <div><div style="color:var(--mu);margin-bottom:2px">Last Changed</div><div style="color:var(--tx2)">${lastSaved}</div></div>
+        </div>
+        ${connected?`<button onclick="_pushToDrive().then(()=>toast('✓ Synced now','var(--cd)'))" style="background:rgba(var(--ac-rgb),.12);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;align-self:flex-start">↻ Sync Now</button>`:''}
+      </div>
+    </div>
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Auto Backup</div>
+        <div style="font-size:12px;color:var(--mu)">Automatically export a backup to Drive every N days</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;align-items:center;gap:10px">
+        <input type="number" id="backup-days" min="1" max="365" value="${SETTINGS.autoBackupDays||10}"
+          style="width:70px;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--tx);outline:none">
+        <span style="font-size:13px;color:var(--tx2)">days</span>
+        <button onclick="saveBackupDays()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
+      </div>
+    </div>`;
+}
+
+function saveBackupDays() {
+  const v = parseInt(document.getElementById('backup-days')?.value);
+  if (v > 0) { SETTINGS.autoBackupDays = v; saveSettings(SETTINGS); toast('✓ Saved'); }
+}
+
+// ── STORAGE TAB ──
+function renderSettingsStorage(el) {
+  const keys = [
+    { label:'Media',     key:K.DATA,      color:'#e879a0' },
+    { label:'Games',     key:GAMES_KEY,   color:'#f59e0b' },
+    { label:'Books',     key:BOOKS_KEY,   color:'#a78bfa' },
+    { label:'Music',     key:MUSIC_KEY,   color:'#fb923c' },
+    { label:'Playlists', key:MUSIC_PL_KEY,color:'#fb923c' },
+    { label:'Genres',    key:K.GENRES,    color:'#8888aa' },
+    { label:'Settings',  key:SETTINGS_KEY,color:'#8888aa' },
+  ];
+
+  let totalBytes = 0;
+  const rows = keys.map(k => {
+    const val = localStorage.getItem(k.key) || '';
+    const bytes = new Blob([val]).size;
+    totalBytes += bytes;
+    return { ...k, bytes };
+  });
+
+  const maxBytes = Math.max(...rows.map(r => r.bytes), 1);
+  const fmtBytes = b => b > 1024*1024 ? `${(b/1024/1024).toFixed(2)} MB` : b > 1024 ? `${(b/1024).toFixed(1)} KB` : `${b} B`;
+  const totalKB = (totalBytes/1024).toFixed(1);
+  const lsLimit = 5120; // ~5MB typical limit
+  const pct = Math.min(Math.round(totalBytes/1024/lsLimit*100), 100);
+
+  el.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">localStorage Usage</div>
+        <div style="font-size:12px;color:var(--mu)">${fmtBytes(totalBytes)} used of ~5 MB</div>
+      </div>
+      <div style="padding:14px 16px">
+        <div style="height:6px;background:var(--surf3);border-radius:3px;overflow:hidden;margin-bottom:14px">
+          <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--ac),var(--ac2));border-radius:3px;transition:width .4s"></div>
+        </div>
+        ${rows.map(r => `
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--brd)">
+            <div style="width:8px;height:8px;border-radius:50%;background:${r.color};flex-shrink:0"></div>
+            <span style="flex:1;font-size:13px;color:var(--tx)">${r.label}</span>
+            <div style="width:100px;height:3px;background:var(--surf3);border-radius:2px;overflow:hidden">
+              <div style="height:100%;width:${Math.round(r.bytes/maxBytes*100)}%;background:${r.color};border-radius:2px"></div>
+            </div>
+            <span style="font-size:12px;color:var(--tx2);min-width:60px;text-align:right">${fmtBytes(r.bytes)}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="exportData()" style="background:var(--surf2);color:var(--tx2);border:1px solid var(--brd);border-radius:5px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">⬇ Export Backup</button>
+      <button onclick="importFile()" style="background:var(--surf2);color:var(--tx2);border:1px solid var(--brd);border-radius:5px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">⬆ Import Backup</button>
+    </div>`;
+}
+
+// ── APPEARANCE TAB ──
+function renderSettingsAI(el) {
+  const hasKey = !!getAIKey();
+  el.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">✦ Claude API Key</div>
+        <div style="font-size:12px;color:var(--mu)">Your key is stored locally on this device only — never sent to GitHub</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:13px;color:${hasKey?'#4ade80':'var(--tx2)'}">
+          ${hasKey?'✓ API key is set on this device':'No API key set'}
+        </div>
+        <div style="display:flex;gap:8px">
+          <input type="password" id="ai-key-setting" placeholder="sk-ant-..." value="${hasKey?'••••••••••••••••':''}"
+            style="flex:1;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:8px 10px;font-size:13px;color:var(--tx);outline:none"
+            onfocus="if(this.value==='••••••••••••••••')this.value=''">
+          <button onclick="saveAIKeySetting()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">Save</button>
+        </div>
+        ${hasKey?`<button onclick="clearAIKey()" style="background:rgba(251,113,133,.08);color:#fb7185;border:1px solid rgba(251,113,133,.2);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;align-self:flex-start">Remove Key</button>`:''}
+        <div style="font-size:12px;color:var(--mu);line-height:1.6">
+          Get a free API key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--ac)">console.anthropic.com</a> → API Keys → Create Key.<br>
+          You'll need to paste it once per device.
+        </div>
+      </div>
+    </div>`;
+}
+
+function saveAIKeySetting() {
+  const val = document.getElementById('ai-key-setting')?.value?.trim();
+  if (!val || !val.startsWith('sk-')) { toast('Invalid key — must start with sk-', 'var(--cr)'); return; }
+  setAIKey(val); toast('✓ API key saved', 'var(--cd)');
+  renderSettingsAI(document.getElementById('settings-body'));
+}
+
+function clearAIKey() {
+  showConfirm('Remove your Claude API key from this device?', () => {
+    ls.del(AI_KEY_STORAGE); AI_HISTORY = [];
+    renderSettingsAI(document.getElementById('settings-body'));
+    toast('API key removed');
+  }, { title:'Remove API Key?', okLabel:'Remove', danger:false });
+}
+
+function setFontSize(v) {
+  SETTINGS.fontSize = v; saveSettings(SETTINGS);
+  document.documentElement.style.setProperty('--base-font', {small:'12px',medium:'14px',large:'16px'}[v]||'14px');
+  renderSettingsBody();
+  toast('✓ Font size updated');
+}
+
+function setDensity(v) {
+  SETTINGS.density = v; saveSettings(SETTINGS);
+  document.documentElement.setAttribute('data-density', v);
+  renderSettingsBody();
+  toast('✓ Density updated');
+}
+
+// ── SECURITY TAB ──
+function renderSettingsSecurity(el) {
+  const hasPin = !!getPin();
+  el.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Vault PIN</div>
+        <div style="font-size:12px;color:var(--mu)">Protects 18+ Games and private Link Vault links</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:13px;color:var(--tx)">${hasPin?'PIN is set':'No PIN set'}</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:2px">${hasPin?'Click to change your PIN':'Set a PIN to protect adult content'}</div>
+        </div>
+        <button onclick="showPinModal(()=>renderSettingsSecurity(document.getElementById('settings-body')),'${hasPin?'change':'setup'}')"
+          style="background:rgba(var(--ac-rgb),.12);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
+          ${hasPin?'Change PIN':'Set PIN'}
+        </button>
+      </div>
+      ${hasPin?`<div style="padding:0 16px 14px">
+        <button onclick="clearPin()" style="background:rgba(251,113,133,.08);color:#fb7185;border:1px solid rgba(251,113,133,.2);border-radius:5px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">Remove PIN</button>
+      </div>`:''}
+    </div>
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Auto-Lock Timeout</div>
+        <div style="font-size:12px;color:var(--mu)">Minutes of inactivity before 18+ content re-locks</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;align-items:center;gap:10px">
+        <input type="number" id="idle-timeout" min="1" max="60" value="${SETTINGS.idleTimeout||5}"
+          style="width:70px;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--tx);outline:none">
+        <span style="font-size:13px;color:var(--tx2)">minutes</span>
+        <button onclick="saveIdleTimeout()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
+      </div>
+    </div>`;
+}
+
+function clearPin() {
+  showConfirm('Remove your PIN? 18+ content will no longer be locked.', () => {
+    ls.del(PIN_KEY); renderSettingsSecurity(document.getElementById('settings-body'));
+    toast('PIN removed');
+  }, { title:'Remove PIN?', okLabel:'Remove', danger:false });
+}
+
+function saveIdleTimeout() {
+  const v = parseInt(document.getElementById('idle-timeout')?.value);
+  if (v > 0) { SETTINGS.idleTimeout = v; saveSettings(SETTINGS); toast('✓ Saved'); }
 }
 
 // ═══════════════════════════════
@@ -3342,6 +3774,315 @@ function renderBooksUpcoming(c) {
 
 
 
+
+// ═══════════════════════════════════════════════════════
+//  AI ASSISTANT
+// ═══════════════════════════════════════════════════════
+const AI_KEY_STORAGE = 'ac_claude_key';
+let AI_OPEN = false;
+let AI_HISTORY = []; // {role, content}
+let AI_TYPING = false;
+
+function getAIKey() { return ls.str(AI_KEY_STORAGE) || null; }
+function setAIKey(k) { ls.setStr(AI_KEY_STORAGE, k); }
+
+// ── Build context for Claude ──
+function buildAIContext() {
+  const now = new Date();
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const today = days[now.getDay()];
+  const dateStr = now.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  // Compact media summary
+  const watching = DATA.filter(e => e.status === 'watching').map(e => {
+    const as = activeSeason(e);
+    const st = entryStats(e);
+    return `${e.title} (${gbyid(e.genreId).name}, ${st.cur}/${st.tot||'?'} ep${e.airingDay!=null?`, airs ${days[e.airingDay]}`:''}${e.rating?`, rated ${e.rating}`:''})`; 
+  });
+
+  const allMedia = DATA.map(e => {
+    const st = entryStats(e);
+    const tl = (e.timeline||[]).map(t => `${t.name||t.movieTitle||''}:${t.status||''}${t.type==='season'?`(${t.epWatched||0}/${t.eps||'?'}ep)`:'(movie)'}`).join('; ');
+    return {
+      id: e.id, title: e.title, genre: gbyid(e.genreId).name,
+      status: e.status, watched: st.cur, total: st.tot||null,
+      rating: e.rating||null, notes: e.notes||null,
+      airingDay: e.airingDay!=null ? days[e.airingDay] : null,
+      airingTime: e.airingTime||null,
+      rewatchCount: e.rewatchCount||null,
+      favorite: e.favorite||false,
+      timeline: tl || null,
+    };
+  });
+
+  const stats = {
+    total: DATA.length,
+    watching: DATA.filter(e=>e.status==='watching').length,
+    completed: DATA.filter(e=>e.status==='completed').length,
+    dropped: DATA.filter(e=>e.status==='dropped').length,
+    planToWatch: DATA.filter(e=>e.status==='plan').length,
+    avgRating: (() => { const r=DATA.filter(e=>e.rating); return r.length?(r.reduce((a,e)=>a+parseFloat(e.rating),0)/r.length).toFixed(1):'N/A'; })(),
+    totalEpsWatched: DATA.reduce((a,e)=>a+entryStats(e).cur, 0),
+  };
+
+  return `You are an AI assistant for "The Aether Codex" — a personal media tracker. You are helping the user manage and explore their media data.
+
+TODAY: ${dateStr}
+
+USER STATS:
+${JSON.stringify(stats, null, 2)}
+
+ALL MEDIA ENTRIES (${allMedia.length} total):
+${JSON.stringify(allMedia, null, 2)}
+
+GAMES (${GDATA.length}):
+${JSON.stringify(GDATA.map(g=>({id:g.id,title:g.title,platform:g.platform,status:g.status,hours:g.totalHours,rating:g.rating})), null, 2)}
+
+BOOKS (${BDATA.length}):
+${JSON.stringify(BDATA.map(b=>({id:b.id,title:b.title,author:b.author,status:b.status,rating:b.rating})), null, 2)}
+
+MUSIC (${MDATA.filter(s=>!s.removedFromPlaylist).length} songs):
+${JSON.stringify(MDATA.filter(s=>!s.removedFromPlaylist).slice(0,50).map(s=>({title:s.title,artist:s.artist,album:s.album})), null, 2)}${MDATA.length>50?`\n... and ${MDATA.length-50} more songs`:''}
+
+INSTRUCTIONS:
+- Be conversational, friendly and concise. Use short responses.
+- For READ queries: answer directly from the data above.
+- For ACTION requests (add/edit/delete/update): respond with a friendly confirmation message AND include a JSON block at the end of your response like this:
+  <ACTION>{"type":"update_status","id":"entry_id","field":"status","value":"completed"}</ACTION>
+  Valid action types: update_status, update_rating, update_episodes, add_entry, delete_entry, update_notes
+  For add_entry include: {type:"add_entry", title, genreId, status, epTot(optional)}
+  For update_episodes: {type:"update_episodes", id, epCur}
+- Always confirm before destructive actions (delete).
+- If data is not found, say so clearly.
+- Keep responses under 150 words unless showing a list.
+- Never make up data that isn't in the user's list.`;
+}
+
+// ── Send message to Claude API ──
+async function sendAIMessage(userMsg) {
+  const key = getAIKey();
+  if (!key) { showAIKeyPrompt(); return; }
+
+  AI_HISTORY.push({ role: 'user', content: userMsg });
+  renderAIMessages();
+  setAITyping(true);
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: buildAIContext(),
+        messages: AI_HISTORY,
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || `API error ${res.status}`);
+    }
+
+    const data = await res.json();
+    const reply = data.content?.[0]?.text || 'Sorry, I could not generate a response.';
+
+    // Check for action
+    const actionMatch = reply.match(/<ACTION>([\s\S]*?)<\/ACTION>/);
+    const cleanReply = reply.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim();
+
+    AI_HISTORY.push({ role: 'assistant', content: reply });
+    setAITyping(false);
+    renderAIMessages();
+
+    // Handle action if present
+    if (actionMatch) {
+      try {
+        const action = JSON.parse(actionMatch[1]);
+        setTimeout(() => handleAIAction(action), 300);
+      } catch(e) { console.warn('AI action parse failed:', e); }
+    }
+  } catch(e) {
+    setAITyping(false);
+    AI_HISTORY.push({ role: 'assistant', content: `Sorry, something went wrong: ${e.message}` });
+    renderAIMessages();
+    if (e.message.includes('401') || e.message.includes('authentication')) {
+      toast('Invalid API key — check Settings → AI Assistant', 'var(--cr)');
+    }
+  }
+}
+
+// ── Handle AI actions ──
+function handleAIAction(action) {
+  switch(action.type) {
+    case 'update_status': {
+      const e = DATA.find(x => x.id === action.id || x.title.toLowerCase() === (action.title||'').toLowerCase());
+      if (!e) { appendAIMessage('assistant', "I couldn't find that entry in your list."); return; }
+      showConfirm(`Change "${e.title}" status to "${action.value}"?`, () => {
+        e.status = action.value;
+        if (action.value === 'completed' && !e.endDate) e.endDate = today();
+        e.updatedAt = Date.now();
+        saveData(DATA);
+        if (CURRENT === 'media') render();
+        appendAIMessage('assistant', `✓ Done! "${e.title}" is now ${action.value}.`);
+      }, { title: 'Confirm Change', okLabel: 'Yes, update', danger: false });
+      break;
+    }
+    case 'update_rating': {
+      const e = DATA.find(x => x.id === action.id || x.title.toLowerCase() === (action.title||'').toLowerCase());
+      if (!e) { appendAIMessage('assistant', "I couldn't find that entry."); return; }
+      showConfirm(`Set rating for "${e.title}" to ${action.value}?`, () => {
+        e.rating = String(action.value);
+        e.updatedAt = Date.now();
+        saveData(DATA);
+        if (CURRENT === 'media') render();
+        appendAIMessage('assistant', `✓ Rating for "${e.title}" set to ${action.value}/10.`);
+      }, { title: 'Confirm Rating', okLabel: 'Yes', danger: false });
+      break;
+    }
+    case 'update_episodes': {
+      const e = DATA.find(x => x.id === action.id || x.title.toLowerCase() === (action.title||'').toLowerCase());
+      if (!e) { appendAIMessage('assistant', "I couldn't find that entry."); return; }
+      showConfirm(`Update "${e.title}" to episode ${action.epCur}?`, () => {
+        if (e.timeline?.length) {
+          const as = activeSeason(e);
+          if (as) { as.epWatched = String(action.epCur); }
+        } else {
+          e.epCur = String(action.epCur);
+        }
+        e.updatedAt = Date.now();
+        saveData(DATA);
+        if (CURRENT === 'media') render();
+        appendAIMessage('assistant', `✓ "${e.title}" updated to episode ${action.epCur}.`);
+      }, { title: 'Confirm Update', okLabel: 'Yes', danger: false });
+      break;
+    }
+    case 'add_entry': {
+      showConfirm(`Add "${action.title}" to your ${action.genreId||'Anime'} list as ${action.status||'Plan to Watch'}?`, () => {
+        const g = GENRES.find(g => g.name.toLowerCase() === (action.genreId||'anime').toLowerCase()) || GENRES[0];
+        const entry = {
+          id: uid(), title: action.title, genreId: g.id,
+          status: action.status || 'plan',
+          epTot: action.epTot||null, epCur: null,
+          rating: null, notes: null, timeline: [],
+          addedAt: Date.now(), updatedAt: Date.now(),
+        };
+        DATA.unshift(entry);
+        saveData(DATA);
+        if (CURRENT === 'media') render();
+        appendAIMessage('assistant', `✓ Added "${action.title}" to your list!`);
+      }, { title: 'Confirm Add', okLabel: 'Add', danger: false });
+      break;
+    }
+    case 'delete_entry': {
+      const e = DATA.find(x => x.id === action.id || x.title.toLowerCase() === (action.title||'').toLowerCase());
+      if (!e) { appendAIMessage('assistant', "I couldn't find that entry."); return; }
+      showConfirm(`Delete "${e.title}" permanently?`, () => {
+        DATA = DATA.filter(x => x.id !== e.id);
+        saveData(DATA);
+        if (CURRENT === 'media') render();
+        appendAIMessage('assistant', `✓ "${e.title}" has been deleted.`);
+      }, { title: 'Delete Entry?', okLabel: 'Delete' });
+      break;
+    }
+    case 'update_notes': {
+      const e = DATA.find(x => x.id === action.id || x.title.toLowerCase() === (action.title||'').toLowerCase());
+      if (!e) { appendAIMessage('assistant', "I couldn't find that entry."); return; }
+      e.notes = action.value; e.updatedAt = Date.now();
+      saveData(DATA);
+      if (CURRENT === 'media') render();
+      appendAIMessage('assistant', `✓ Notes updated for "${e.title}".`);
+      break;
+    }
+  }
+}
+
+// ── UI ──
+function toggleAI() {
+  AI_OPEN = !AI_OPEN;
+  const panel = document.getElementById('ai-panel');
+  if (!panel) return;
+  panel.style.transform = AI_OPEN ? 'translateY(0)' : 'translateY(100%)';
+  panel.style.opacity = AI_OPEN ? '1' : '0';
+  if (AI_OPEN && !getAIKey()) showAIKeyPrompt();
+  else if (AI_OPEN) document.getElementById('ai-input')?.focus();
+}
+
+function showAIKeyPrompt() {
+  appendAIMessage('assistant', `👋 Hi! To use me, you need to paste your **Claude API key**.
+
+Get one free at [console.anthropic.com](https://console.anthropic.com) → API Keys → Create Key.
+
+Then go to **Settings → AI Assistant** to paste it, or type it below:`);
+  // Show key input inline
+  const msgs = document.getElementById('ai-messages');
+  if (!msgs) return;
+  const inp = document.createElement('div');
+  inp.style.cssText = 'padding:8px 12px';
+  inp.innerHTML = `<div style="display:flex;gap:6px">
+    <input id="ai-key-inp" type="password" placeholder="sk-ant-..." style="flex:1;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:8px 10px;font-size:12px;color:var(--tx);outline:none">
+    <button onclick="saveAIKeyFromInput()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
+  </div>`;
+  msgs.appendChild(inp);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function saveAIKeyFromInput() {
+  const val = document.getElementById('ai-key-inp')?.value?.trim();
+  if (!val || !val.startsWith('sk-')) { toast('Invalid key — must start with sk-', 'var(--cr)'); return; }
+  setAIKey(val);
+  AI_HISTORY = [];
+  renderAIMessages();
+  toast('✓ API key saved', 'var(--cd)');
+  appendAIMessage('assistant', "✓ Key saved! I'm ready. Ask me anything about your media collection — or tell me to make changes!");
+}
+
+function renderAIMessages() {
+  const msgs = document.getElementById('ai-messages'); if (!msgs) return;
+  if (!AI_HISTORY.length) {
+    msgs.innerHTML = `<div style="padding:20px;text-align:center;color:var(--mu);font-size:13px">
+      <div style="font-size:28px;margin-bottom:8px">✦</div>
+      <div style="font-weight:600;color:var(--tx2);margin-bottom:4px">AI Assistant</div>
+      <div>Ask me about your media, or tell me to make changes.</div>
+    </div>`;
+    return;
+  }
+  msgs.innerHTML = AI_HISTORY
+    .filter(m => m.role !== 'system')
+    .map(m => {
+      const isUser = m.role === 'user';
+      const clean = m.content.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim();
+      return `<div style="display:flex;justify-content:${isUser?'flex-end':'flex-start'};padding:4px 12px">
+        <div style="max-width:85%;padding:9px 13px;border-radius:${isUser?'12px 12px 3px 12px':'12px 12px 12px 3px'};background:${isUser?'var(--ac)':'var(--surf2)'};color:${isUser?'#000':'var(--tx)'};font-size:13px;line-height:1.5;border:${isUser?'none':'1px solid var(--brd)'}">
+          ${clean.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')}
+        </div>
+      </div>`;
+    }).join('');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function appendAIMessage(role, content) {
+  AI_HISTORY.push({ role, content });
+  renderAIMessages();
+}
+
+function setAITyping(v) {
+  AI_TYPING = v;
+  const ind = document.getElementById('ai-typing');
+  if (ind) ind.style.display = v ? 'flex' : 'none';
+}
+
+function aiSend() {
+  const inp = document.getElementById('ai-input');
+  const msg = inp?.value?.trim(); if (!msg || AI_TYPING) return;
+  inp.value = '';
+  sendAIMessage(msg);
+}
+
+function aiKeydown(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiSend(); } }
+
+
+
 (function bootstrap(){
   // No seed data - data loads from Drive or localStorage only
   // Show connect prompt if no data and not connected
@@ -3350,13 +4091,47 @@ function renderBooksUpcoming(c) {
 // ═══════════════════════════════
 //  INIT
 // ═══════════════════════════════
-applyTheme(ls.str(K.THEME)||'dark');
+SETTINGS = loadSettings();
 (function init(){
   const h=location.hash.replace('#/','').replace('#','');
   nav(h||'home',false);
   initGIS();
   initYTAuth();
+  applySettings();
 })();
 </script>
+
+<!-- AI ASSISTANT PANEL -->
+<div id="ai-panel" style="position:fixed;bottom:0;right:20px;width:380px;max-width:calc(100vw - 40px);height:520px;background:var(--surf);border:1px solid var(--brd);border-radius:12px 12px 0 0;z-index:9500;display:flex;flex-direction:column;transform:translateY(100%);opacity:0;transition:transform .3s cubic-bezier(.4,0,.2,1),opacity .3s;box-shadow:0 -8px 32px rgba(0,0,0,.5)">
+  <div style="padding:12px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:16px;color:var(--ac)">✦</span>
+      <span style="font-size:14px;font-weight:700;color:var(--tx);font-family:var(--fd)">AI Assistant</span>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button onclick="AI_HISTORY=[];renderAIMessages()" title="Clear chat" style="width:26px;height:26px;border-radius:5px;background:var(--surf2);border:1px solid var(--brd);color:var(--tx2);font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer">↺</button>
+      <button onclick="toggleAI()" style="width:26px;height:26px;border-radius:50%;background:var(--surf2);border:1px solid var(--brd);color:var(--tx2);font-size:14px;display:flex;align-items:center;justify-content:center;cursor:pointer">✕</button>
+    </div>
+  </div>
+  <div id="ai-messages" style="flex:1;overflow-y:auto;padding:8px 0;display:flex;flex-direction:column;gap:4px"></div>
+  <div id="ai-typing" style="display:none;padding:6px 16px;align-items:center;gap:6px">
+    <div style="display:flex;gap:4px;align-items:center">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--ac);animation:ai-bounce .8s infinite 0s"></span>
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--ac);animation:ai-bounce .8s infinite .15s"></span>
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--ac);animation:ai-bounce .8s infinite .3s"></span>
+    </div>
+    <span style="font-size:12px;color:var(--mu)">Thinking...</span>
+  </div>
+  <div style="padding:10px 12px;border-top:1px solid var(--brd);display:flex;gap:8px;flex-shrink:0">
+    <input id="ai-input" placeholder="Ask me anything..." onkeydown="aiKeydown(event)"
+      style="flex:1;background:var(--surf2);border:1px solid var(--brd);border-radius:20px;padding:8px 14px;font-size:13px;color:var(--tx);outline:none;font-family:var(--fb)"
+      onfocus="this.style.borderColor='var(--ac)'" onblur="this.style.borderColor='var(--brd)'">
+    <button onclick="aiSend()" style="width:36px;height:36px;border-radius:50%;background:var(--ac);border:none;color:#000;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">➤</button>
+  </div>
+</div>
+<style>
+@keyframes ai-bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
+#ai-messages::-webkit-scrollbar{width:3px}
+</style>
 </body>
 </html>
