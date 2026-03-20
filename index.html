@@ -1732,7 +1732,7 @@ function renderSettingsAI(el) {
   el.innerHTML = `
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
       <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
-        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">✦ Claude API Key</div>
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">✦ Gemini API Key</div>
         <div style="font-size:12px;color:var(--mu)">Your key is stored locally on this device only — never sent to GitHub</div>
       </div>
       <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
@@ -1740,7 +1740,7 @@ function renderSettingsAI(el) {
           ${hasKey?'✓ API key is set on this device':'No API key set'}
         </div>
         <div style="display:flex;gap:8px">
-          <input type="password" id="ai-key-setting" placeholder="sk-ant-..." value="${hasKey?'••••••••••••••••':''}"
+          <input type="password" id="ai-key-setting" placeholder="AIzaSy..." value="${hasKey?'••••••••••••••••':''}"
             style="flex:1;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:8px 10px;font-size:13px;color:var(--tx);outline:none"
             onfocus="if(this.value==='••••••••••••••••')this.value=''">
           <button onclick="saveAIKeySetting()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">Save</button>
@@ -1762,7 +1762,7 @@ function saveAIKeySetting() {
 }
 
 function clearAIKey() {
-  showConfirm('Remove your Claude API key from this device?', () => {
+  showConfirm('Remove your Gemini API key from this device?', () => {
     ls.del(AI_KEY_STORAGE); AI_HISTORY = [];
     renderSettingsAI(document.getElementById('settings-body'));
     toast('API key removed');
@@ -4027,7 +4027,7 @@ Go to **Settings → AI Assistant** to paste it, or type it below:`);
   const inp = document.createElement('div');
   inp.style.cssText = 'padding:8px 12px';
   inp.innerHTML = `<div style="display:flex;gap:6px">
-    <input id="ai-key-inp" type="password" placeholder="sk-ant-..." style="flex:1;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:8px 10px;font-size:12px;color:var(--tx);outline:none">
+    <input id="ai-key-inp" type="password" placeholder="AIzaSy..." style="flex:1;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:8px 10px;font-size:12px;color:var(--tx);outline:none">
     <button onclick="saveAIKeyFromInput()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
   </div>`;
   msgs.appendChild(inp);
