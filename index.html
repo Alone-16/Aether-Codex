@@ -3860,28 +3860,26 @@ INSTRUCTIONS:
 
 // ── Send message to Claude API ──
 async function sendAIMessage(userMsg) {
-  const key = getAIKey();
-  if (!key) { showAIKeyPrompt(); return; }
+  const key = 'proxy'; // Key handled by Cloudflare Worker
 
   AI_HISTORY.push({ role: 'user', parts: [{ text: userMsg }] });
   renderAIMessages();
   setAITyping(true);
 
   try {
-    // Prepend system context to first message (same pattern as working test)
-    const contents = AI_HISTORY.map((m, i) => {
-      if (i === 0 && m.role === 'user') {
-        return { role: 'user', parts: [{ text: buildAIContext() + '\n\nUser: ' + m.parts[0].text }] };
-      }
-      return { role: m.role, parts: m.parts };
-    });
+    // Inject system context as first user/model exchange (same pattern as test file)
+    const withContext = [
+      { role: 'user',  parts: [{ text: buildAIContext() }] },
+      { role: 'model', parts: [{ text: 'Understood. I have full access to your media data and am ready to help!' }] },
+      ...AI_HISTORY
+    ];
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview:generateContent?key=${key}`,
+      'https://aether-codex-ai.nadeempubgmobile2-0.workers.dev',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents })
+        body: JSON.stringify({ contents: withContext })
       }
     );
 
@@ -3892,28 +3890,20 @@ async function sendAIMessage(userMsg) {
     }
 
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
-
-    // Check for action
     const actionMatch = reply.match(/<ACTION>([\s\S]*?)<\/ACTION>/);
 
     AI_HISTORY.push({ role: 'model', parts: [{ text: reply }] });
     setAITyping(false);
     renderAIMessages();
 
-    // Handle action if present
     if (actionMatch) {
-      try {
-        const action = JSON.parse(actionMatch[1]);
-        setTimeout(() => handleAIAction(action), 300);
-      } catch(e) { console.warn('AI action parse failed:', e); }
+      try { const action = JSON.parse(actionMatch[1]); setTimeout(() => handleAIAction(action), 300); }
+      catch(e) { console.warn('AI action parse failed:', e); }
     }
   } catch(e) {
     setAITyping(false);
     AI_HISTORY.push({ role: 'model', parts: [{ text: `Sorry, something went wrong: ${e.message}` }] });
     renderAIMessages();
-    if (e.message.includes('API_KEY') || e.message.includes('400')) {
-      toast('Invalid API key — check Settings → AI Assistant', 'var(--cr)');
-    }
   }
 }
 
@@ -4055,8 +4045,8 @@ function renderAIMessages() {
   msgs.innerHTML = AI_HISTORY
     .map(m => {
       const isUser = m.role === 'user';
-      const rawText = m.parts?.[0]?.text || m.content || '';
-      const clean = rawText.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').replace(buildAIContext() + '\n\nUser: ', '').trim();
+      const rawText = m.parts?.[0]?.text || '';
+      const clean = rawText.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim();
       return `<div style="display:flex;justify-content:${isUser?'flex-end':'flex-start'};padding:4px 12px">
         <div style="max-width:85%;padding:9px 13px;border-radius:${isUser?'12px 12px 3px 12px':'12px 12px 12px 3px'};background:${isUser?'var(--ac)':'var(--surf2)'};color:${isUser?'#000':'var(--tx)'};font-size:13px;line-height:1.5;border:${isUser?'none':'1px solid var(--brd)'}">
           ${clean.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')}
