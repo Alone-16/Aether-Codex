@@ -4730,9 +4730,13 @@ async function renderPublicView(fileId) {
   document.head.appendChild(link);
 
   try {
-    const res = await fetch(`https://drive.google.com/uc?export=download&id=${fileId}`);
+    const res = await fetch(`https://aether-codex-ai.nadeempubgmobile2-0.workers.dev?fileId=${fileId}`);
     if (!res.ok) throw new Error('File not found or not public');
-    const data = await res.json();
+    const text = await res.text();
+    // Handle Google Drive virus scan warning page
+    const jsonStart = text.indexOf('{');
+    if (jsonStart === -1) throw new Error('Invalid response from Drive');
+    const data = JSON.parse(text.slice(jsonStart));
     renderPublicContent(data);
   } catch(e) {
     document.getElementById('pub-content').innerHTML = `
