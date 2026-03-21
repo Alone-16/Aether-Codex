@@ -2809,29 +2809,51 @@ function askDelGame(id) {
 },{title:'Delete Game?',okLabel:'Delete'});
 }
 
-// ── SAVE FILE UPLOAD ──
+// ── SAVE FOLDER UPLOAD ──
+const _driveFolderCache = {}; // cache folder id by path
+
+async function _getOrCreateDriveFolder(name, parentId) {
+  const cacheKey = `${parentId}/${name}`;
+  if (_driveFolderCache[cacheKey]) return _driveFolderCache[cacheKey];
+  // Check if exists
+  const r = await _req(`https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(name)}'+and+'${parentId}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id)`);
+  if (r) {
+    const d = await r.json();
+    if (d.files?.length) { _driveFolderCache[cacheKey] = d.files[0].id; return d.files[0].id; }
+  }
+  // Create
+  const cr = await _req('https://www.googleapis.com/drive/v3/files', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name, mimeType:'application/vnd.google-apps.folder', parents:[parentId]})
+  });
+  if (!cr) return null;
+  const cf = await cr.json();
+  _driveFolderCache[cacheKey] = cf.id;
+  return cf.id;
+}
+
 async function uploadSaveFile(gameTitle, file) {
   try {
-    const folderId = await _getOrCreateFolder();
-    if (!folderId) return null;
-    // Create game-saves subfolder
-    const sfRes = await _req(`https://www.googleapis.com/drive/v3/files?q=name='game-saves'+and+'${folderId}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id)`);
-    let sfId;
-    if (sfRes) {
-      const sfData = await sfRes.json();
-      if (sfData.files?.length) sfId = sfData.files[0].id;
+    const rootId = await _getOrCreateFolder(); if (!rootId) return null;
+    // game-saves folder
+    const savesId = await _getOrCreateDriveFolder('game-saves', rootId); if (!savesId) return null;
+
+    // Use webkitRelativePath to preserve folder structure
+    // e.g. "MySaveFolder/slot1/save.dat" → create each folder level
+    const relPath = file.webkitRelativePath || file.name;
+    const parts = relPath.split('/');
+    const fileName = parts.pop(); // last part is the file name
+
+    // Navigate/create folder hierarchy under game-saves
+    let currentParent = savesId;
+    for (const folderName of parts) {
+      currentParent = await _getOrCreateDriveFolder(folderName, currentParent);
+      if (!currentParent) return null;
     }
-    if (!sfId) {
-      const cr = await _req('https://www.googleapis.com/drive/v3/files', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({name:'game-saves', mimeType:'application/vnd.google-apps.folder', parents:[folderId]})
-      });
-      if (!cr) return null;
-      sfId = (await cr.json()).id;
-    }
-    // Upload file
+
+    // Upload file into the correct folder
     const formData = new FormData();
-    formData.append('metadata', new Blob([JSON.stringify({name: file.name, parents:[sfId]})], {type:'application/json'}));
+    formData.append('metadata', new Blob([JSON.stringify({name: fileName, parents:[currentParent]})], {type:'application/json'}));
     formData.append('file', file);
     const token = _getToken();
     const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
