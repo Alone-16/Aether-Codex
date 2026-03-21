@@ -22,6 +22,7 @@
 [data-section="music"]{--ac:#fb923c;--ac2:#ea580c;--ac-rgb:251,146,60;--bg:#080400;--surf:#120800;--surf2:#1c1000;--surf3:#261800;--brd:#382200;--brd2:#503200;--tx:#fff4e6;--tx2:#c8844a;--mu:#5a3a1a;--sh:0 4px 24px rgba(0,0,0,.7);--fd:'Outfit',sans-serif;--fb:'Outfit',sans-serif;--cr:12px;--glow:0 0 24px rgba(251,146,60,.2)}
 [data-section="settings"]{--ac:#8888aa;--ac2:#666688;--ac-rgb:136,136,170;--bg:#0a0a12;--surf:#111118;--surf2:#18181f;--surf3:#202028;--brd:#2a2a3a;--brd2:#383848;--tx:#eeedf8;--tx2:#8888aa;--mu:#44445a;--sh:0 4px 24px rgba(0,0,0,.5);--fd:'Cinzel',serif;--fb:'Outfit',sans-serif;--cr:8px;--glow:none}
 [data-section="vault"]{--ac:#7c3aed;--ac2:#6d28d9;--ac-rgb:124,58,237;--bg:#f0eefa;--surf:#faf8ff;--surf2:#ece8f8;--surf3:#e0d8f0;--brd:#2a1a4a;--brd2:#3d2a6a;--tx:#1a0a2e;--tx2:#4a3070;--mu:#9080b0;--sh:2px 2px 0 #2a1a4a;--fd:'Cinzel',serif;--fb:'Outfit',sans-serif;--cr:8px;--glow:2px 2px 0 rgba(124,58,237,.3)}
+[data-section="log"]{--ac:#38bdf8;--ac2:#0ea5e9;--ac-rgb:56,189,248;--bg:#010c14;--surf:#041420;--surf2:#071e2e;--surf3:#0a2840;--brd:#0f3a52;--brd2:#1a5270;--tx:#e0f4ff;--tx2:#60a8c8;--mu:#1e4a62;--sh:0 4px 24px rgba(0,0,0,.7);--fd:'Cinzel',serif;--fb:'Outfit',sans-serif;--cr:8px;--glow:0 0 20px rgba(56,189,248,.2)}
 
 /* ═══ RESET ═══ */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -335,6 +336,7 @@ textarea.fin{resize:vertical;min-height:60px}
   <div class="mob-ni" data-r="books" onclick="nav('books')"><span>◎</span>Books</div>
   <div class="mob-ni" data-r="music" onclick="nav('music')"><span>♪</span>Music</div>
   <div class="mob-ni" data-r="vault" onclick="nav('vault')"><span>⛓</span>Vault</div>
+  <div class="mob-ni" data-r="log" onclick="nav('log')"><span>◎</span>Log</div>
   <div class="mob-sep"></div>
   <div class="mob-ni" data-r="settings" onclick="nav('settings')"><span>⚙</span>Settings</div>
 </div>
@@ -349,6 +351,7 @@ textarea.fin{resize:vertical;min-height:60px}
     <div class="ni" data-r="books" data-tip="Books" onclick="nav('books')"><span class="ni-ico">◎</span><span class="ni-lbl">Books</span></div>
     <div class="ni" data-r="music" data-tip="Music" onclick="nav('music')"><span class="ni-ico">♪</span><span class="ni-lbl">Music</span></div>
     <div class="ni" data-r="vault" data-tip="Vault" onclick="nav('vault')"><span class="ni-ico">◈</span><span class="ni-lbl">Vault</span></div>
+    <div class="ni" data-r="log" data-tip="Activity" onclick="nav('log')"><span class="ni-ico">◎</span><span class="ni-lbl">Log</span></div>
     <div class="sb-bot">
       <div class="sb-sep"></div>
       <div class="ni" data-r="settings" data-tip="Settings" onclick="nav('settings')"><span class="ni-ico">⚙</span><span class="ni-lbl">Settings</span></div>
@@ -524,6 +527,7 @@ const SECTION_META={
   books:   {title:'Book Codex',      label:'Books'},
   music:   {title:'Music Codex',     label:'Music'},
   vault:   {title:'Link Vault',       label:'Vault'},
+  log:     {title:'Activity Log',      label:'Log'},
   settings:{title:'Settings',        label:'Settings'},
 };
 
@@ -553,6 +557,7 @@ function nav(id,push=true){
   else if(id==='music') document.getElementById('srch').oninput=e=>{MSEARCH=e.target.value.toLowerCase();renderMusicBody();};
   else if(id==='books') document.getElementById('srch').oninput=e=>{BSEARCH=e.target.value.toLowerCase();renderBooksBody();};
   else if(id==='vault') document.getElementById('srch').oninput=e=>{VSEARCH=e.target.value.toLowerCase();renderVaultBody();};
+  else if(id==='log')   document.getElementById('srch').oninput=e=>{LSEARCH=e.target.value.toLowerCase();renderLogBody()};
   else document.getElementById('srch').oninput=e=>{onSearch(e.target.value)};
     // Apply genre CSS vars for media section without triggering a re-render
     if(id==='media'){
@@ -584,6 +589,7 @@ function renderPage(id){
   else if(id==='music')    renderMusic(c);
   else if(id==='books')    renderBooks(c);
   else if(id==='vault')    renderVault(c);
+  else if(id==='log')      renderLog(c);
   else if(id==='settings') renderSettings(c);
   else renderSectionStub(id,c);
 }
@@ -1399,7 +1405,10 @@ function saveEntry(eid){
 
 function askDel(id){
   showConfirm('This entry will be permanently deleted.',()=>{
-  DATA=DATA.filter(x=>x.id!==id);saveData(DATA);closePanel();render();toast('Deleted');
+  const _del=DATA.find(x=>x.id===id);
+  DATA=DATA.filter(x=>x.id!==id);
+  if(_del) addLog('media','Deleted',_del.title);
+  saveData(DATA);closePanel();render();toast('Deleted');
 },{title:'Delete Entry?',okLabel:'Delete'});
 }
 
@@ -1423,15 +1432,24 @@ function renderSectionStub(id,c){
 const SETTINGS_KEY = 'ac_v4_settings';
 
 function loadSettings() {
-  return ls.get(SETTINGS_KEY) || {
-    sectionOrder: ['home','media','games','books','music','vault'],
-    sectionEnabled: { home:true, media:true, games:true, books:true, music:true, vault:true },
+  const defaults = {
+    sectionOrder: ['home','media','games','books','music','vault','log'],
+    sectionEnabled: { home:true, media:true, games:true, books:true, music:true, vault:true, log:true },
     density: 'comfortable',
     fontSize: 'medium',
     autoBackupDays: 10,
     idleTimeout: 5,
     theme: 'dark',
   };
+  const saved = ls.get(SETTINGS_KEY);
+  if (!saved) return defaults;
+  // Ensure new sections are always added if missing
+  const allSections = ['home','media','games','books','music','vault','log'];
+  allSections.forEach(s => {
+    if (!saved.sectionOrder.includes(s)) saved.sectionOrder.push(s);
+    if (saved.sectionEnabled[s] === undefined) saved.sectionEnabled[s] = true;
+  });
+  return { ...defaults, ...saved };
 }
 function saveSettings(s) { ls.set(SETTINGS_KEY, s); }
 
@@ -1461,6 +1479,7 @@ function rebuildSidebar() {
     books: { icon:'◎', label:'Books' },
     music: { icon:'♪', label:'Music' },
     vault: { icon:'◈', label:'Vault' },
+    log:   { icon:'◎', label:'Log' },
   };
   // Desktop sidebar
   const sb = document.getElementById('sidebar');
@@ -2074,7 +2093,7 @@ async function _pushToDrive(){
   _updateDriveBtn('syncing');
   try{
     const fileId=await _getOrCreateFile();if(!fileId)throw new Error('No file');
-    const payload=JSON.stringify({version:DATA_VERSION,savedAt:parseInt(ls.str(K.SAVED)||'0'),data:DATA,genres:GENRES,games:GDATA,music:MDATA,playlists:MPLAYLISTS,books:BDATA,vault:VDATA});
+    const payload=JSON.stringify({version:DATA_VERSION,savedAt:parseInt(ls.str(K.SAVED)||'0'),data:DATA,genres:GENRES,games:GDATA,music:MDATA,playlists:MPLAYLISTS,books:BDATA,vault:VDATA,log:LDATA});
     const r=await _req(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:payload});
     if(!r||!r.ok)throw new Error('Upload failed');
     ls.setStr(K.DSYNC,String(Date.now()));
@@ -2135,6 +2154,10 @@ async function _driveInit(){
     if(remote.vault&&Array.isArray(remote.vault)){
       VDATA=_mergeData(VDATA,remote.vault);
       saveVault(VDATA);
+    }
+    if(remote.log&&Array.isArray(remote.log)){
+      LDATA=remote.log;
+      saveLog(LDATA);
     }
     saveData(DATA);render();
     toast('✓ Synced from Drive','var(--cd)');
@@ -2811,8 +2834,8 @@ async function saveGame(eid) {
   if (eid) { const i=GDATA.findIndex(x=>x.id===eid); GDATA[i]=entry; }
   else GDATA.unshift(entry);
 
+  addLog('games', eid?'Updated':'Added', entry.title, entry.status);
   saveGames(GDATA);
-  // Close panel without triggering full re-render
   GPANEL=null; GPEDIT=null;
   document.getElementById('rpanel').classList.remove('open');
   document.getElementById('poverlay').classList.remove('show');
@@ -2823,7 +2846,9 @@ async function saveGame(eid) {
 
 function askDelGame(id) {
   showConfirm('This game will be permanently deleted.',()=>{
+  const _gdel=GDATA.find(x=>x.id===id);
   GDATA = GDATA.filter(x=>x.id!==id);
+  if(_gdel) addLog('games','Deleted',_gdel.title);
   saveGames(GDATA);
   GPANEL=null; GPEDIT=null;
   document.getElementById('rpanel').classList.remove('open');
@@ -3284,7 +3309,9 @@ function openSongDetail(id) {
 
 function delSong(id) {
   showConfirm('Remove this song from your library?', () => {
+    const _mdel=MDATA.find(x=>x.id===id);
     MDATA = MDATA.filter(x => x.id !== id);
+    if(_mdel) addLog('music','Removed',_mdel.title,_mdel.artist||null);
     saveMusic(MDATA);
     closePanel();
     renderMusicBody();
@@ -3828,6 +3855,7 @@ function saveBook(eid) {
   };
   if (entry.status==='completed'&&!entry.endDate&&!vols.length) entry.endDate=today();
   if (eid) { const i=BDATA.findIndex(x=>x.id===eid); BDATA[i]=entry; } else BDATA.unshift(entry);
+  addLog('books', eid?'Updated':'Added', entry.title, entry.status);
   saveBooks(BDATA);
   BPANEL=null; BPEDIT=null;
   document.getElementById('rpanel').classList.remove('open');
@@ -3838,7 +3866,9 @@ function saveBook(eid) {
 
 function askDelBook(id) {
   showConfirm('This book will be permanently deleted.', () => {
+    const _bdel=BDATA.find(x=>x.id===id);
     BDATA = BDATA.filter(x=>x.id!==id);
+    if(_bdel) addLog('books','Deleted',_bdel.title);
     saveBooks(BDATA);
     BPANEL=null; BPEDIT=null;
     document.getElementById('rpanel').classList.remove('open');
@@ -4464,6 +4494,7 @@ function saveVaultLink() {
   if (existing) { const i=VDATA.findIndex(l=>l.id===VEDIT_ID); VDATA[i]=entry; }
   else VDATA.unshift(entry);
 
+  addLog('vault', existing?'Updated link':'Added link', entry.desc, entry.url);
   saveVault(VDATA);
   PANEL=null;
   document.getElementById('rpanel').classList.remove('open');
@@ -4990,6 +5021,124 @@ async function handleRevokePublicLink() {
     toast('Public link revoked');
     renderSettingsPublicShare(document.getElementById('settings-body'));
   }, {title:'Revoke Link?', okLabel:'Revoke', danger:false});
+}
+
+
+
+
+// ═══════════════════════════════════════════════════════
+//  ACTIVITY LOG
+// ═══════════════════════════════════════════════════════
+const LOG_KEY = 'ac_v4_log';
+const LOG_MAX_DAYS = 30;
+
+function loadLog()  { return ls.get(LOG_KEY) || []; }
+function saveLog(l) { ls.set(LOG_KEY, l); }
+
+let LDATA   = loadLog();
+let LFILTER = 'all';
+let LSEARCH = '';
+
+function addLog(section, action, title, detail) {
+  const now = Date.now();
+  // Prune entries older than 30 days first
+  const cutoff = now - LOG_MAX_DAYS * 24 * 60 * 60 * 1000;
+  LDATA = LDATA.filter(l => l.ts >= cutoff);
+  LDATA.unshift({ id: uid(), section, action, title, detail: detail||null, ts: now });
+  saveLog(LDATA);
+}
+
+const LOG_SECTION_COLOR = {
+  media:  '#e879a0', games: '#f59e0b',
+  books:  '#a78bfa', music: '#fb923c', vault: '#38bdf8',
+};
+const LOG_SECTION_ICON = {
+  media:'◉', games:'◈', books:'◎', music:'♪', vault:'◈',
+};
+
+function fmtLogTime(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  const diff = Math.floor((now - d) / 1000);
+  if (diff < 60)    return 'just now';
+  if (diff < 3600)  return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  const days = Math.floor(diff/86400);
+  if (days < 7)     return `${days}d ago`;
+  return d.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
+}
+
+// ── RENDER ──
+function renderLog(c) {
+  const sections = ['all','media','games','books','music'];
+  c.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+      <div class="sub-tabs">
+        ${sections.map(s => `<button class="stab${LFILTER===s?' active':''}" onclick="setLogFilter('${s}')">${s==='all'?'All':s.charAt(0).toUpperCase()+s.slice(1)}</button>`).join('')}
+      </div>
+      <button onclick="clearOldLogs()" style="font-size:11px;color:var(--mu);background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:4px;border:1px solid var(--brd)">Clear Log</button>
+    </div>
+    <div id="log-body"></div>`;
+  renderLogBody();
+}
+
+function setLogFilter(f) { LFILTER = f; renderLogBody(); }
+
+function renderLogBody() {
+  const el = document.getElementById('log-body'); if (!el) return;
+  // Update tab active states
+  const tabs = ['all','media','games','books','music'];
+  document.querySelectorAll('.stab').forEach((t,i) => {
+    if (tabs.includes(t.textContent.toLowerCase())) {
+      t.classList.toggle('active', t.textContent.toLowerCase() === LFILTER || 
+        (LFILTER==='all' && t.textContent.toLowerCase()==='all'));
+    }
+  });
+
+  let entries = LDATA;
+  if (LFILTER !== 'all') entries = entries.filter(l => l.section === LFILTER);
+  if (LSEARCH) entries = entries.filter(l =>
+    l.title?.toLowerCase().includes(LSEARCH) || l.action?.toLowerCase().includes(LSEARCH)
+  );
+
+  if (!entries.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-ico">📋</div><p>No activity yet${LFILTER!=='all'?' in this section':''}</p></div>`;
+    return;
+  }
+
+  // Group by date
+  const groups = {};
+  entries.forEach(l => {
+    const d = new Date(l.ts);
+    const key = d.toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long'});
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(l);
+  });
+
+  el.innerHTML = Object.entries(groups).map(([date, logs]) => `
+    <div style="margin-bottom:20px">
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--brd)">${date}</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${logs.map(l => {
+          const col = LOG_SECTION_COLOR[l.section] || 'var(--ac)';
+          const ico = LOG_SECTION_ICON[l.section] || '●';
+          return `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 12px;background:var(--surf);border:1px solid var(--brd2);border-radius:7px;border-left:3px solid ${col}">
+            <div style="font-size:11px;color:${col};font-weight:700;flex-shrink:0;margin-top:1px">${ico}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;color:var(--tx);line-height:1.4">${esc(l.action)} <b style="color:${col}">${esc(l.title||'')}</b>${l.detail?` <span style="color:var(--mu);font-size:12px">· ${esc(l.detail)}</span>`:''}</div>
+            </div>
+            <div style="font-size:10px;color:var(--mu);flex-shrink:0;white-space:nowrap;margin-top:2px">${fmtLogTime(l.ts)}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function clearOldLogs() {
+  showConfirm('Clear all activity log entries?', () => {
+    LDATA = []; saveLog(LDATA); renderLogBody();
+    toast('Activity log cleared');
+  }, {title:'Clear Log?', okLabel:'Clear', danger:false});
 }
 
 
