@@ -2751,13 +2751,36 @@ async function saveGame(eid) {
   // Handle save file upload
   const saveFileInp = document.getElementById('gf-save');
   if (saveFileInp?.files?.length && _isConnected()) {
-    toast('Uploading save folder...', 'var(--ch)');
-    let lastId = null;
-    for (const file of Array.from(saveFileInp.files)) {
-      lastId = await uploadSaveFile(title, file);
+    const files = Array.from(saveFileInp.files);
+    const total = files.length;
+    let done = 0, lastId = null;
+
+    // Show progress in panel
+    const statusEl = document.createElement('div');
+    statusEl.id = 'upload-status';
+    statusEl.style.cssText = 'padding:10px 16px;background:rgba(var(--ac-rgb),.06);border-top:1px solid var(--brd);font-size:12px;color:var(--tx2)';
+    statusEl.innerHTML = `⬆ Uploading 0 / ${total} files...`;
+    document.getElementById('panel-inner')?.appendChild(statusEl);
+
+    for (const file of files) {
+      lastId = await uploadSaveFile(entry.title, file);
+      done++;
+      const pct = Math.round(done/total*100);
+      if (statusEl) statusEl.innerHTML = `
+        <div style="margin-bottom:5px">⬆ Uploading ${done} / ${total} files... ${pct}%</div>
+        <div style="height:4px;background:var(--surf3);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:var(--ac);border-radius:2px;transition:width .2s"></div>
+        </div>`;
     }
-    if (lastId) { entry.saveFileId = lastId; toast(`✓ ${saveFileInp.files.length} files uploaded`, 'var(--cd)'); }
-    else toast('Save folder upload failed', 'var(--cr)');
+
+    if (lastId) {
+      entry.saveFileId = lastId;
+      if (statusEl) statusEl.innerHTML = `<span style="color:#4ade80">✓ ${total} file${total!==1?'s':''} uploaded to Drive</span>`;
+      setTimeout(() => statusEl?.remove(), 2000);
+    } else {
+      if (statusEl) statusEl.innerHTML = `<span style="color:#fb7185">✗ Upload failed — check Drive connection</span>`;
+      toast('Save folder upload failed', 'var(--cr)');
+    }
   }
 
   if (eid) { const i=GDATA.findIndex(x=>x.id===eid); GDATA[i]=entry; }
