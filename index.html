@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>The Aether Codex</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#34d399">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Aether Codex">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Bangers&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -327,7 +334,7 @@ textarea.fin{resize:vertical;min-height:60px}
   <div class="mob-ni" data-r="games" onclick="nav('games')"><span>◈</span>Games</div>
   <div class="mob-ni" data-r="books" onclick="nav('books')"><span>◎</span>Books</div>
   <div class="mob-ni" data-r="music" onclick="nav('music')"><span>♪</span>Music</div>
-  <div class="mob-ni" data-r="vault" onclick="nav('vault')"><span>🔗</span>Vault</div>
+  <div class="mob-ni" data-r="vault" onclick="nav('vault')"><span>⛓</span>Vault</div>
   <div class="mob-sep"></div>
   <div class="mob-ni" data-r="settings" onclick="nav('settings')"><span>⚙</span>Settings</div>
 </div>
@@ -341,7 +348,7 @@ textarea.fin{resize:vertical;min-height:60px}
     <div class="ni" data-r="games" data-tip="Games" onclick="nav('games')"><span class="ni-ico">◈</span><span class="ni-lbl">Games</span></div>
     <div class="ni" data-r="books" data-tip="Books" onclick="nav('books')"><span class="ni-ico">◎</span><span class="ni-lbl">Books</span></div>
     <div class="ni" data-r="music" data-tip="Music" onclick="nav('music')"><span class="ni-ico">♪</span><span class="ni-lbl">Music</span></div>
-    <div class="ni" data-r="vault" data-tip="Vault" onclick="nav('vault')"><span class="ni-ico">🔗</span><span class="ni-lbl">Vault</span></div>
+    <div class="ni" data-r="vault" data-tip="Vault" onclick="nav('vault')"><span class="ni-ico">◈</span><span class="ni-lbl">Vault</span></div>
     <div class="sb-bot">
       <div class="sb-sep"></div>
       <div class="ni" data-r="settings" data-tip="Settings" onclick="nav('settings')"><span class="ni-ico">⚙</span><span class="ni-lbl">Settings</span></div>
@@ -1450,7 +1457,7 @@ function rebuildSidebar() {
     games: { icon:'◈', label:'Games' },
     books: { icon:'◎', label:'Books' },
     music: { icon:'♪', label:'Music' },
-    vault: { icon:'🔗', label:'Vault' },
+    vault: { icon:'◈', label:'Vault' },
   };
   // Desktop sidebar
   const sb = document.getElementById('sidebar');
@@ -4526,5 +4533,15 @@ SETTINGS = loadSettings();
 @keyframes ai-bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
 #ai-messages::-webkit-scrollbar{width:3px}
 </style>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => console.log('SW registered:', reg.scope))
+      .catch(err => console.log('SW failed:', err));
+  });
+}
+</script>
 </body>
 </html>
