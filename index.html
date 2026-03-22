@@ -603,14 +603,7 @@ function buildGenreMenu(){
 function toggleGdrop(e){
   e.stopPropagation();
   const m=document.getElementById('gdrop-menu');
-  if(!m)return;
-  const btn=e.currentTarget||e.target.closest('button');
-  if(!m.classList.contains('open')){
-    const r=btn.getBoundingClientRect();
-    m.style.top=(r.bottom+4)+'px';
-    m.style.left=r.left+'px';
-  }
-  m.classList.toggle('open');
+  if(m) m.classList.toggle('open');
 }
 document.addEventListener('click',e=>{const m=document.getElementById('gdrop-menu');const d=document.getElementById('gdrop');if(m&&d&&!d.contains(e.target))m.classList.remove('open')});
 
@@ -623,7 +616,7 @@ function selectGenre(id){
   const [r,gg,b]=[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)];
   document.documentElement.style.setProperty('--ac-rgb',`${r},${gg},${b}`);
   document.getElementById('gdrop-lbl').textContent=g.name;
-  document.getElementById('gdot').style.background=c;
+  const _gdot=document.getElementById('gdot'); if(_gdot) _gdot.style.background=c;
   document.getElementById('gdrop-menu').classList.remove('open');
   SEARCH='';document.getElementById('srch').value='';
   document.getElementById('fstatus').value='';
@@ -1018,11 +1011,10 @@ function renderMedia(c){
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <div id="gdrop" style="position:relative">
         <button class="nb-btn ac" style="height:32px;font-size:13px;font-weight:700;white-space:nowrap" onclick="toggleGdrop(event)">
-          <span style="width:8px;height:8px;border-radius:50%;background:var(--ac);display:inline-block;flex-shrink:0" id="gdot"></span>
           <span id="gdrop-lbl">${gbyid(GACTIVE).name}</span>
           <span style="font-size:9px">▾</span>
         </button>
-        <div id="gdrop-menu" style="position:fixed;top:auto;left:auto;background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);min-width:180px;z-index:9000;box-shadow:0 8px 24px rgba(0,0,0,.5);overflow:hidden;display:none">
+        <div id="gdrop-menu" style="position:absolute;top:calc(100% + 4px);left:0;background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);min-width:180px;z-index:9000;box-shadow:0 8px 24px rgba(0,0,0,.5);overflow:hidden;display:none">
         </div>
       </div>
       <div class="sub-tabs">
@@ -1036,7 +1028,7 @@ function renderMedia(c){
 
   // Update gdot color
   const g=gbyid(GACTIVE);
-  document.getElementById('gdot').style.background=g.color;
+  const _gd=document.getElementById('gdot'); if(_gd) _gd.style.background=g.color;
   document.getElementById('gdrop-lbl').textContent=g.name;
 
   renderMediaBody();
