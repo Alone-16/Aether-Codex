@@ -16,12 +16,21 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Bangers&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
-// Set data-section from URL hash immediately to prevent theme flash
+// Immediately set background from URL hash to prevent flash
 (function(){
-  const h = location.hash.replace('#/','').replace('#','');
-  if (h && h !== 'home') document.documentElement.setAttribute('data-section', h);
+  const bg = {
+    home:'#070d0b', media:'#0a0008', games:'#080600',
+    books:'#f0eefa', music:'#080400', vault:'#f0eefa',
+    log:'#010c14',  settings:'#0a0a12'
+  };
+  const h = location.hash.replace('#/','').replace('#','') || 'home';
+  const col = bg[h] || bg.home;
+  document.documentElement.style.background = col;
+  document.documentElement.style.backgroundColor = col;
+  document.documentElement.setAttribute('data-section', h);
 })();
 </script>
+<style>html,body{background:#070d0b;visibility:hidden}</style>
 <link rel="stylesheet" href="style.css" onload="document.body.style.visibility='visible'">
 <noscript><style>body{visibility:visible}</style></noscript>
 
