@@ -254,7 +254,7 @@ textarea.fin{resize:vertical;min-height:60px}
 .ql-card:hover{border-color:var(--brd2);transform:translateX(3px)}
 .ql-section-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .ql-info{flex:1;min-width:0}
-.ql-title{font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ql-title{font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .ql-meta{font-size:11px;color:var(--tx2);margin-top:2px}
 .ql-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
 .ql-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;white-space:nowrap}
@@ -334,25 +334,24 @@ textarea.fin{resize:vertical;min-height:60px}
   .nb-ico{width:28px;height:28px;font-size:12px}
   .nb-btn{height:28px;padding:0 8px;font-size:11px}
   .nb-divider{display:none}
+  #nb-sec{display:none}
+  .nb-title{font-size:11px}
 
   /* ── CONTENT ── */
   #content{padding:10px}
 
   /* ── HOME STAT CARDS ── */
-  .dc{padding:10px 12px}
-  .dc-v{font-size:clamp(14px,4vw,20px)}
-  .dc-l{font-size:9px}
-  .dash-grid{grid-template-columns:repeat(3,1fr);gap:6px}
+  .dc{padding:8px 10px;min-height:0}
+  .dc-v{font-size:clamp(12px,3.5vw,17px)}
+  .dc-l{font-size:8px;letter-spacing:0}
+  .dash-grid{grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:12px!important}
 
   /* ── HOME TWO-COL LAYOUT → single col ── */
   .home-two-col{grid-template-columns:1fr!important;gap:12px}
 
   /* ── AIRING WIDGET → horizontal scroll ── */
-  .airing-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
-  .airing-grid{min-width:560px}
-  .airing-col{font-size:11px}
-  .airing-day-hd{font-size:9px;padding:3px 0}
-  .airing-item{padding:4px 6px;font-size:10px}
+  .airing-scroll{display:none!important}
+  .airing-mobile{display:block!important}
 
   /* ── SECTION OVERVIEW ── */
   .section-ov-grid{grid-template-columns:1fr!important}
@@ -768,7 +767,7 @@ function renderHome(c){
     return`<div class="ql-card" onclick="openDetail('${e.id}')">
       <div class="ql-section-dot" style="background:${g.color}"></div>
       <div class="ql-info">
-        <div class="ql-title">${esc(e.title)}</div>
+        <div class="ql-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">${esc(e.title)}</div>
         <div class="ql-meta">${meta}</div>
       </div>
       <div class="ql-right">
@@ -883,6 +882,9 @@ function renderAiringWidget(){
       <div style="font-size:11px;color:var(--ac);cursor:pointer" onclick="nav('media')">Manage →</div>
     </div>
     <div class="airing-scroll" style="padding:8px 12px"><div class="airing-grid" style="display:grid;grid-template-columns:repeat(7,minmax(90px,1fr));gap:6px">${cols}</div></div>
+    <div class="airing-mobile" style="display:none;padding:0 12px 8px">
+      ${airingMobileList()}
+    </div>
   </div>`;
 }
 
@@ -5704,6 +5706,33 @@ function setCDD(id, value, label) {
     el.classList.toggle('selected', el.dataset.val === value);
   });
   document.getElementById(id + '-menu')?.classList.remove('open');
+}
+
+
+
+function airingMobileList() {
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const todayNum = new Date().getDay();
+  const watching = DATA.filter(e => e.status==='watching' && e.airingDay != null);
+  if (!watching.length) return '<div style="font-size:12px;color:var(--mu);padding:8px 0">No airing shows tracked</div>';
+  
+  // Sort by proximity to today
+  const sorted = watching.map(e => {
+    const diff = (e.airingDay - todayNum + 7) % 7;
+    return { e, diff };
+  }).sort((a,b) => a.diff - b.diff);
+
+  return sorted.map(({e, diff}) => {
+    const lbl = diff===0 ? 'Today' : diff===1 ? 'Tomorrow' : days[e.airingDay];
+    const col = diff===0 ? '#4ade80' : diff===1 ? '#fbbf24' : 'var(--tx2)';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--brd)">
+      <div style="width:56px;flex-shrink:0;text-align:right">
+        <span style="font-size:11px;font-weight:700;color:${col}">${lbl}</span>
+        ${e.airingTime?`<div style="font-size:10px;color:var(--mu)">${e.airingTime}</div>`:''}
+      </div>
+      <div style="flex:1;min-width:0;font-size:13px;font-weight:500;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</div>
+    </div>`;
+  }).join('');
 }
 
 
