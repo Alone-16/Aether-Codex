@@ -90,13 +90,13 @@ input,select,textarea{font-family:inherit;color:var(--tx)}
 #content.fade-up{opacity:0;transform:translateY(-8px)}
 
 /* ═══ FILTERBAR (media) ═══ */
-#filterbar{background:var(--surf);border-bottom:1px solid var(--brd);padding:6px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0;transition:background .35s,border-color .35s}
+#filterbar{background:var(--surf);border-bottom:1px solid var(--brd);padding:6px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0;transition:background .35s,border-color .35s;overflow:visible}
 .fsel{background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:5px 9px;font-size:12px;color:var(--tx2);outline:none;cursor:pointer;height:32px;box-sizing:border-box}
 .fsel:focus{border-color:var(--ac)}
 .cnt-lbl{font-size:12px;color:var(--mu);margin-left:4px}
 
 /* ═══ SUB-TABS ═══ */
-.sub-tabs{display:flex;gap:3px;background:var(--surf);border:1px solid var(--brd);border-radius:7px;padding:3px;flex-wrap:wrap}
+.sub-tabs{display:inline-flex;gap:3px;background:var(--surf);border:1px solid var(--brd);border-radius:7px;padding:3px;flex-wrap:wrap;width:fit-content}
 .stab{padding:5px 13px;border-radius:4px;font-size:12px;font-weight:600;color:var(--tx2);transition:all .15s;white-space:nowrap}
 .stab:hover{background:var(--surf2);color:var(--tx)}
 .stab.active{background:rgba(var(--ac-rgb),.15);color:var(--ac)}
@@ -384,9 +384,10 @@ textarea.fin{resize:vertical;min-height:60px}
   .stab{font-size:11px;padding:5px 8px;white-space:nowrap}
 
   /* ── FILTER BAR ── */
-  #filterbar{gap:6px;flex-wrap:nowrap;padding:5px 10px}
-  #filterbar .cdd{flex:1;min-width:0}
-  #filterbar .cdd-btn{width:100%;min-width:0;justify-content:space-between}
+  #filterbar{gap:5px;padding:5px 8px}
+  #filterbar>.cdd{flex:1;min-width:0;max-width:50%}
+  #filterbar>.cdd .cdd-btn{width:100%;min-width:0;box-sizing:border-box}
+  #filterbar>.cdd .cdd-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
   .cnt-lbl{display:none}
 
   /* ── BOTTOM NAV BAR ── */
@@ -396,7 +397,7 @@ textarea.fin{resize:vertical;min-height:60px}
 
 /* ── CUSTOM DROPDOWN ── */
 .cdd{position:relative;display:inline-block}
-.cdd-btn{height:32px;min-width:100px;padding:0 10px;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;color:var(--tx);font-size:12px;font-family:var(--fb);cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;min-width:90px}
+.cdd-btn{height:32px;min-width:80px;padding:0 10px;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;color:var(--tx);font-size:12px;font-family:var(--fb);cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;min-width:90px}
 .cdd-btn:after{content:'▾';margin-left:auto;color:var(--mu);font-size:10px}
 .cdd-menu{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;background:var(--surf);border:1px solid var(--brd2);border-radius:7px;z-index:800;box-shadow:0 8px 24px rgba(0,0,0,.4);overflow:hidden;display:none}
 .cdd-menu.open{display:block}
