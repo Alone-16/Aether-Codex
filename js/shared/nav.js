@@ -14,6 +14,14 @@ function nav(id,push=true){
   setTimeout(()=>{
     c.style.transition = '';
     document.documentElement.setAttribute('data-section',id);
+    // Keep inline bg in sync to prevent FOUC override conflicts
+    const sectionBg = {
+      home:'#070d0b', media:'#07000f', games:'#080600',
+      books:'#f5f0e8', music:'#080400', vault:'#f0eefa',
+      log:'#010c14', settings:'#0a0a12'
+    };
+    document.documentElement.style.background = sectionBg[id] || sectionBg.home;
+    document.documentElement.style.backgroundColor = sectionBg[id] || sectionBg.home;
     document.querySelectorAll('.ni').forEach(el=>el.classList.toggle('active',el.dataset.r===id));
     document.querySelectorAll('.mob-ni').forEach(el=>el.classList.toggle('active',el.dataset.r===id));
     document.querySelectorAll('.bn-item').forEach(el=>el.classList.toggle('active',el.dataset.r===id));
