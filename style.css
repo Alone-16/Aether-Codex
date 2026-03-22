@@ -311,6 +311,9 @@ textarea.fin{resize:vertical;min-height:60px}
 }
 @media(max-width:640px){
   .mob-hide{display:none!important}
+  .drive-status-txt{display:none!important}
+  .drive-txt{display:none!important}
+  #drive-btn{min-width:32px!important;padding:0 8px}
   /* ── NAVBAR ── */
   #navbar{padding:0 8px;gap:4px;height:46px}
   .nb-title{font-size:12px}

@@ -61,7 +61,7 @@
         <input class="srch" id="srch" placeholder="Search everything..." oninput="onSearch(this.value)">
       </div>
       <div class="nb-r">
-        <button class="nb-ico ac" id="drive-btn" onclick="driveAction()" title="Drive" style="font-size:13px">☁</button>
+        <button class="nb-btn" id="drive-btn" onclick="driveAction()" title="Drive" style="min-width:60px;gap:3px"><span style="font-size:12px">☁</span><span class="drive-status-txt" style="font-size:10px;font-weight:700">Drive</span></button>
         <button class="nb-btn mob-hide" onclick="exportData()">⬇ <span>Export</span></button>
         <button class="nb-btn mob-hide" onclick="importFile()">⬆ <span>Import</span></button>
         <button class="nb-ico ac" id="add-btn" onclick="openAdd()" title="Add" style="font-size:16px;font-weight:700">+</button>
@@ -117,6 +117,7 @@
 <div id="rpanel"><div id="panel-inner"></div></div>
 
 <script src="js/shared/utils.js"></script>
+<script src="js/shared/drive.js"></script>
 <script src="js/shared/nav.js"></script>
 <script src="js/shared/routing.js"></script>
 <script src="js/sections/home.js"></script>
