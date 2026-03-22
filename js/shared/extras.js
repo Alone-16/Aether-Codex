@@ -1,4 +1,5 @@
-// REWATCH MODE
+// ═══════════════════════════════════════════════════════
+//  REWATCH MODE
 // ═══════════════════════════════════════════════════════
 function startRewatch(id) {
   const e = DATA.find(x => x.id === id); if (!e) return;
