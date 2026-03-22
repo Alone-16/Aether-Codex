@@ -1003,10 +1003,10 @@ function renderUpcomingWidget(){
 function renderMedia(c){
   // Sub-tabs
   const tabs=['List','Dashboard','Upcoming','Incomplete'];
-  const tabsHtml=`<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div id="gdrop" style="position:relative">
-        <button class="nb-btn ac" style="height:32px;font-size:13px;font-weight:700" onclick="toggleGdrop(event)">
+  const tabsHtml=`<div style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <div id="gdrop" style="position:relative;flex-shrink:0">
+        <button class="nb-btn ac" style="height:32px;font-size:13px;font-weight:700;white-space:nowrap" onclick="toggleGdrop(event)">
           <span class="sb-sep" style="width:7px;height:7px;border-radius:50%;background:var(--ac);margin:0;flex-shrink:0" id="gdot"></span>
           <span id="gdrop-lbl">${gbyid(GACTIVE).name}</span>
           <span style="font-size:9px">▾</span>
@@ -1014,7 +1014,7 @@ function renderMedia(c){
         <div id="gdrop-menu" style="position:absolute;top:calc(100% + 5px);left:0;background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);min-width:170px;z-index:200;box-shadow:var(--sh);overflow:hidden;display:none">
         </div>
       </div>
-      <div class="sub-tabs">
+      <div class="sub-tabs" style="flex-shrink:0">
         ${tabs.map((t,i)=>`<button class="stab${MEDIA_PAGE===['list','dashboard','upcoming','incomplete'][i]?' active':''}" onclick="setMediaPage('${['list','dashboard','upcoming','incomplete'][i]}')">${t}</button>`).join('')}
       </div>
     </div>
