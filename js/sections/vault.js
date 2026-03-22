@@ -1,0 +1,261 @@
+// LINK VAULT DATA & STATE
+// ═══════════════════════════════════════════════════════
+const VAULT_KEY = 'ac_v4_vault';
+
+function loadVault()  { return ls.get(VAULT_KEY) || []; }
+function saveVault(d) { ls.set(VAULT_KEY, d); ls.setStr(K.SAVED, String(Date.now())); scheduleDriveSync(); }
+
+let VDATA          = loadVault();
+let VSEARCH        = '';
+let VAULT_UNLOCKED = false;
+let VAULT_IDLE_TIMER = null;
+let VEDIT_ID       = null;
+
+// ── Auto-lock on navigate away ──
+function lockVaultOnNav() {
+  if (VAULT_UNLOCKED) {
+    VAULT_UNLOCKED = false;
+    clearTimeout(VAULT_IDLE_TIMER);
+  }
+}
+
+function startVaultIdleTimer() {
+  clearTimeout(VAULT_IDLE_TIMER);
+  const mins = SETTINGS.idleTimeout || 5;
+  VAULT_IDLE_TIMER = setTimeout(() => {
+    VAULT_UNLOCKED = false;
+    if (CURRENT === 'vault') renderVaultBody();
+  }, mins * 60 * 1000);
+}
+
+function unlockVault() {
+  if (!getPin()) {
+    showPinModal(() => {
+      VAULT_UNLOCKED = true;
+      startVaultIdleTimer();
+      renderVaultBody();
+    });
+  } else {
+    showPinModal(() => {
+      VAULT_UNLOCKED = true;
+      startVaultIdleTimer();
+      renderVaultBody();
+    }, 'unlock');
+  }
+}
+
+function lockVault() {
+  VAULT_UNLOCKED = false;
+  clearTimeout(VAULT_IDLE_TIMER);
+  renderVaultBody();
+}
+
+// ── Favicon helper ──
+function faviconUrl(url) {
+  try {
+    const domain = new URL(url).hostname;
+    return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+  } catch { return ''; }
+}
+
+// ═══════════════════════════════════════════════════════
+//  VAULT RENDER
+// ═══════════════════════════════════════════════════════
+function renderVault(c) {
+  c.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="sub-tabs">
+          <button class="stab active">Links</button>
+        </div>
+        <button id="vault-lock-btn" style="display:none;height:28px;border-radius:5px;background:rgba(251,113,133,.1);border:1px solid rgba(251,113,133,.25);color:#fb7185;font-size:11px;font-weight:600;padding:0 10px;cursor:pointer" onclick="lockVault()">🔓 Lock</button>
+      </div>
+      <button class="nb-btn ac" onclick="openAddLink()">+ Add Link</button>
+    </div>
+    <div id="vault-body"></div>`;
+  renderVaultBody();
+}
+
+function renderVaultBody() {
+  const el = document.getElementById('vault-body'); if (!el) return;
+
+  // Show/hide lock button like games section
+  const lockBtn = document.getElementById('vault-lock-btn');
+  if (lockBtn) lockBtn.style.display = VAULT_UNLOCKED ? 'block' : 'none';
+
+  const all = VDATA;
+  const q = VSEARCH.toLowerCase();
+  const filtered = q ? all.filter(l => l.desc?.toLowerCase().includes(q) || l.url?.toLowerCase().includes(q)) : all;
+
+  // Sort: pinned first, then by date desc
+  const pub    = filtered.filter(l => !l.locked).sort((a,b) => (b.pinned?1:0)-(a.pinned?1:0) || b.addedAt-a.addedAt);
+  const priv   = filtered.filter(l => l.locked).sort((a,b) => b.addedAt-a.addedAt);
+
+  if (!pub.length && !priv.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-ico">🔗</div><p>No links yet — add your first one!</p></div>`;
+    return;
+  }
+
+  const pubHtml  = pub.map(l => vaultCardHtml(l, false)).join('');
+  const privHtml = priv.length ? `
+    <div style="display:flex;align-items:center;gap:10px;margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--brd)">
+      <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#fb7185">🔒 Private Links</span>
+      <div style="flex:1;height:1px;background:rgba(251,113,133,.2)"></div>
+      <span style="font-size:11px;color:var(--mu)">${priv.length} link${priv.length!==1?'s':''}</span>
+      ${!VAULT_UNLOCKED ? `<button onclick="unlockVault()" style="background:rgba(251,113,133,.1);color:#fb7185;border:1px solid rgba(251,113,133,.25);border-radius:4px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer">🔒 Unlock</button>` : ''}
+    </div>
+    <div style="${!VAULT_UNLOCKED ? 'filter:blur(8px);pointer-events:none;user-select:none' : ''}">
+      ${priv.map(l => vaultCardHtml(l, true)).join('')}
+    </div>` : '';
+
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px">${pubHtml}</div>${privHtml}`;
+}
+
+function vaultCardHtml(l, isPrivate) {
+  const fav  = faviconUrl(l.url||'');
+  const date = l.addedAt ? new Date(l.addedAt).toLocaleDateString() : '';
+  const shortUrl = (() => { try { return new URL(l.url).hostname; } catch { return l.url||''; } })();
+
+  return `<div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);padding:12px 14px;display:flex;align-items:center;gap:12px;transition:border-color .15s" id="vcard-${l.id}"
+    onmouseover="this.style.borderColor='var(--brd2)'" onmouseout="this.style.borderColor='var(--brd)'">
+    ${fav ? `<img src="${esc(fav)}" width="20" height="20" style="flex-shrink:0;border-radius:4px" onerror="this.style.display='none'">` : `<div style="width:20px;height:20px;background:var(--surf2);border-radius:4px;flex-shrink:0"></div>`}
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        ${l.pinned ? '<span style="color:#fbbf24;margin-right:4px">📌</span>' : ''}${esc(l.desc||'Untitled')}
+      </div>
+      <div style="font-size:11px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px">${esc(shortUrl)}</div>
+      ${date ? `<div style="font-size:10px;color:var(--mu);margin-top:1px">${date}</div>` : ''}
+    </div>
+    <div style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+      <button onclick="copyVaultLink('${esc(l.url)}')" title="Copy URL"
+        style="width:28px;height:28px;border-radius:5px;background:var(--surf2);border:1px solid var(--brd);color:var(--tx2);font-size:12px;cursor:pointer">📋</button>
+      <button onclick="window.open('${esc(l.url)}','_blank')" title="Open in new tab"
+        style="width:28px;height:28px;border-radius:5px;background:var(--surf2);border:1px solid var(--brd);color:var(--tx2);font-size:12px;cursor:pointer">↗</button>
+
+      <button onclick="openEditLink('${l.id}')" title="Edit"
+        style="width:28px;height:28px;border-radius:5px;background:var(--surf2);border:1px solid var(--brd);color:var(--tx2);font-size:12px;cursor:pointer">✏</button>
+      <button onclick="askDelLink('${l.id}')" title="Delete"
+        style="width:28px;height:28px;border-radius:5px;background:rgba(251,113,133,.08);border:1px solid rgba(251,113,133,.2);color:#fb7185;font-size:12px;cursor:pointer">✕</button>
+    </div>
+  </div>`;
+}
+
+function copyVaultLink(url) {
+  navigator.clipboard?.writeText(url).then(() => toast('✓ URL copied')).catch(() => toast('Copy failed', 'var(--cr)'));
+}
+
+function openPrivateTab(url) {
+  navigator.clipboard?.writeText(url)
+    .then(() => {
+      showAlert(
+        `URL copied to clipboard!<br><br>Now open a private/incognito window manually:<br>
+        <b>Chrome/Edge:</b> Ctrl+Shift+N<br>
+        <b>Firefox:</b> Ctrl+Shift+P<br>
+        <b>Then paste</b> the URL there.`,
+        { title: '🕶 Open in Private' }
+      );
+    })
+    .catch(() => {
+      showAlert(
+        `Copy this URL manually and paste it in a private window:<br><br>
+        <span style="word-break:break-all;color:var(--ac);font-size:12px">${esc(url)}</span>`,
+        { title: '🕶 Open in Private' }
+      );
+    });
+}
+
+// ── ADD / EDIT FORM ──
+function openAddLink() {
+  VEDIT_ID = null;
+  renderVaultForm(null);
+}
+
+function openEditLink(id) {
+  VEDIT_ID = id;
+  renderVaultForm(VDATA.find(l => l.id === id));
+}
+
+function renderVaultForm(l) {
+  document.getElementById('rpanel').classList.add('open');
+  document.getElementById('poverlay').classList.add('show');
+  document.getElementById('content').classList.add('pushed');
+
+  document.getElementById('panel-inner').innerHTML = `
+    <div class="ph">
+      <div class="ph-title">${l ? 'Edit Link' : 'Add New Link'}</div>
+      <button class="ph-close" onclick="closePanel()">✕</button>
+    </div>
+    <div class="form-wrap">
+      <div class="fg">
+        <label class="flbl">Description *</label>
+        <input class="fin" id="vf-desc" placeholder="e.g. My favourite anime site" value="${esc(l?l.desc||'':'')}">
+      </div>
+      <div class="fg">
+        <label class="flbl">URL *</label>
+        <input class="fin" type="url" id="vf-url" placeholder="https://..." value="${esc(l?l.url||'':'')}">
+      </div>
+      <div style="display:flex;gap:16px;padding-top:4px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="vf-pin" ${l?.pinned?'checked':''} style="width:14px;height:14px;cursor:pointer;accent-color:var(--ac)">
+          <label for="vf-pin" class="flbl" style="margin:0;cursor:pointer">📌 Pinned</label>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="vf-lock" ${l?.locked?'checked':''} style="width:14px;height:14px;cursor:pointer;accent-color:#fb7185">
+          <label for="vf-lock" class="flbl" style="margin:0;cursor:pointer;color:#fb7185">🔒 Private</label>
+        </div>
+      </div>
+    </div>
+    <div class="panel-actions">
+      ${l ? `<button class="btn-del" onclick="askDelLink('${l.id}')">Delete</button>` : ''}
+      <button class="btn-cancel" onclick="closePanel()">Cancel</button>
+      <button class="btn-save" onclick="saveVaultLink()">Save</button>
+    </div>`;
+}
+
+function saveVaultLink() {
+  const desc = document.getElementById('vf-desc')?.value?.trim();
+  const url  = document.getElementById('vf-url')?.value?.trim();
+  if (!desc) { showAlert('Please enter a description', {title:'Missing Description'}); return; }
+  if (!url)  { showAlert('Please enter a URL', {title:'Missing URL'}); return; }
+
+  const existing = VEDIT_ID ? VDATA.find(l => l.id === VEDIT_ID) : null;
+  const entry = {
+    id:      VEDIT_ID || uid(),
+    desc, url,
+    pinned:  document.getElementById('vf-pin')?.checked  || false,
+    locked:  document.getElementById('vf-lock')?.checked || false,
+    addedAt: existing ? existing.addedAt : Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  if (existing) { const i=VDATA.findIndex(l=>l.id===VEDIT_ID); VDATA[i]=entry; }
+  else VDATA.unshift(entry);
+
+  addLog('vault', existing?'Updated link':'Added link', entry.desc, entry.url);
+  saveVault(VDATA);
+  PANEL=null;
+  document.getElementById('rpanel').classList.remove('open');
+  document.getElementById('poverlay').classList.remove('show');
+  document.getElementById('content').classList.remove('pushed');
+  renderVaultBody();
+  toast('✓ Link saved');
+}
+
+function askDelLink(id) {
+  showConfirm('Delete this link?', () => {
+    const _vdel=VDATA.find(l=>l.id===id);
+    VDATA = VDATA.filter(l => l.id !== id);
+    saveVault(VDATA);
+    document.getElementById('rpanel').classList.remove('open');
+    document.getElementById('poverlay').classList.remove('show');
+    document.getElementById('content').classList.remove('pushed');
+    renderVaultBody();
+    if(_vdel) toastWithUndo(_vdel.desc||'Link',()=>{VDATA.push(_vdel);saveVault(VDATA);renderVaultBody();});
+  }, {title:'Delete Link?', okLabel:'Delete'});
+}
+
+
+
+
+// ═══════════════════════════════════════════════════════
+//

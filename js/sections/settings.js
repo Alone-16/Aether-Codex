@@ -1,0 +1,760 @@
+// SETTINGS STATE
+// ═══════════════════════════════════════════════════════
+const SETTINGS_KEY = 'ac_v4_settings';
+
+function loadSettings() {
+  const defaults = {
+    sectionOrder: ['home','media','games','books','music','vault','log'],
+    sectionEnabled: { home:true, media:true, games:true, books:true, music:true, vault:true, log:true },
+    density: 'comfortable',
+    fontSize: 'medium',
+    autoBackupDays: 10,
+    idleTimeout: 5,
+    theme: 'dark',
+  };
+  const saved = ls.get(SETTINGS_KEY);
+  if (!saved) return defaults;
+  // Ensure new sections are always added if missing
+  const allSections = ['home','media','games','books','music','vault','log'];
+  allSections.forEach(s => {
+    if (!saved.sectionOrder.includes(s)) saved.sectionOrder.push(s);
+    if (saved.sectionEnabled[s] === undefined) saved.sectionEnabled[s] = true;
+  });
+  return { ...defaults, ...saved };
+}
+function saveSettings(s) { ls.set(SETTINGS_KEY, s); }
+
+let SETTINGS = loadSettings();
+let SETTINGS_DRAG_IDX = null;
+let SETTINGS_TAB = 'sections';
+
+// Apply settings on load
+function applySettings() {
+  const s = SETTINGS;
+  // Font size via CSS variable
+  const sizeMap = { small:'12px', medium:'14px', large:'16px' };
+  document.documentElement.style.setProperty('--base-font', sizeMap[s.fontSize||'medium']);
+  // Density via data attribute
+  document.documentElement.setAttribute('data-density', s.density||'comfortable');
+  // Rebuild sidebar order
+  rebuildSidebar();
+}
+
+function rebuildSidebar() {
+  const order = SETTINGS.sectionOrder || ['home','media','games','books','music'];
+  const enabled = SETTINGS.sectionEnabled || {};
+  const sidebarMeta = {
+    home:  { icon:'⌂', label:'Home' },
+    media: { icon:'◉', label:'Media' },
+    games: { icon:'◈', label:'Games' },
+    books: { icon:'◎', label:'Books' },
+    music: { icon:'♪', label:'Music' },
+    vault: { icon:'◈', label:'Vault' },
+    log:   { icon:'◎', label:'Log' },
+  };
+  // Desktop sidebar
+  const sb = document.getElementById('sidebar');
+  if (!sb) return;
+  // Keep logo and sep, rebuild nav items
+  const logo = sb.querySelector('.sb-logo');
+  const sep  = sb.querySelector('.sb-sep');
+  const bot  = sb.querySelector('.sb-bot');
+  // Remove existing nav items
+  sb.querySelectorAll('.ni:not(.sb-bot .ni)').forEach(el => el.remove());
+  // Re-insert in order
+  const frag = document.createDocumentFragment();
+  order.filter(id => enabled[id] !== false).forEach(id => {
+    const m = sidebarMeta[id]; if (!m) return;
+    const el = document.createElement('div');
+    el.className = 'ni' + (CURRENT === id ? ' active' : '');
+    el.dataset.r = id;
+    el.dataset.tip = m.label;
+    el.innerHTML = `<span class="ni-ico">${m.icon}</span><span class="ni-lbl">${m.label}</span>`;
+    el.onclick = () => nav(id);
+    if (CURRENT === id) {
+      el.classList.add('active');
+      el.style.setProperty('--ac-active', 'var(--ac)');
+    }
+    frag.appendChild(el);
+  });
+  // Insert before .sb-bot
+  sb.insertBefore(frag, bot);
+  // Also rebuild mobile sidebar
+  const mobSb = document.getElementById('mob-sb');
+  if (mobSb) {
+    const mobLogo = mobSb.querySelector('.mob-logo');
+    const mobSep  = mobSb.querySelector('.mob-sep');
+    mobSb.querySelectorAll('.mob-ni').forEach(el => el.remove());
+    const mobFrag = document.createDocumentFragment();
+    order.filter(id => enabled[id] !== false).forEach(id => {
+      const m = sidebarMeta[id]; if (!m) return;
+      const el = document.createElement('div');
+      el.className = 'mob-ni' + (CURRENT === id ? ' active' : '');
+      el.dataset.r = id;
+      el.innerHTML = `<span>${m.icon}</span>${m.label}`;
+      el.onclick = () => nav(id);
+      mobFrag.appendChild(el);
+    });
+    // Insert sep then settings
+    mobSb.appendChild(mobFrag);
+    if (mobSep) mobSb.appendChild(mobSep.cloneNode());
+    const settingsEl = document.createElement('div');
+    settingsEl.className = 'mob-ni' + (CURRENT === 'settings' ? ' active' : '');
+    settingsEl.innerHTML = '<span>⚙</span>Settings';
+    settingsEl.onclick = () => nav('settings');
+    mobSb.appendChild(settingsEl);
+  }
+}
+
+// ─── SETTINGS RENDER ───
+function renderSettings(c) {
+  const tabs = ['sections','drive','storage','ai','security','share'];
+  const tabLabels = ['Sections','Drive','Storage','AI Assistant','Security','Public Share'];
+
+  c.innerHTML = `
+    <div style="font-family:var(--fd);font-size:20px;font-weight:700;margin-bottom:20px;color:var(--tx)">⚙ Settings</div>
+    <div style="display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap">
+      ${tabs.map((t,i) => `<button class="stab${SETTINGS_TAB===t?' active':''}" onclick="setSettingsTab('${t}')">${tabLabels[i]}</button>`).join('')}
+    </div>
+    <div id="settings-body" style="max-width:560px"></div>`;
+  renderSettingsBody();
+}
+
+function setSettingsTab(t) { SETTINGS_TAB = t; renderSettingsBody(); }
+
+function renderSettingsBody() {
+  const el = document.getElementById('settings-body'); if (!el) return;
+  if      (SETTINGS_TAB === 'sections')   renderSettingsSections(el);
+  else if (SETTINGS_TAB === 'drive')      renderSettingsDrive(el);
+  else if (SETTINGS_TAB === 'storage')    renderSettingsStorage(el);
+  else if (SETTINGS_TAB === 'ai')         renderSettingsAI(el);
+  else if (SETTINGS_TAB === 'share')       renderSettingsPublicShare(el);
+  else if (SETTINGS_TAB === 'security')   renderSettingsSecurity(el);
+  // Update active tab
+  document.querySelectorAll('.stab').forEach(t => {
+    const tabs = ['sections','drive','storage','appearance','security'];
+    t.classList.toggle('active', t.textContent.toLowerCase() === (tabs.find(x => x === SETTINGS_TAB) || ''));
+  });
+}
+
+// ── SECTIONS TAB ──
+function renderSettingsSections(el) {
+  const order   = [...(SETTINGS.sectionOrder || ['home','media','games','books','music'])];
+  const enabled = SETTINGS.sectionEnabled || {};
+  const meta = {
+    home:  { icon:'⌂', color:'#34d399', desc:'Master dashboard' },
+    media: { icon:'◉', color:'#e879a0', desc:'Anime, K-Drama, Manhwa & more' },
+    games: { icon:'◈', color:'#f59e0b', desc:'PC & Mobile game tracker' },
+    books: { icon:'◎', color:'#a78bfa', desc:'Novels, Audiobooks & Manga' },
+    music: { icon:'♪', color:'#fb923c', desc:'Music library & YouTube sync' },
+    vault: { icon:'🔗', color:'#a78bfa', desc:'Save and manage links privately' },
+  };
+
+  el.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:14px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Section Order</div>
+        <div style="font-size:12px;color:var(--mu)">Drag to reorder · toggle to show/hide · click Save to apply</div>
+      </div>
+      <div id="section-order-list" style="padding:8px">
+        ${order.map((id, i) => {
+          const m = meta[id]; if (!m) return '';
+          const isEnabled = enabled[id] !== false;
+          const isHome = id === 'home';
+          return `<div class="settings-section-row" draggable="${!isHome}" data-id="${id}" data-idx="${i}"
+            ondragstart="ssDragStart(event,${i})" ondragover="ssDragOver(event,${i})" ondrop="ssDrop(event,${i})"
+            ondragleave="this.classList.remove('ss-drag-over')"
+            style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--surf2);border:1px solid var(--brd);border-radius:7px;margin-bottom:4px;transition:all .15s;${!isHome?'cursor:grab':''}">
+            <span style="font-size:12px;color:var(--mu);cursor:grab;user-select:none">${isHome?'📌':'⠿'}</span>
+            <span style="font-size:18px">${m.icon}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--tx)">${id.charAt(0).toUpperCase()+id.slice(1)}</div>
+              <div style="font-size:11px;color:var(--mu)">${m.desc}</div>
+            </div>
+            ${!isHome ? `<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--tx2)">
+              <input type="checkbox" ${isEnabled?'checked':''} onchange="toggleSection('${id}',this.checked)"
+                style="width:14px;height:14px;accent-color:var(--ac);cursor:pointer">
+              ${isEnabled?'Enabled':'Hidden'}
+            </label>` : `<span style="font-size:11px;color:var(--mu);padding:2px 8px;background:var(--surf3);border-radius:4px">Always on</span>`}
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="padding:10px 16px;border-top:1px solid var(--brd);display:flex;justify-content:flex-end">
+        <button onclick="saveSectionOrder()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">Save Order</button>
+      </div>
+    </div>`;
+
+  // Add drag-over style
+  if (!document.getElementById('settings-drag-style')) {
+    const style = document.createElement('style');
+    style.id = 'settings-drag-style';
+    style.textContent = `.ss-drag-over{border-color:var(--ac)!important;background:rgba(var(--ac-rgb),.08)!important}`;
+    document.head.appendChild(style);
+  }
+}
+
+let SS_DRAG_IDX = null;
+let SS_DRAG_ORDER = null;
+
+function ssDragStart(e, i) {
+  SS_DRAG_IDX = i;
+  SS_DRAG_ORDER = [...(SETTINGS.sectionOrder || ['home','media','games','books','music'])];
+  e.currentTarget.style.opacity = '.4';
+}
+function ssDragOver(e, i) {
+  e.preventDefault();
+  if (SS_DRAG_IDX === i || SS_DRAG_IDX === null) return;
+  document.querySelectorAll('.settings-section-row').forEach(r => r.classList.remove('ss-drag-over'));
+  e.currentTarget.classList.add('ss-drag-over');
+}
+function ssDrop(e, i) {
+  e.preventDefault();
+  document.querySelectorAll('.settings-section-row').forEach(r => {
+    r.classList.remove('ss-drag-over');
+    r.style.opacity = '1';
+  });
+  if (SS_DRAG_IDX === null || SS_DRAG_IDX === i) return;
+  const order = [...(SETTINGS.sectionOrder || ['home','media','games','books','music'])];
+  // Never move home from position 0
+  if (order[SS_DRAG_IDX] === 'home' || order[i] === 'home') return;
+  const item = order.splice(SS_DRAG_IDX, 1)[0];
+  order.splice(i, 0, item);
+  SETTINGS.sectionOrder = order;
+  SS_DRAG_IDX = null;
+  renderSettingsSections(document.getElementById('settings-body'));
+}
+
+function toggleSection(id, enabled) {
+  if (!SETTINGS.sectionEnabled) SETTINGS.sectionEnabled = {};
+  SETTINGS.sectionEnabled[id] = enabled;
+  renderSettingsSections(document.getElementById('settings-body'));
+}
+
+function saveSectionOrder() {
+  saveSettings(SETTINGS);
+  rebuildSidebar();
+  toast('✓ Section order saved', 'var(--cd)');
+}
+
+// ── DRIVE TAB ──
+function renderSettingsDrive(el) {
+  const connected = _isConnected();
+  const lastSync  = ls.str(K.DSYNC) ? new Date(parseInt(ls.str(K.DSYNC))).toLocaleString() : 'Never';
+  const lastSaved = ls.str(K.SAVED) ? new Date(parseInt(ls.str(K.SAVED))).toLocaleString() : 'Never';
+
+  el.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Google Drive</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--tx)">Status</div>
+            <div style="font-size:12px;color:${connected?'#4ade80':'#fb7185'};margin-top:2px">${connected?'✓ Connected':'✗ Not connected'}</div>
+          </div>
+          <button onclick="driveAction()" style="background:${connected?'rgba(251,113,133,.1)':'rgba(var(--ac-rgb),.12)'};color:${connected?'#fb7185':'var(--ac)'};border:1px solid ${connected?'rgba(251,113,133,.25)':'rgba(var(--ac-rgb),.3)'};border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
+            ${connected?'Disconnect':'Connect'}
+          </button>
+        </div>
+        <div style="height:1px;background:var(--brd)"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+          <div><div style="color:var(--mu);margin-bottom:2px">Last Synced</div><div style="color:var(--tx2)">${lastSync}</div></div>
+          <div><div style="color:var(--mu);margin-bottom:2px">Last Changed</div><div style="color:var(--tx2)">${lastSaved}</div></div>
+        </div>
+        ${connected?`<button onclick="_pushToDrive().then(()=>toast('✓ Synced now','var(--cd)'))" style="background:rgba(var(--ac-rgb),.12);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;align-self:flex-start">↻ Sync Now</button>`:''}
+      </div>
+    </div>
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Auto Backup</div>
+        <div style="font-size:12px;color:var(--mu)">Automatically export a backup to Drive every N days</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;align-items:center;gap:10px">
+        <input type="number" id="backup-days" min="1" max="365" value="${SETTINGS.autoBackupDays||10}"
+          style="width:70px;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--tx);outline:none">
+        <span style="font-size:13px;color:var(--tx2)">days</span>
+        <button onclick="saveBackupDays()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
+      </div>
+    </div>`;
+}
+
+function saveBackupDays() {
+  const v = parseInt(document.getElementById('backup-days')?.value);
+  if (v > 0) { SETTINGS.autoBackupDays = v; saveSettings(SETTINGS); toast('✓ Saved'); }
+}
+
+// ── STORAGE TAB ──
+function renderSettingsStorage(el) {
+  const keys = [
+    { label:'Media',     key:K.DATA,      color:'#e879a0' },
+    { label:'Games',     key:GAMES_KEY,   color:'#f59e0b' },
+    { label:'Books',     key:BOOKS_KEY,   color:'#a78bfa' },
+    { label:'Music',     key:MUSIC_KEY,   color:'#fb923c' },
+    { label:'Playlists', key:MUSIC_PL_KEY,color:'#fb923c' },
+    { label:'Genres',    key:K.GENRES,    color:'#8888aa' },
+    { label:'Settings',  key:SETTINGS_KEY,color:'#8888aa' },
+  ];
+
+  let totalBytes = 0;
+  const rows = keys.map(k => {
+    const val = localStorage.getItem(k.key) || '';
+    const bytes = new Blob([val]).size;
+    totalBytes += bytes;
+    return { ...k, bytes };
+  });
+
+  const maxBytes = Math.max(...rows.map(r => r.bytes), 1);
+  const fmtBytes = b => b > 1024*1024 ? `${(b/1024/1024).toFixed(2)} MB` : b > 1024 ? `${(b/1024).toFixed(1)} KB` : `${b} B`;
+  const totalKB = (totalBytes/1024).toFixed(1);
+  const lsLimit = 5120; // ~5MB typical limit
+  const pct = Math.min(Math.round(totalBytes/1024/lsLimit*100), 100);
+
+  el.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">localStorage Usage</div>
+        <div style="font-size:12px;color:var(--mu)">${fmtBytes(totalBytes)} used of ~5 MB</div>
+      </div>
+      <div style="padding:14px 16px">
+        <div style="height:6px;background:var(--surf3);border-radius:3px;overflow:hidden;margin-bottom:14px">
+          <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--ac),var(--ac2));border-radius:3px;transition:width .4s"></div>
+        </div>
+        ${rows.map(r => `
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--brd)">
+            <div style="width:8px;height:8px;border-radius:50%;background:${r.color};flex-shrink:0"></div>
+            <span style="flex:1;font-size:13px;color:var(--tx)">${r.label}</span>
+            <div style="width:100px;height:3px;background:var(--surf3);border-radius:2px;overflow:hidden">
+              <div style="height:100%;width:${Math.round(r.bytes/maxBytes*100)}%;background:${r.color};border-radius:2px"></div>
+            </div>
+            <span style="font-size:12px;color:var(--tx2);min-width:60px;text-align:right">${fmtBytes(r.bytes)}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="exportData()" style="background:var(--surf2);color:var(--tx2);border:1px solid var(--brd);border-radius:5px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">⬇ Export Backup</button>
+      <button onclick="importFile()" style="background:var(--surf2);color:var(--tx2);border:1px solid var(--brd);border-radius:5px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">⬆ Import Backup</button>
+    </div>`;
+}
+
+// ── APPEARANCE TAB ──
+function renderSettingsAI(el) {
+  const hasKey = !!getAIKey();
+  el.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">✦ Gemini API Key</div>
+        <div style="font-size:12px;color:var(--mu)">Your key is stored locally on this device only — never sent to GitHub</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:13px;color:${hasKey?'#4ade80':'var(--tx2)'}">
+          ${hasKey?'✓ API key is set on this device':'No API key set'}
+        </div>
+        <div style="display:flex;gap:8px">
+          <input type="password" id="ai-key-setting" placeholder="AIzaSy..." value="${hasKey?'••••••••••••••••':''}"
+            style="flex:1;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:8px 10px;font-size:13px;color:var(--tx);outline:none"
+            onfocus="if(this.value==='••••••••••••••••')this.value=''">
+          <button onclick="saveAIKeySetting()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">Save</button>
+        </div>
+        ${hasKey?`<button onclick="clearAIKey()" style="background:rgba(251,113,133,.08);color:#fb7185;border:1px solid rgba(251,113,133,.2);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;align-self:flex-start">Remove Key</button>`:''}
+        <div style="font-size:12px;color:var(--mu);line-height:1.6">
+          Get a free API key at <a href="https://aistudio.google.com" target="_blank" style="color:var(--ac)">aistudio.google.com</a> → Get API Key → Create API key.<br>
+          You'll need to paste it once per device.
+        </div>
+      </div>
+    </div>`;
+}
+
+function saveAIKeySetting() {
+  const val = document.getElementById('ai-key-setting')?.value?.trim();
+  if (!val) { toast('Please enter an API key', 'var(--cr)'); return; }
+  setAIKey(val); toast('✓ API key saved', 'var(--cd)');
+  renderSettingsAI(document.getElementById('settings-body'));
+}
+
+function clearAIKey() {
+  showConfirm('Remove your Gemini API key from this device?', () => {
+    ls.del(AI_KEY_STORAGE); AI_HISTORY = [];
+    renderSettingsAI(document.getElementById('settings-body'));
+    toast('API key removed');
+  }, { title:'Remove API Key?', okLabel:'Remove', danger:false });
+}
+
+function setFontSize(v) {
+  SETTINGS.fontSize = v; saveSettings(SETTINGS);
+  document.documentElement.style.setProperty('--base-font', {small:'12px',medium:'14px',large:'16px'}[v]||'14px');
+  renderSettingsBody();
+  toast('✓ Font size updated');
+}
+
+function setDensity(v) {
+  SETTINGS.density = v; saveSettings(SETTINGS);
+  document.documentElement.setAttribute('data-density', v);
+  renderSettingsBody();
+  toast('✓ Density updated');
+}
+
+// ── SECURITY TAB ──
+function renderSettingsSecurity(el) {
+  const hasPin = !!getPin();
+  el.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Vault PIN</div>
+        <div style="font-size:12px;color:var(--mu)">Protects 18+ Games and private Link Vault links</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:13px;color:var(--tx)">${hasPin?'PIN is set':'No PIN set'}</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:2px">${hasPin?'Click to change your PIN':'Set a PIN to protect adult content'}</div>
+        </div>
+        <button onclick="showPinModal(()=>renderSettingsSecurity(document.getElementById('settings-body')),'${hasPin?'change':'setup'}')"
+          style="background:rgba(var(--ac-rgb),.12);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
+          ${hasPin?'Change PIN':'Set PIN'}
+        </button>
+      </div>
+      ${hasPin?`<div style="padding:0 16px 14px">
+        <button onclick="clearPin()" style="background:rgba(251,113,133,.08);color:#fb7185;border:1px solid rgba(251,113,133,.2);border-radius:5px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer">Remove PIN</button>
+      </div>`:''}
+    </div>
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Auto-Lock Timeout</div>
+        <div style="font-size:12px;color:var(--mu)">Minutes of inactivity before 18+ content re-locks</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;align-items:center;gap:10px">
+        <input type="number" id="idle-timeout" min="1" max="60" value="${SETTINGS.idleTimeout||5}"
+          style="width:70px;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--tx);outline:none">
+        <span style="font-size:13px;color:var(--tx2)">minutes</span>
+        <button onclick="saveIdleTimeout()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
+      </div>
+    </div>`;
+}
+
+function clearPin() {
+  showConfirm('Remove your PIN? 18+ content will no longer be locked.', () => {
+    ls.del(PIN_KEY); renderSettingsSecurity(document.getElementById('settings-body'));
+    toast('PIN removed');
+  }, { title:'Remove PIN?', okLabel:'Remove', danger:false });
+}
+
+function saveIdleTimeout() {
+  const v = parseInt(document.getElementById('idle-timeout')?.value);
+  if (v > 0) { SETTINGS.idleTimeout = v; saveSettings(SETTINGS); toast('✓ Saved'); }
+}
+
+// ═══════════════════════════════
+//  SEARCH
+// ═══════════════════════════════
+function onSearch(v){SEARCH=v.toLowerCase();if(CURRENT==='media')renderMediaBody();}
+
+// ═══════════════════════════════
+//  EXPORT / IMPORT
+// ═══════════════════════════════
+function exportData(){
+  const payload={version:DATA_VERSION,exported:new Date().toISOString(),data:DATA,genres:GENRES};
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+  a.download='AetherCodex_backup_'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();URL.revokeObjectURL(a.href);toast('✓ Backup exported');
+}
+
+function importFile(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.json';
+  inp.onchange=e=>{const file=e.target.files[0];if(!file)return;
+    const r=new FileReader();
+    r.onload=ev=>{try{
+      const p=JSON.parse(ev.target.result);
+      if(!p.data||!Array.isArray(p.data))throw new Error('Invalid file');
+      showConfirm(`Import ${p.data.length} entries? This will merge with your current data.`,()=>{
+        const ids=new Set(DATA.map(x=>x.id));
+        const fresh=p.data.filter(x=>!ids.has(x.id));
+        DATA=DATA.concat(fresh);saveData(DATA);
+        if(p.genres){const gids=new Set(GENRES.map(g=>g.id));p.genres.filter(g=>!gids.has(g.id)).forEach(g=>GENRES.push(g));saveGenres(GENRES);}
+        render();toast(`✓ Imported ${fresh.length} new entries`);
+      },{title:'Import Data?',okLabel:'Import',danger:false});
+    }catch(err){toast('✗ '+err.message);}};
+    r.readAsText(file);
+  };inp.click();
+}
+
+// ═══════════════════════════════
+//  TOAST
+// ═══════════════════════════════
+// ═══ CUSTOM MODALS ═══
+function showConfirm(msg, onOk, opts={}) {
+  const isDanger = opts.danger !== false;
+  const title    = opts.title || (isDanger ? '⚠ Confirm' : 'Confirm');
+  const okLabel  = opts.okLabel || (isDanger ? 'Delete' : 'OK');
+  const el = document.createElement('div');
+  el.className = 'modal-overlay';
+  el.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-title">${title}</div>
+      <div class="modal-msg">${msg}</div>
+      <div class="modal-btns">
+        <button class="modal-btn cancel" id="modal-cancel">Cancel</button>
+        <button class="modal-btn ${isDanger?'danger':'confirm'}" id="modal-ok">${okLabel}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  el.querySelector('#modal-cancel').onclick = () => el.remove();
+  el.querySelector('#modal-ok').onclick     = () => { el.remove(); onOk(); };
+  el.addEventListener('click', e => { if(e.target===el) el.remove(); });
+  setTimeout(() => el.querySelector('#modal-ok').focus(), 50);
+}
+
+function showAlert(msg, opts={}) {
+  const title = opts.title || 'Notice';
+  const el = document.createElement('div');
+  el.className = 'modal-overlay';
+  el.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-title">${title}</div>
+      <div class="modal-msg">${msg}</div>
+      <div class="modal-btns">
+        <button class="modal-btn confirm" id="modal-ok">OK</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  el.querySelector('#modal-ok').onclick = () => el.remove();
+  el.addEventListener('click', e => { if(e.target===el) el.remove(); });
+  setTimeout(() => el.querySelector('#modal-ok').focus(), 50);
+}
+
+function toast(msg,col){
+  const el=document.createElement('div');el.className='toast-el';
+  if(col)el.style.borderLeftColor=col;el.textContent=msg;
+  document.body.appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';setTimeout(()=>el.remove(),300)},2200);
+}
+
+// ═══════════════════════════════
+//  DRIVE (stub - Phase 4)
+// ═══════════════════════════════
+// ═══════════════════════════════
+//  GOOGLE DRIVE SYNC
+// ═══════════════════════════════
+let _gisReady=false, _tokenClient=null, _syncTimer=null, _driveFolderId=null;
+
+function _getToken(){return Date.now()<parseInt(ls.str(K.DEXP)||'0')?ls.str(K.DTOKEN):null;}
+function _isConnected(){return !!_getToken();}
+
+function _updateDriveBtn(state){
+  const btn=document.getElementById('drive-btn');if(!btn)return;
+  const map={connected:['✓ Drive','var(--cd)'],syncing:['↻ Drive','var(--ch)'],pending:['… Drive','var(--ch)'],error:['✗ Drive','var(--cr)'],off:['☁ Drive','']};
+  const[label,color]=map[state||(_isConnected()?'connected':'off')];
+  btn.querySelector('span').textContent=label.split(' ')[1];
+  btn.firstChild.textContent=label.split(' ')[0]+' ';
+  btn.style.color=color;
+  btn.title=state==='connected'?'Drive synced — click to disconnect':state==='syncing'?'Syncing...':state==='error'?'Sync error — click to retry':'Connect to Google Drive';
+}
+
+function initGIS(){
+  if(!window.google?.accounts?.oauth2){setTimeout(initGIS,600);return;}
+
+  // Silent token client - tries to get token without showing popup
+  _tokenClient=google.accounts.oauth2.initTokenClient({
+    client_id:CLIENT_ID, scope:DRIVE_SCOPE,
+    prompt:'',  // empty = silent, no popup unless truly needed
+    callback:resp=>{
+      if(resp.error==='interaction_required'||resp.error==='user_logged_out'){
+        // Silent failed - need user interaction, create a new client with prompt
+        _tokenClient=google.accounts.oauth2.initTokenClient({
+          client_id:CLIENT_ID, scope:DRIVE_SCOPE,
+          callback:resp2=>{
+            if(resp2.error){toast('Drive auth failed: '+resp2.error,'var(--cr)');_updateDriveBtn('error');return;}
+            _saveToken(resp2);
+          }
+        });
+        _tokenClient.requestAccessToken();
+        return;
+      }
+      if(resp.error){toast('Drive auth failed: '+resp.error,'var(--cr)');_updateDriveBtn('error');return;}
+      _saveToken(resp);
+    }
+  });
+
+  _gisReady=true;
+
+  if(_isConnected()){
+    // Token still valid - reconnect silently, no popup
+    _updateDriveBtn('syncing');
+    _driveInit();
+  } else if(ls.str(K.DTOKEN)){
+    // Had a token before but it expired - try silent refresh
+    _updateDriveBtn('syncing');
+    _tokenClient.requestAccessToken();
+  } else {
+    _updateDriveBtn('off');
+  }
+}
+
+function _saveToken(resp){
+  ls.setStr(K.DTOKEN,resp.access_token);
+  ls.setStr(K.DEXP,String(Date.now()+(resp.expires_in-60)*1000));
+  _updateDriveBtn('syncing');
+  _driveInit();
+}
+
+function _showDriveHint(){
+  setTimeout(()=>{
+    const el=document.getElementById('drive-hint-inner');
+    if(el && DATA.length===0 && !_isConnected()) el.style.display='flex';
+  }, 300);
+}
+
+function driveAction(){
+  if(_isConnected()){
+    showConfirm('Your data will stay in localStorage. You can reconnect anytime.',()=>{
+    ls.del(K.DTOKEN);ls.del(K.DEXP);ls.del(K.DFILE);ls.del(K.DSYNC);
+    _driveFolderId=null;_updateDriveBtn('off');toast('Disconnected from Drive');
+  },{title:'Disconnect Drive?',okLabel:'Disconnect',danger:false});
+  } else {
+    if(!_gisReady){toast('Google API loading, try again','var(--ch)');return;}
+    // Force interactive login
+    _tokenClient=google.accounts.oauth2.initTokenClient({
+      client_id:CLIENT_ID, scope:DRIVE_SCOPE,
+      callback:resp=>{
+        if(resp.error){toast('Drive auth failed: '+resp.error,'var(--cr)');_updateDriveBtn('error');return;}
+        _saveToken(resp);
+      }
+    });
+    _tokenClient.requestAccessToken();
+  }
+}
+
+async function _req(url,opts={}){
+  const token=_getToken();if(!token)return null;
+  try{
+    const r=await fetch(url,{...opts,headers:{Authorization:`Bearer ${token}`,... (opts.headers||{})}});
+    if(r.status===401){ls.del(K.DTOKEN);ls.del(K.DEXP);_updateDriveBtn('off');return null;}
+    return r;
+  }catch{return null;}
+}
+
+async function _getOrCreateFolder(){
+  if(_driveFolderId)return _driveFolderId;
+  const r=await _req(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FOLDER}'+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id)`);
+  if(!r)return null;
+  const d=await r.json();
+  if(d.files?.length){_driveFolderId=d.files[0].id;return _driveFolderId;}
+  const cr=await _req('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:DRIVE_FOLDER,mimeType:'application/vnd.google-apps.folder'})});
+  if(!cr)return null;
+  const cf=await cr.json();_driveFolderId=cf.id;return _driveFolderId;
+}
+
+async function _getOrCreateFile(){
+  const cached=ls.str(K.DFILE);if(cached)return cached;
+  const folderId=await _getOrCreateFolder();if(!folderId)return null;
+  const r=await _req(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FILE}'+and+'${folderId}'+in+parents+and+trashed=false&fields=files(id,modifiedTime)`);
+  if(!r)return null;
+  const d=await r.json();
+  if(d.files?.length){ls.setStr(K.DFILE,d.files[0].id);return d.files[0].id;}
+  const cr=await _req('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+    method:'POST',
+    headers:{'Content-Type':'multipart/related; boundary=boundary'},
+    body:`--boundary\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({name:DRIVE_FILE,parents:[folderId]})}\r\n--boundary\r\nContent-Type: application/json\r\n\r\n{}\r\n--boundary--`
+  });
+  if(!cr)return null;
+  const cf=await cr.json();ls.setStr(K.DFILE,cf.id);return cf.id;
+}
+
+async function _pushToDrive(){
+  _updateDriveBtn('syncing');
+  try{
+    const fileId=await _getOrCreateFile();if(!fileId)throw new Error('No file');
+    const payload=JSON.stringify({version:DATA_VERSION,savedAt:parseInt(ls.str(K.SAVED)||'0'),data:DATA,genres:GENRES,games:GDATA,music:MDATA,playlists:MPLAYLISTS,books:BDATA,vault:VDATA,log:LDATA});
+    const r=await _req(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:payload});
+    if(!r||!r.ok)throw new Error('Upload failed');
+    ls.setStr(K.DSYNC,String(Date.now()));
+    _updateDriveBtn('connected');
+  }catch(e){_updateDriveBtn('error');toast('Drive sync failed: '+e.message,'var(--cr)');}
+}
+
+async function _pullFromDrive(){
+  try{
+    const fileId=await _getOrCreateFile();if(!fileId)return null;
+    const r=await _req(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+    if(!r||!r.ok)return null;
+    return await r.json();
+  }catch{return null;}
+}
+
+// Entry-level merge — newer entry per ID wins
+function _mergeData(local,remote){
+  const map=new Map();
+  local.forEach(e=>map.set(e.id,e));
+  remote.forEach(e=>{
+    const l=map.get(e.id);
+    if(!l||(e.updatedAt||0)>(l.updatedAt||0))map.set(e.id,e);
+  });
+  return Array.from(map.values()).sort((a,b)=>a.title.localeCompare(b.title));
+}
+
+async function _driveInit(){
+  _updateDriveBtn('syncing');
+  const remote=await _pullFromDrive();
+  if(!remote){await _pushToDrive();return;}
+  const localSaved=parseInt(ls.str(K.SAVED)||'0');
+  const remoteSaved=remote.savedAt||0;
+  if(remoteSaved>localSaved){
+    // Remote has changes local doesn't — merge
+    DATA=_mergeData(DATA,remote.data||[]);
+    if(remote.genres){
+      const gids=new Set(GENRES.map(g=>g.id));
+      (remote.genres||[]).filter(g=>!gids.has(g.id)).forEach(g=>GENRES.push(g));
+      saveGenres(GENRES);
+    }
+    if(remote.games&&Array.isArray(remote.games)){
+      GDATA=_mergeData(GDATA,remote.games);
+      saveGames(GDATA);
+    }
+    if(remote.music&&Array.isArray(remote.music)){
+      MDATA=_mergeData(MDATA,remote.music);
+      saveMusic(MDATA);
+    }
+    if(remote.playlists&&Array.isArray(remote.playlists)){
+      MPLAYLISTS=remote.playlists;
+      savePlaylists(MPLAYLISTS);
+    }
+    if(remote.books&&Array.isArray(remote.books)){
+      BDATA=_mergeData(BDATA,remote.books);
+      saveBooks(BDATA);
+    }
+    if(remote.vault&&Array.isArray(remote.vault)){
+      VDATA=_mergeData(VDATA,remote.vault);
+      saveVault(VDATA);
+    }
+    if(remote.log&&Array.isArray(remote.log)){
+      LDATA=remote.log;
+      saveLog(LDATA);
+    }
+    saveData(DATA);render();
+    toast('✓ Synced from Drive','var(--cd)');
+  } else if(localSaved>remoteSaved){
+    await _pushToDrive();
+  } else {
+    _updateDriveBtn('connected');
+  }
+}
+
+function scheduleDriveSync(){
+  if(!_isConnected())return;
+  clearTimeout(_syncTimer);
+  _updateDriveBtn('pending');
+  _syncTimer=setTimeout(_pushToDrive,3000);
+}
+
+// ═══════════════════════════════
+//  MOBILE
+// ═══════════════════════════════
+function openMob(){document.getElementById('mob-ov').classList.add('show');document.getElementById('mob-sb').classList.add('open')}
+function closeMob(){document.getElementById('mob-ov').classList.remove('show');document.getElementById('mob-sb').classList.remove('open')}
+
+// ═══════════════════════════════
+//  BOOTSTRAP
+// ═══════════════════════════════
+
+// ═══════════════════════════════════════════════════════
+//
