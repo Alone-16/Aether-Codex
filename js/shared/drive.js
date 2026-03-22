@@ -1,12 +1,3 @@
-// ═══════════════════════════════════════════════════════
-//  GOOGLE DRIVE SYNC
-// ═══════════════════════════════════════════════════════
-// ═══════════════════════════════
-//  DRIVE (stub - Phase 4)
-// ═══════════════════════════════
-// ═══════════════════════════════
-//  GOOGLE DRIVE SYNC
-// ═══════════════════════════════
 let _gisReady=false, _tokenClient=null, _syncTimer=null, _driveFolderId=null;
 
 function _getToken(){return Date.now()<parseInt(ls.str(K.DEXP)||'0')?ls.str(K.DTOKEN):null;}
@@ -14,20 +5,12 @@ function _isConnected(){return !!_getToken();}
 
 function _updateDriveBtn(state){
   const btn=document.getElementById('drive-btn');if(!btn)return;
-  const s = state||(_isConnected()?'connected':'off');
-  const map={
-    connected: {ico:'✓', txt:'Synced',  col:'#4ade80'},
-    syncing:   {ico:'↻', txt:'Syncing…', col:'#fbbf24'},
-    pending:   {ico:'…', txt:'Pending', col:'#fbbf24'},
-    error:     {ico:'✗', txt:'Error',   col:'#fb7185'},
-    off:       {ico:'☁', txt:'Drive',   col:''}
-  };
-  const {ico, txt, col} = map[s] || map.off;
-  btn.innerHTML = `<span style="font-size:12px">${ico}</span><span class="drive-status-txt" style="font-size:10px;font-weight:700;margin-left:3px">${txt}</span>`;
-  btn.style.color = col || 'var(--tx2)';
-  btn.style.borderColor = col ? col + '66' : '';
-  btn.style.background = col ? col + '18' : '';
-  btn.title = s==='connected'?'Drive synced — click to disconnect':s==='syncing'?'Syncing...':s==='error'?'Sync error — click to retry':'Connect Google Drive';
+  const map={connected:['✓ Drive','var(--cd)'],syncing:['↻ Drive','var(--ch)'],pending:['… Drive','var(--ch)'],error:['✗ Drive','var(--cr)'],off:['☁ Drive','']};
+  const[label,color]=map[state||(_isConnected()?'connected':'off')];
+  btn.querySelector('span').textContent=label.split(' ')[1];
+  btn.firstChild.textContent=label.split(' ')[0]+' ';
+  btn.style.color=color;
+  btn.title=state==='connected'?'Drive synced — click to disconnect':state==='syncing'?'Syncing...':state==='error'?'Sync error — click to retry':'Connect to Google Drive';
 }
 
 function initGIS(){
@@ -235,6 +218,3 @@ function closeMob(){document.getElementById('mob-ov').classList.remove('show');d
 // ═══════════════════════════════
 //  BOOTSTRAP
 // ═══════════════════════════════
-
-// ═══════════════════════════════════════════════════════
-//
