@@ -1,6 +1,7 @@
 function nav(id,push=true){
   const prevId = CURRENT;
   CURRENT=id;
+  localStorage.setItem('ac_last_section', id);
   if(push) try{history.pushState({},'',' #/'+(id==='home'?'':id));}catch(e){}
   const c=document.getElementById('content');
   // Directional slide based on section order
