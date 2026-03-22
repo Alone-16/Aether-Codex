@@ -27,10 +27,11 @@
          || 'home';
   const col = bg[h] || bg.home;
   document.documentElement.setAttribute('data-section', h);
-  // Write a style tag immediately so background is set before any paint
-  document.write('<style>html,body{background:' + col + '!important;visibility:hidden}</style>');
+  document.documentElement.style.background = col;
+  document.documentElement.style.backgroundColor = col;
 })();
 </script>
+<style>html,body{visibility:hidden}</style>
 <link rel="stylesheet" href="style.css" onload="document.body.style.visibility='visible'">
 <noscript><style>body{visibility:visible}</style></noscript>
 
