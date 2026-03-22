@@ -1,4 +1,5 @@
-// MEDIA SECTION
+// ═══════════════════════════════
+//  MEDIA SECTION
 // ═══════════════════════════════
 function renderMedia(c){
   // Sub-tabs
@@ -659,6 +660,3 @@ function renderSectionStub(id,c){
       <small style="font-size:12px;color:var(--mu);display:block;margin-top:6px">Architecture planned and ready</small>
     </div>`;
 }
-
-// ═══════════════════════════════════════════════════════
-//

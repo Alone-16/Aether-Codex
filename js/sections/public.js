@@ -1,4 +1,5 @@
-// PUBLIC LIST SHARE
+// ═══════════════════════════════════════════════════════
+//  PUBLIC LIST SHARE
 // ═══════════════════════════════════════════════════════
 const SHARE_KEY = 'ac_v4_share';
 
@@ -301,9 +302,3 @@ async function handleRevokePublicLink() {
     renderSettingsPublicShare(document.getElementById('settings-body'));
   }, {title:'Revoke Link?', okLabel:'Revoke', danger:false});
 }
-
-
-
-
-// ═══════════════════════════════════════════════════════
-//

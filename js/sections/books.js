@@ -1,4 +1,5 @@
-// BOOKS DATA & STATE
+// ═══════════════════════════════════════════════════════
+//  BOOKS DATA & STATE
 // ═══════════════════════════════════════════════════════
 const BOOKS_KEY = 'ac_v4_books';
 
@@ -478,9 +479,3 @@ function renderBooksUpcoming(c) {
   c.innerHTML=`<div style="font-family:'Bangers',cursive;font-size:22px;font-weight:700;margin-bottom:16px;letter-spacing:2px;color:var(--ac)">🗓 Upcoming Books</div>
     ${rows||`<div class="empty"><div class="empty-ico">📅</div><p style="font-family:'Comic Neue',cursive">No upcoming books</p></div>`}`;
 }
-
-
-
-
-// ═══════════════════════════════════════════════════════
-//

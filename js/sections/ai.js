@@ -1,4 +1,5 @@
-// AI ASSISTANT
+// ═══════════════════════════════════════════════════════
+//  AI ASSISTANT
 // ═══════════════════════════════════════════════════════
 const AI_KEY_STORAGE = 'ac_claude_key';
 let AI_OPEN = false;
@@ -320,9 +321,3 @@ function aiSend() {
 }
 
 function aiKeydown(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiSend(); } }
-
-
-
-
-// ═══════════════════════════════════════════════════════
-//

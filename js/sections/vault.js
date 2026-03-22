@@ -1,4 +1,5 @@
-// LINK VAULT DATA & STATE
+// ═══════════════════════════════════════════════════════
+//  LINK VAULT DATA & STATE
 // ═══════════════════════════════════════════════════════
 const VAULT_KEY = 'ac_v4_vault';
 
@@ -253,9 +254,3 @@ function askDelLink(id) {
     if(_vdel) toastWithUndo(_vdel.desc||'Link',()=>{VDATA.push(_vdel);saveVault(VDATA);renderVaultBody();});
   }, {title:'Delete Link?', okLabel:'Delete'});
 }
-
-
-
-
-// ═══════════════════════════════════════════════════════
-//

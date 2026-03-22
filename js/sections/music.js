@@ -1,4 +1,5 @@
-// MUSIC DATA & STATE
+// ═══════════════════════════════════════════════════════
+//  MUSIC DATA & STATE
 // ═══════════════════════════════════════════════════════
 const MUSIC_KEY     = 'ac_v4_music';
 const MUSIC_PL_KEY  = 'ac_v4_music_playlists';
@@ -469,9 +470,3 @@ function renderMusicDash(c) {
         </div>`).join('')}
     </div>` : ''}`;
 }
-
-
-
-
-// ═══════════════════════════════════════════════════════
-//

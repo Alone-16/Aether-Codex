@@ -1,4 +1,5 @@
-// WRAPPED — MONTHLY & YEARLY SUMMARY
+// ═══════════════════════════════════════════════════════
+//  WRAPPED — MONTHLY & YEARLY SUMMARY
 // ═══════════════════════════════════════════════════════
 
 function openWrapped() {
@@ -192,9 +193,3 @@ function renderWrappedContent(type) {
       No activity tracked for ${label} yet.<br>Keep using the app and check back!
     </div>`:''}`;
 }
-
-
-
-
-// ═══════════════════════════════════════════════════════
-//

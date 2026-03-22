@@ -1,4 +1,5 @@
-// GAMES DATA
+// ═══════════════════════════════════════════════════════
+//  GAMES DATA
 // ═══════════════════════════════════════════════════════
 const GAMES_KEY = 'ac_v4_games';
 const GAMES_VER = '1.0';
@@ -783,9 +784,3 @@ function renderGamesUpcoming(c) {
   c.innerHTML = `<div style="font-family:var(--fd);font-size:18px;font-weight:700;margin-bottom:16px;letter-spacing:2px;text-transform:uppercase;color:var(--ac)">🗓 Upcoming Games</div>
     ${rows||`<div class="empty"><div class="empty-ico">📅</div><p>No upcoming games</p></div>`}`;
 }
-
-
-
-
-// ═══════════════════════════════════════════════════════
-//

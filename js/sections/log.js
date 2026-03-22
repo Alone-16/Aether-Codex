@@ -1,4 +1,5 @@
-// ACTIVITY LOG
+// ═══════════════════════════════════════════════════════
+//  ACTIVITY LOG
 // ═══════════════════════════════════════════════════════
 const LOG_KEY = 'ac_v4_log';
 const LOG_MAX_DAYS = 30;
@@ -111,9 +112,3 @@ function clearOldLogs() {
     toast('Activity log cleared');
   }, {title:'Clear Log?', okLabel:'Clear', danger:false});
 }
-
-
-
-
-// ═══════════════════════════════════════════════════════
-//
