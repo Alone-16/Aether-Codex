@@ -600,7 +600,18 @@ function buildGenreMenu(){
     </div>`;
 }
 
-function toggleGdrop(e){e.stopPropagation();const m=document.getElementById('gdrop-menu');if(m)m.classList.toggle('open')}
+function toggleGdrop(e){
+  e.stopPropagation();
+  const m=document.getElementById('gdrop-menu');
+  if(!m)return;
+  const btn=e.currentTarget||e.target.closest('button');
+  if(!m.classList.contains('open')){
+    const r=btn.getBoundingClientRect();
+    m.style.top=(r.bottom+4)+'px';
+    m.style.left=r.left+'px';
+  }
+  m.classList.toggle('open');
+}
 document.addEventListener('click',e=>{const m=document.getElementById('gdrop-menu');const d=document.getElementById('gdrop');if(m&&d&&!d.contains(e.target))m.classList.remove('open')});
 
 function selectGenre(id){
@@ -1004,17 +1015,17 @@ function renderMedia(c){
   // Sub-tabs
   const tabs=['List','Dashboard','Upcoming','Incomplete'];
   const tabsHtml=`<div style="margin-bottom:14px">
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch">
-      <div id="gdrop" style="position:relative;flex-shrink:0">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <div id="gdrop" style="position:relative">
         <button class="nb-btn ac" style="height:32px;font-size:13px;font-weight:700;white-space:nowrap" onclick="toggleGdrop(event)">
-          <span class="sb-sep" style="width:7px;height:7px;border-radius:50%;background:var(--ac);margin:0;flex-shrink:0" id="gdot"></span>
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--ac);display:inline-block;flex-shrink:0" id="gdot"></span>
           <span id="gdrop-lbl">${gbyid(GACTIVE).name}</span>
           <span style="font-size:9px">▾</span>
         </button>
-        <div id="gdrop-menu" style="position:absolute;top:calc(100% + 5px);left:0;background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);min-width:170px;z-index:200;box-shadow:var(--sh);overflow:hidden;display:none">
+        <div id="gdrop-menu" style="position:fixed;top:auto;left:auto;background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);min-width:180px;z-index:9000;box-shadow:0 8px 24px rgba(0,0,0,.5);overflow:hidden;display:none">
         </div>
       </div>
-      <div class="sub-tabs" style="flex-shrink:0">
+      <div class="sub-tabs">
         ${tabs.map((t,i)=>`<button class="stab${MEDIA_PAGE===['list','dashboard','upcoming','incomplete'][i]?' active':''}" onclick="setMediaPage('${['list','dashboard','upcoming','incomplete'][i]}')">${t}</button>`).join('')}
       </div>
     </div>
