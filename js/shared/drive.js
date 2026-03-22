@@ -13,7 +13,50 @@ function _updateDriveBtn(state){
   btn.title=state==='connected'?'Drive synced — click to disconnect':state==='syncing'?'Syncing...':state==='error'?'Sync error — click to retry':'Connect to Google Drive';
 }
 
+const _isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+const _REDIRECT_KEY = 'ac_oauth_redirect';
+
+// ── Mobile redirect OAuth flow ──
+function _mobileOAuthRedirect() {
+  // Save current section so we can restore after redirect
+  localStorage.setItem(_REDIRECT_KEY, '1');
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: location.origin + location.pathname,
+    response_type: 'token',
+    scope: DRIVE_SCOPE,
+    include_granted_scopes: 'true',
+    state: location.hash || '#/',
+  });
+  location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+}
+
+function _handleOAuthRedirect() {
+  // Check for token in URL hash after redirect
+  if (!localStorage.getItem(_REDIRECT_KEY)) return false;
+  localStorage.removeItem(_REDIRECT_KEY);
+
+  const hash = location.hash;
+  const params = new URLSearchParams(hash.replace(/^#/, ''));
+  const token = params.get('access_token');
+  const expiresIn = parseInt(params.get('expires_in') || '3600');
+
+  if (token) {
+    ls.setStr(K.DTOKEN, token);
+    ls.setStr(K.DEXP, String(Date.now() + (expiresIn - 60) * 1000));
+    // Clean up URL — remove token from hash
+    history.replaceState({}, '', location.pathname + (localStorage.getItem('ac_last_section') ? '#/' + localStorage.getItem('ac_last_section') : ''));
+    _updateDriveBtn('syncing');
+    _driveInit();
+    return true;
+  }
+  return false;
+}
+
 function initGIS(){
+  // Handle redirect return first
+  if (_handleOAuthRedirect()) return;
+
   if(!window.google?.accounts?.oauth2){setTimeout(initGIS,600);return;}
 
   // Silent token client - tries to get token without showing popup
@@ -74,8 +117,13 @@ function driveAction(){
     _driveFolderId=null;_updateDriveBtn('off');toast('Disconnected from Drive');
   },{title:'Disconnect Drive?',okLabel:'Disconnect',danger:false});
   } else {
+    // Mobile: use redirect flow — no popup issues
+    if (_isMobile) {
+      _mobileOAuthRedirect();
+      return;
+    }
     if(!_gisReady){toast('Google API loading, try again','var(--ch)');return;}
-    // Force interactive login
+    // Desktop: use popup flow
     _tokenClient=google.accounts.oauth2.initTokenClient({
       client_id:CLIENT_ID, scope:DRIVE_SCOPE,
       callback:resp=>{
