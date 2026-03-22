@@ -325,9 +325,80 @@ textarea.fin{resize:vertical;min-height:60px}
   .fg-row{grid-template-columns:1fr}
   .time-cards{grid-template-columns:1fr}
 }
-@media(max-width:480px){
-  .dash-grid{grid-template-columns:repeat(2,1fr)}
+@media(max-width:640px){
+  /* ── NAVBAR ── */
+  #navbar{padding:0 8px;gap:4px;height:46px}
+  .nb-title{font-size:12px}
+  .srch-wrap{max-width:100px}
+  .nb-ico{width:28px;height:28px;font-size:12px}
+  .nb-btn{height:28px;padding:0 8px;font-size:11px}
+  .nb-divider{display:none}
+
+  /* ── CONTENT ── */
+  #content{padding:10px}
+
+  /* ── HOME STAT CARDS ── */
+  .dc{padding:10px 12px}
+  .dc-v{font-size:clamp(14px,4vw,20px)}
+  .dc-l{font-size:9px}
+  .dash-grid{grid-template-columns:repeat(3,1fr);gap:6px}
+
+  /* ── HOME TWO-COL LAYOUT → single col ── */
+  .home-two-col{grid-template-columns:1fr!important;gap:12px}
+
+  /* ── AIRING WIDGET → horizontal scroll ── */
+  .airing-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .airing-grid{min-width:500px}
+
+  /* ── SECTION OVERVIEW ── */
+  .section-ov-grid{grid-template-columns:1fr!important}
+
+  /* ── ROWS ── */
+  .row{min-height:48px}
+  .row-title{font-size:13px}
+  .row-meta{gap:4px}
+  .ep-inline{gap:2px}
+  .ep-pm{width:24px;height:24px;font-size:13px}
+  .ep-val{font-size:12px;min-width:20px}
+  .rbt{width:28px;height:28px;font-size:11px}
+  .prog-txt{font-size:10px}
+
+  /* ── PANEL ── */
+  #rpanel{width:100%;max-width:100%;border-radius:12px 12px 0 0}
+  .pstats{grid-template-columns:repeat(2,1fr)}
+  .panel-actions{padding:10px 12px;gap:6px}
+  .panel-actions button{font-size:12px;padding:8px 10px}
+
+  /* ── FORM ── */
+  .form-wrap{padding:10px 12px}
+  .fin{padding:8px 10px;font-size:13px}
+  .fg{margin-bottom:8px}
+  .fg-row{grid-template-columns:1fr;gap:8px}
+
+  /* ── SUB TABS ── */
+  .sub-tabs{gap:2px;flex-wrap:nowrap;overflow-x:auto}
+  .stab{font-size:11px;padding:5px 8px;white-space:nowrap}
+
+  /* ── FILTER BAR ── */
+  #filterbar{gap:6px;flex-wrap:wrap}
+  #filterbar select{font-size:12px;padding:4px 6px}
+
+  /* ── BOTTOM NAV BAR ── */
+  #bottom-nav{display:flex}
 }
+
+/* ── BOTTOM NAV ── */
+@media(min-width:641px){#kb-btn{display:flex!important}}
+#bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:56px;background:var(--surf);border-top:1px solid var(--brd);z-index:500;align-items:stretch;padding-bottom:env(safe-area-inset-bottom)}
+.bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--tx2);transition:color .15s;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;border:none;background:none}
+.bn-item.active{color:var(--ac)}
+.bn-item .bn-ico{font-size:19px;line-height:1}
+/* Pad content above bottom nav on mobile */
+@media(max-width:640px){
+  #main{padding-bottom:56px}
+  #app{align-items:stretch}
+}
+
 </style>
 </head>
 <body>
@@ -377,7 +448,7 @@ textarea.fin{resize:vertical;min-height:60px}
         <button class="nb-btn" onclick="exportData()">⬇ <span>Export</span></button>
         <button class="nb-btn" onclick="importFile()">⬆ <span>Import</span></button>
         <button class="nb-btn ac" id="add-btn" onclick="openAdd()">+ <span>Add</span></button>
-        <button class="nb-ico" onclick="showKeyboardHelp()" title="Keyboard Shortcuts (?)">⌨</button>
+        <button class="nb-ico" onclick="showKeyboardHelp()" title="Keyboard Shortcuts (?)" style="display:none" id="kb-btn">⌨</button>
         <button class="nb-ico" onclick="toggleAI()" id="ai-btn" title="AI Assistant" style="font-size:16px">✦</button>
       </div>
     </nav>
@@ -400,6 +471,15 @@ textarea.fin{resize:vertical;min-height:60px}
     </div>
     <div id="content"></div>
   </div>
+</div>
+
+<!-- BOTTOM NAV (mobile only) -->
+<div id="bottom-nav">
+  <button class="bn-item" data-r="home"     onclick="nav('home')"    ><span class="bn-ico">⌂</span>Home</button>
+  <button class="bn-item" data-r="media"    onclick="nav('media')"   ><span class="bn-ico">◉</span>Media</button>
+  <button class="bn-item" data-r="games"    onclick="nav('games')"   ><span class="bn-ico">◈</span>Games</button>
+  <button class="bn-item" data-r="books"    onclick="nav('books')"   ><span class="bn-ico">◎</span>Books</button>
+  <button class="bn-item" data-r="music"    onclick="nav('music')"   ><span class="bn-ico">♪</span>Music</button>
 </div>
 
 <div id="poverlay" onclick="closePanel()"></div>
@@ -554,6 +634,7 @@ function nav(id,push=true){
     document.documentElement.setAttribute('data-section',id);
     document.querySelectorAll('.ni').forEach(el=>el.classList.toggle('active',el.dataset.r===id));
     document.querySelectorAll('.mob-ni').forEach(el=>el.classList.toggle('active',el.dataset.r===id));
+    document.querySelectorAll('.bn-item').forEach(el=>el.classList.toggle('active',el.dataset.r===id));
     const m=SECTION_META[id]||{title:id,label:id};
     document.getElementById('nb-title').textContent=m.title;
     document.getElementById('nb-sec').textContent=m.label;
@@ -698,7 +779,7 @@ function renderHome(c){
         <button onclick="openWrapped()" style="margin-top:6px;background:rgba(var(--ac-rgb),.1);border:1px solid rgba(var(--ac-rgb),.25);color:var(--ac);border-radius:5px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">✦ Wrapped</button>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:9px;margin-bottom:20px">
+    <div class="dash-grid" style="margin-bottom:20px">
       <div class="dc"><div class="dc-v">${mediaEntries.length}</div><div class="dc-l">Media Entries</div></div>
       <div class="dc"><div class="dc-v">${watching}</div><div class="dc-l">Watching</div></div>
       <div class="dc"><div class="dc-v">${completed}</div><div class="dc-l">Completed</div></div>
@@ -714,14 +795,14 @@ function renderHome(c){
       </div>
       <button onclick="driveAction()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Connect Drive</button>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;align-items:start">
+    <div class="home-two-col" style="display:grid;grid-template-columns:1fr 320px;gap:14px;align-items:start">
       <div>
         ${renderAiringWidget()}
         <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-top:14px">
           <div style="padding:12px 14px 8px;border-bottom:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center">
             <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu)">📊 Section Overview</div>
           </div>
-          <div style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:9px">
+          <div class="section-ov-grid" style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:9px">
             <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('media')">
               <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>◉</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#e879a0">Media</span></div>
               <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#e879a0">${mediaEntries.length}</div>
@@ -781,7 +862,7 @@ function renderAiringWidget(){
       <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu)">📺 Airing This Week</div>
       <div style="font-size:11px;color:var(--ac);cursor:pointer" onclick="nav('media')">Manage →</div>
     </div>
-    <div style="padding:12px;display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${cols}</div>
+    <div class="airing-scroll" style="padding:12px"><div class="airing-grid" style="display:grid;grid-template-columns:repeat(7,minmax(80px,1fr));gap:4px">${cols}</div></div>
   </div>`;
 }
 
@@ -4234,6 +4315,8 @@ function toggleAI() {
   AI_OPEN = !AI_OPEN;
   const panel = document.getElementById('ai-panel');
   if (!panel) return;
+  const isMobile = window.innerWidth <= 640;
+  if(isMobile) panel.style.right='0';
   panel.style.transform = AI_OPEN ? 'translateY(0)' : 'translateY(100%)';
   panel.style.opacity = AI_OPEN ? '1' : '0';
   if (AI_OPEN && !getAIKey()) showAIKeyPrompt();
@@ -5597,7 +5680,7 @@ SETTINGS = loadSettings();
 </script>
 
 <!-- AI ASSISTANT PANEL -->
-<div id="ai-panel" style="position:fixed;bottom:0;right:20px;width:380px;max-width:calc(100vw - 40px);height:520px;background:var(--surf);border:1px solid var(--brd);border-radius:12px 12px 0 0;z-index:9500;display:flex;flex-direction:column;transform:translateY(100%);opacity:0;transition:transform .3s cubic-bezier(.4,0,.2,1),opacity .3s;box-shadow:0 -8px 32px rgba(0,0,0,.5)">
+<div id="ai-panel" style="position:fixed;bottom:0;right:0;width:100%;max-width:480px;height:75vh;background:var(--surf);border:1px solid var(--brd);border-radius:12px 12px 0 0;z-index:9500;display:flex;flex-direction:column;transform:translateY(100%);opacity:0;transition:transform .3s cubic-bezier(.4,0,.2,1),opacity .3s;box-shadow:0 -8px 32px rgba(0,0,0,.5)">
   <div style="padding:12px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
     <div style="display:flex;align-items:center;gap:8px">
       <span style="font-size:16px;color:var(--ac)">✦</span>
