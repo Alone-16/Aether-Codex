@@ -425,6 +425,3 @@ function airingMobileList() {
     </div>`;
   }).join('');
 }
-
-
-(
