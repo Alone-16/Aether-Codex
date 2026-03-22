@@ -326,6 +326,7 @@ textarea.fin{resize:vertical;min-height:60px}
   .time-cards{grid-template-columns:1fr}
 }
 @media(max-width:640px){
+  .mob-hide{display:none!important}
   /* ── NAVBAR ── */
   #navbar{padding:0 8px;gap:4px;height:46px}
   .nb-title{font-size:12px}
@@ -347,8 +348,11 @@ textarea.fin{resize:vertical;min-height:60px}
   .home-two-col{grid-template-columns:1fr!important;gap:12px}
 
   /* ── AIRING WIDGET → horizontal scroll ── */
-  .airing-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .airing-grid{min-width:500px}
+  .airing-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+  .airing-grid{min-width:560px}
+  .airing-col{font-size:11px}
+  .airing-day-hd{font-size:9px;padding:3px 0}
+  .airing-item{padding:4px 6px;font-size:10px}
 
   /* ── SECTION OVERVIEW ── */
   .section-ov-grid{grid-template-columns:1fr!important}
@@ -386,6 +390,17 @@ textarea.fin{resize:vertical;min-height:60px}
   /* ── BOTTOM NAV BAR ── */
   #bottom-nav{display:flex}
 }
+
+
+/* ── CUSTOM DROPDOWN ── */
+.cdd{position:relative;display:inline-block}
+.cdd-btn{height:32px;padding:0 10px;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;color:var(--tx);font-size:12px;font-family:var(--fb);cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;min-width:90px}
+.cdd-btn:after{content:'▾';margin-left:auto;color:var(--mu);font-size:10px}
+.cdd-menu{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;background:var(--surf);border:1px solid var(--brd2);border-radius:7px;z-index:800;box-shadow:0 8px 24px rgba(0,0,0,.4);overflow:hidden;display:none}
+.cdd-menu.open{display:block}
+.cdd-item{padding:9px 14px;font-size:13px;cursor:pointer;color:var(--tx2);transition:background .1s}
+.cdd-item:hover,.cdd-item.selected{background:rgba(var(--ac-rgb),.08);color:var(--tx)}
+.cdd-item.selected{color:var(--ac);font-weight:600}
 
 /* ── BOTTOM NAV ── */
 @media(min-width:641px){#kb-btn{display:flex!important}}
@@ -444,25 +459,30 @@ textarea.fin{resize:vertical;min-height:60px}
         <input class="srch" id="srch" placeholder="Search everything..." oninput="onSearch(this.value)">
       </div>
       <div class="nb-r">
-        <button class="nb-btn ac" id="drive-btn" onclick="driveAction()">☁ <span>Drive</span></button>
-        <button class="nb-btn" onclick="exportData()">⬇ <span>Export</span></button>
-        <button class="nb-btn" onclick="importFile()">⬆ <span>Import</span></button>
-        <button class="nb-btn ac" id="add-btn" onclick="openAdd()">+ <span>Add</span></button>
+        <button class="nb-ico ac" id="drive-btn" onclick="driveAction()" title="Drive" style="font-size:13px">☁</button>
+        <button class="nb-btn mob-hide" onclick="exportData()">⬇ <span>Export</span></button>
+        <button class="nb-btn mob-hide" onclick="importFile()">⬆ <span>Import</span></button>
+        <button class="nb-ico ac" id="add-btn" onclick="openAdd()" title="Add" style="font-size:16px;font-weight:700">+</button>
         <button class="nb-ico" onclick="showKeyboardHelp()" title="Keyboard Shortcuts (?)" style="display:none" id="kb-btn">⌨</button>
         <button class="nb-ico" onclick="toggleAI()" id="ai-btn" title="AI Assistant" style="font-size:16px">✦</button>
       </div>
     </nav>
     <div id="filterbar" style="display:none">
-      <select class="fsel" id="fstatus" onchange="render()">
-        <option value="">All Status</option>
-        <option value="watching">Watching</option>
-        <option value="plan">Plan to Watch</option>
-        <option value="not_started">Not Started</option>
-        <option value="completed">Completed</option>
-        <option value="on_hold">On Hold</option>
-        <option value="dropped">Dropped</option>
-        <option value="upcoming">Upcoming</option>
-      </select>
+      <div class="cdd" id="fstatus-cdd">
+        <button class="cdd-btn fsel" id="fstatus-btn" onclick="openCDD('fstatus')">
+          <span class="cdd-label">All Status</span>
+        </button>
+        <div class="cdd-menu" id="fstatus-menu">
+          <div class="cdd-item selected" data-val="" onclick="setCDD('fstatus','','All Status');document.getElementById('fstatus').value='';render()">All Status</div>
+          <div class="cdd-item" data-val="watching" onclick="setCDD('fstatus','watching','Watching');document.getElementById('fstatus').value='watching';render()">Watching</div>
+          <div class="cdd-item" data-val="plan" onclick="setCDD('fstatus','plan','Plan to Watch');document.getElementById('fstatus').value='plan';render()">Plan to Watch</div>
+          <div class="cdd-item" data-val="completed" onclick="setCDD('fstatus','completed','Completed');document.getElementById('fstatus').value='completed';render()">Completed</div>
+          <div class="cdd-item" data-val="on_hold" onclick="setCDD('fstatus','on_hold','On Hold');document.getElementById('fstatus').value='on_hold';render()">On Hold</div>
+          <div class="cdd-item" data-val="dropped" onclick="setCDD('fstatus','dropped','Dropped');document.getElementById('fstatus').value='dropped';render()">Dropped</div>
+          <div class="cdd-item" data-val="upcoming" onclick="setCDD('fstatus','upcoming','Upcoming');document.getElementById('fstatus').value='upcoming';render()">Upcoming</div>
+        </div>
+      </div>
+      <select class="fsel" id="fstatus" onchange="render()" style="display:none"></select>
       <select class="fsel" id="fsort" onchange="render()">
         <option value="title">A → Z</option>
         <option value="added">Recently Added</option>
@@ -862,7 +882,7 @@ function renderAiringWidget(){
       <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu)">📺 Airing This Week</div>
       <div style="font-size:11px;color:var(--ac);cursor:pointer" onclick="nav('media')">Manage →</div>
     </div>
-    <div class="airing-scroll" style="padding:12px"><div class="airing-grid" style="display:grid;grid-template-columns:repeat(7,minmax(80px,1fr));gap:4px">${cols}</div></div>
+    <div class="airing-scroll" style="padding:8px 12px"><div class="airing-grid" style="display:grid;grid-template-columns:repeat(7,minmax(90px,1fr));gap:6px">${cols}</div></div>
   </div>`;
 }
 
@@ -5654,6 +5674,36 @@ function showKeyboardHelp() {
     </div>`;
   document.body.appendChild(el);
   el.addEventListener('click', e => { if (e.target === el) el.remove(); });
+}
+
+
+
+// ═══ CUSTOM DROPDOWN ═══
+function openCDD(id) {
+  // Close all others first
+  document.querySelectorAll('.cdd-menu.open').forEach(m => {
+    if (m.id !== id + '-menu') m.classList.remove('open');
+  });
+  const menu = document.getElementById(id + '-menu');
+  if (menu) menu.classList.toggle('open');
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', function closeCDD(e) {
+      if (!e.target.closest('.cdd')) {
+        document.querySelectorAll('.cdd-menu').forEach(m => m.classList.remove('open'));
+        document.removeEventListener('click', closeCDD);
+      }
+    });
+  }, 10);
+}
+
+function setCDD(id, value, label) {
+  const btn = document.getElementById(id + '-btn');
+  if (btn) btn.querySelector('.cdd-label').textContent = label;
+  document.querySelectorAll(`#${id}-menu .cdd-item`).forEach(el => {
+    el.classList.toggle('selected', el.dataset.val === value);
+  });
+  document.getElementById(id + '-menu')?.classList.remove('open');
 }
 
 
