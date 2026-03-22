@@ -350,8 +350,8 @@ textarea.fin{resize:vertical;min-height:60px}
   .home-two-col{grid-template-columns:1fr!important;gap:12px}
 
   /* ── AIRING WIDGET → horizontal scroll ── */
-  .airing-scroll{display:none!important}
-  .airing-mobile{display:block!important}
+  #airing-pills{display:flex!important;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:5px}
+  #airing-pills button{min-width:44px;flex:1}
 
   /* ── SECTION OVERVIEW ── */
   .section-ov-grid{grid-template-columns:1fr!important}
@@ -856,36 +856,98 @@ function renderHome(c){
     </div>`;
 }
 
+let AIRING_DAY = new Date().getDay(); // defaults to today
+
 function renderAiringWidget(){
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const todayN=new Date().getDay();
-  const airingEntries=DATA.filter(e=>e.airingDay!=null&&e.status==='watching');
-  const cols=days.map((d,i)=>{
-    const items=airingEntries.filter(e=>e.airingDay===i);
-    const isToday=i===todayN;
-    const itemsHtml=items.length?items.map(e=>{
-      const diff=(i-todayN+7)%7;
-      return`<div style="background:${isToday?'rgba(var(--ac-rgb),.1)':'var(--surf2)'};border:1px solid ${isToday?'rgba(var(--ac-rgb),.3)':'var(--brd)'};border-radius:4px;padding:4px 5px;font-size:10px;cursor:pointer" title="${e.title} - ${e.airingTime||''}">
-        <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.title.split(' ').slice(0,2).join(' '))}</div>
-        ${e.airingTime?`<div style="font-size:9px;color:var(--mu);margin-top:1px">${e.airingTime}</div>`:''}
-        <div style="font-size:9px;color:var(--ac);margin-top:1px;font-weight:700">${diff===0?'Today':diff+'d'}</div>
-      </div>`;
-    }).join(''):`<div style="font-size:10px;color:var(--mu);text-align:center;padding:6px">—</div>`;
-    return`<div>
-      <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:${isToday?'var(--ac)':'var(--mu)'};text-align:center;padding:4px 0">${d}</div>
-      <div style="display:flex;flex-direction:column;gap:3px">${itemsHtml}</div>
-    </div>`;
+  const todayN = new Date().getDay();
+  const airingEntries = DATA.filter(e=>e.airingDay!=null&&e.status==='watching');
+
+  // Build day pills
+  const pills = days.map((d,i)=>{
+    const hasShows = airingEntries.some(e=>e.airingDay===i);
+    const isToday  = i===todayN;
+    const isSel    = i===AIRING_DAY;
+    return `<button onclick="selectAiringDay(${i})"
+      style="padding:7px 4px;border-radius:20px;font-size:12px;font-weight:${isSel?'700':'500'};cursor:pointer;white-space:nowrap;border:1px solid ${isSel?'var(--ac)':hasShows?'rgba(var(--ac-rgb),.25)':'var(--brd)'};background:${isSel?'var(--ac)':hasShows?'rgba(var(--ac-rgb),.08)':'transparent'};color:${isSel?'#000':hasShows?'var(--ac)':'var(--mu)'};position:relative;transition:all .15s;text-align:center;width:100%">
+      ${isToday?`<span style="position:absolute;top:2px;right:2px;width:4px;height:4px;border-radius:50%;background:${isSel?'#000':'var(--ac)'}"></span>`:''}
+      ${d}
+    </button>`;
   }).join('');
+
+  // Shows for selected day
+  const sel = airingEntries.filter(e=>e.airingDay===AIRING_DAY);
+  const diff = (AIRING_DAY - todayN + 7) % 7;
+  const dayLbl = diff===0?'Today':diff===1?'Tomorrow':`in ${diff}d`;
+  const lblCol = diff===0?'#4ade80':diff===1?'#fbbf24':'var(--mu)';
+
+  const showList = sel.length
+    ? sel.map(e=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--brd);cursor:pointer" onclick="nav('media')">
+          <div style="width:6px;height:6px;border-radius:50%;background:var(--ac);flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;color:var(--tx)">${esc(e.title)}</div>
+            ${e.airingTime?`<div style="font-size:11px;color:var(--mu);margin-top:1px">${e.airingTime}</div>`:''}
+          </div>
+          <span style="font-size:11px;font-weight:700;color:${lblCol};white-space:nowrap">${dayLbl}</span>
+        </div>`).join('')
+    : `<div style="font-size:13px;color:var(--mu);text-align:center;padding:16px 0">Nothing airing</div>`;
+
   return`<div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden">
-    <div style="padding:12px 14px 8px;border-bottom:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center">
+    <div style="padding:12px 14px 10px;border-bottom:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu)">📺 Airing This Week</div>
       <div style="font-size:11px;color:var(--ac);cursor:pointer" onclick="nav('media')">Manage →</div>
     </div>
-    <div class="airing-scroll" style="padding:8px 12px"><div class="airing-grid" style="display:grid;grid-template-columns:repeat(7,minmax(90px,1fr));gap:6px">${cols}</div></div>
-    <div class="airing-mobile" style="display:none;padding:0 12px 8px">
-      ${airingMobileList()}
+    <div style="padding:10px 14px 8px;display:grid;grid-template-columns:repeat(7,1fr);gap:5px" id="airing-pills">
+      ${pills}
+    </div>
+    <div style="padding:0 14px 8px" id="airing-shows">
+      ${showList}
     </div>
   </div>`;
+}
+
+function selectAiringDay(d) {
+  AIRING_DAY = d;
+  // Re-render just the widget
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const todayN = new Date().getDay();
+  const airingEntries = DATA.filter(e=>e.airingDay!=null&&e.status==='watching');
+
+  // Update pills
+  const pillsEl = document.getElementById('airing-pills');
+  if (pillsEl) {
+    pillsEl.innerHTML = days.map((day,i)=>{
+      const hasShows = airingEntries.some(e=>e.airingDay===i);
+      const isToday  = i===todayN;
+      const isSel    = i===d;
+      return `<button onclick="selectAiringDay(${i})"
+        style="padding:7px 4px;border-radius:20px;font-size:12px;font-weight:${isSel?'700':'500'};cursor:pointer;white-space:nowrap;border:1px solid ${isSel?'var(--ac)':hasShows?'rgba(var(--ac-rgb),.25)':'var(--brd)'};background:${isSel?'var(--ac)':hasShows?'rgba(var(--ac-rgb),.08)':'transparent'};color:${isSel?'#000':hasShows?'var(--ac)':'var(--mu)'};position:relative;transition:all .15s;text-align:center;width:100%">
+        ${isToday?`<span style="position:absolute;top:2px;right:2px;width:4px;height:4px;border-radius:50%;background:${isSel?'#000':'var(--ac)'}"></span>`:''}
+        ${day}
+      </button>`;
+    }).join('');
+  }
+
+  // Update show list
+  const sel = airingEntries.filter(e=>e.airingDay===d);
+  const diff = (d - todayN + 7) % 7;
+  const dayLbl = diff===0?'Today':diff===1?'Tomorrow':`in ${diff}d`;
+  const lblCol = diff===0?'#4ade80':diff===1?'#fbbf24':'var(--mu)';
+  const showsEl = document.getElementById('airing-shows');
+  if (showsEl) {
+    showsEl.innerHTML = sel.length
+      ? sel.map(e=>`
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--brd);cursor:pointer" onclick="nav('media')">
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--ac);flex-shrink:0"></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--tx)">${esc(e.title)}</div>
+              ${e.airingTime?`<div style="font-size:11px;color:var(--mu);margin-top:1px">${e.airingTime}</div>`:''}
+            </div>
+            <span style="font-size:11px;font-weight:700;color:${lblCol};white-space:nowrap">${dayLbl}</span>
+          </div>`).join('')
+      : `<div style="font-size:13px;color:var(--mu);text-align:center;padding:16px 0">Nothing airing</div>`;
+  }
 }
 
 function renderUpcomingWidget(){
