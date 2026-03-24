@@ -102,7 +102,15 @@
           <div class="cdd-item" data-val="upcoming" onclick="setCDD('fstatus','upcoming','Upcoming');document.getElementById('fstatus').value='upcoming';render()">Upcoming</div>
         </div>
       </div>
-      <select class="fsel" id="fstatus" onchange="render()" style="display:none"></select>
+      <select class="fsel" id="fstatus" onchange="render()" style="display:none">
+        <option value=""></option>
+        <option value="watching">Watching</option>
+        <option value="plan">Plan to Watch</option>
+        <option value="completed">Completed</option>
+        <option value="on_hold">On Hold</option>
+        <option value="dropped">Dropped</option>
+        <option value="upcoming">Upcoming</option>
+      </select>
       <div class="cdd" id="fsort-cdd">
         <button class="cdd-btn fsel" id="fsort-btn" onclick="openCDD('fsort')">
           <span class="cdd-label">A → Z</span>
