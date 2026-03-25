@@ -179,6 +179,7 @@ async function handleVaultUnlock(btn) {
     VDATA = JSON.parse(dec.decode(plainBuf));
     VAULT_CRYPTO_KEY = key;
     VAULT_UNLOCKED = true;
+    ls.del(VAULT_KEY); // Ensure plain text is never in localStorage
     startVaultIdleTimer();
     overlay.remove();
     if (typeof renderVaultBody === 'function') renderVaultBody();
@@ -205,10 +206,10 @@ function lockVaultCrypto() {
 // ═══════════════════════════════════════════════════════
 const VAULT_KEY = 'ac_v4_vault';
 
-function loadVault()  { return ls.get(VAULT_KEY) || []; }
-function saveVault(d) { ls.set(VAULT_KEY, d); ls.setStr(K.SAVED, String(Date.now())); scheduleDriveSync(); }
+function loadVault()  { return []; } // Always empty - real data comes from encrypted store
+function saveVault(d) { /* disabled - use saveVaultEncrypted instead */ }
 
-let VDATA          = loadVault();
+let VDATA          = []; // Always starts empty — populated after password decrypt
 let VSEARCH        = '';
 let VAULT_UNLOCKED = false;
 let VAULT_IDLE_TIMER = null;
@@ -428,7 +429,7 @@ function saveVaultLink() {
   else VDATA.unshift(entry);
 
   addLog('vault', existing?'Updated link':'Added link', entry.desc, entry.url);
-  if (VAULT_CRYPTO_KEY) { saveVaultEncrypted(VDATA); } else { saveVault(VDATA); }
+  if (VAULT_CRYPTO_KEY) saveVaultEncrypted(VDATA);
   PANEL=null;
   document.getElementById('rpanel').classList.remove('open');
   document.getElementById('poverlay').classList.remove('show');
@@ -441,11 +442,11 @@ function askDelLink(id) {
   showConfirm('Delete this link?', () => {
     const _vdel=VDATA.find(l=>l.id===id);
     VDATA = VDATA.filter(l => l.id !== id);
-    if (VAULT_CRYPTO_KEY) { saveVaultEncrypted(VDATA); } else { saveVault(VDATA); }
+    if (VAULT_CRYPTO_KEY) saveVaultEncrypted(VDATA);
     document.getElementById('rpanel').classList.remove('open');
     document.getElementById('poverlay').classList.remove('show');
     document.getElementById('content').classList.remove('pushed');
     renderVaultBody();
-    if(_vdel) toastWithUndo(_vdel.desc||'Link',()=>{VDATA.push(_vdel);saveVault(VDATA);renderVaultBody();});
+    if(_vdel) toastWithUndo(_vdel.desc||'Link',()=>{VDATA.push(_vdel);if(VAULT_CRYPTO_KEY)saveVaultEncrypted(VDATA);renderVaultBody();});
   }, {title:'Delete Link?', okLabel:'Delete'});
 }
