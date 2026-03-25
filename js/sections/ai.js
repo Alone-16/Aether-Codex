@@ -102,12 +102,21 @@ async function sendAIMessage(userMsg) {
       'https://aether-codex-ai.nadeempubgmobile2-0.workers.dev',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getAIKey() ? { 'X-User-Key': getAIKey() } : {})
+        },
         body: JSON.stringify({ contents: withContext })
       }
     );
 
     const data = await res.json();
+
+    if (res.status === 401 || data?.error === 'no_key') {
+      setAITyping(false);
+      appendAIMessage('assistant', '⚠️ Please set your **Gemini API key** in Settings → AI Assistant to use the AI.');
+      return;
+    }
 
     if (!res.ok) {
       throw new Error(data.error?.message || `API error ${res.status}`);

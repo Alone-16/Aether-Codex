@@ -1,3 +1,205 @@
+
+// ═══════════════════════════════════════════════════════
+//  VAULT ENCRYPTION — Web Crypto API (AES-GCM + PBKDF2)
+// ═══════════════════════════════════════════════════════
+const VAULT_ENC_KEY  = 'ac_v4_vault_enc';  // stores {salt, iv, ciphertext} — all base64
+const VAULT_SALT_KEY = 'ac_v4_vault_salt'; // persistent salt for this device
+let   VAULT_CRYPTO_KEY = null;             // in-memory only, cleared on lock
+
+// ── Helpers ──
+function _b64(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+function _unb64(str) {
+  return Uint8Array.from(atob(str), c => c.charCodeAt(0));
+}
+
+async function _deriveKey(password, salt) {
+  const enc = new TextEncoder();
+  const keyMat = await crypto.subtle.importKey(
+    'raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt, iterations:310000, hash:'SHA-256' },
+    keyMat,
+    { name:'AES-GCM', length:256 },
+    false,
+    ['encrypt','decrypt']
+  );
+}
+
+async function vaultEncrypt(data, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await _deriveKey(password, salt);
+  const enc  = new TextEncoder();
+  const cipherBuf = await crypto.subtle.encrypt(
+    { name:'AES-GCM', iv },
+    key,
+    enc.encode(JSON.stringify(data))
+  );
+  return {
+    salt: _b64(salt),
+    iv:   _b64(iv),
+    data: _b64(cipherBuf),
+    v:    1
+  };
+}
+
+async function vaultDecrypt(stored, password) {
+  const salt      = _unb64(stored.salt);
+  const iv        = _unb64(stored.iv);
+  const cipher    = _unb64(stored.data);
+  const key       = await _deriveKey(password, salt);
+  const plainBuf  = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, cipher);
+  const dec       = new TextDecoder();
+  return JSON.parse(dec.decode(plainBuf));
+}
+
+// ── Save encrypted vault ──
+async function saveVaultEncrypted(data) {
+  if (!VAULT_CRYPTO_KEY) { console.warn('Vault not unlocked'); return; }
+  // Re-encrypt with current password (we store the derived key, re-derive on save)
+  // Instead: store password hash? No — we keep the CryptoKey in memory
+  // We need to re-encrypt using the in-memory key directly
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const enc  = new TextEncoder();
+  const cipherBuf = await crypto.subtle.encrypt(
+    { name:'AES-GCM', iv },
+    VAULT_CRYPTO_KEY,
+    enc.encode(JSON.stringify(data))
+  );
+  const stored = {
+    salt: _b64(salt),
+    iv:   _b64(iv),
+    data: _b64(cipherBuf),
+    v:    1
+  };
+  ls.set(VAULT_ENC_KEY, stored);
+  // Sync to Drive (encrypted blob)
+  ls.setStr(K.SAVED, String(Date.now()));
+  scheduleDriveSync();
+}
+
+// ── Setup vault password ──
+function showVaultPasswordSetup(onSuccess) {
+  const el = document.createElement('div');
+  el.className = 'modal-overlay';
+  el.innerHTML = `
+    <div class="modal-box" style="max-width:420px">
+      <div class="modal-title">🔐 Create Vault Password</div>
+      <div class="modal-msg" style="margin-bottom:14px">
+        Your vault data will be encrypted using this password.<br>
+        <strong style="color:#fb7185">⚠ If you forget this password, your vault data cannot be recovered.</strong>
+      </div>
+      <input type="password" id="vp-new" placeholder="Create password..." class="fin" style="margin-bottom:8px;width:100%;box-sizing:border-box">
+      <input type="password" id="vp-confirm" placeholder="Confirm password..." class="fin" style="width:100%;box-sizing:border-box">
+      <div id="vp-err" style="color:#fb7185;font-size:12px;margin-top:6px;min-height:16px"></div>
+      <div class="modal-btns">
+        <button class="modal-btn cancel" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="modal-btn confirm" onclick="handleVaultPasswordSetup(this, onSuccessCallback)">Create</button>
+      </div>
+    </div>`;
+  // Store callback
+  el.querySelector('.modal-btn.confirm')._cb = onSuccess;
+  el.querySelector('.modal-btn.confirm').onclick = function() {
+    handleVaultPasswordSetup(this);
+  };
+  document.body.appendChild(el);
+  setTimeout(() => el.querySelector('#vp-new')?.focus(), 50);
+}
+
+async function handleVaultPasswordSetup(btn) {
+  const overlay = btn.closest('.modal-overlay');
+  const pw1 = document.getElementById('vp-new')?.value;
+  const pw2 = document.getElementById('vp-confirm')?.value;
+  const errEl = document.getElementById('vp-err');
+  if (!pw1 || pw1.length < 4) { errEl.textContent = 'Password must be at least 4 characters'; return; }
+  if (pw1 !== pw2) { errEl.textContent = 'Passwords do not match'; return; }
+  btn.textContent = 'Encrypting...';
+  btn.disabled = true;
+  try {
+    // Derive key and store in memory
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    VAULT_CRYPTO_KEY = await _deriveKey(pw1, salt);
+    // Encrypt existing VDATA (may be empty)
+    await saveVaultEncrypted(VDATA);
+    ls.setStr('ac_vault_pw_set', '1');
+    overlay.remove();
+    VAULT_UNLOCKED = true;
+    toast('🔐 Vault encrypted & unlocked', 'var(--cd)');
+    if (typeof renderVaultBody === 'function') renderVaultBody();
+  } catch(e) {
+    errEl.textContent = 'Error: ' + e.message;
+    btn.textContent = 'Create';
+    btn.disabled = false;
+  }
+}
+
+// ── Unlock vault with password ──
+function showVaultPasswordUnlock(onSuccess) {
+  const el = document.createElement('div');
+  el.className = 'modal-overlay';
+  el.innerHTML = `
+    <div class="modal-box" style="max-width:380px">
+      <div class="modal-title">🔐 Unlock Vault</div>
+      <div class="modal-msg" style="margin-bottom:12px">Enter your vault password to decrypt your links.</div>
+      <input type="password" id="vp-unlock" placeholder="Vault password..." class="fin" style="width:100%;box-sizing:border-box"
+        onkeydown="if(event.key==='Enter')document.getElementById('vp-unlock-btn').click()">
+      <div id="vp-unlock-err" style="color:#fb7185;font-size:12px;margin-top:6px;min-height:16px"></div>
+      <div class="modal-btns">
+        <button class="modal-btn cancel" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="modal-btn confirm" id="vp-unlock-btn" onclick="handleVaultUnlock(this)">Unlock</button>
+      </div>
+    </div>`;
+  el._cb = onSuccess;
+  document.body.appendChild(el);
+  setTimeout(() => el.querySelector('#vp-unlock')?.focus(), 50);
+}
+
+async function handleVaultUnlock(btn) {
+  const overlay = btn.closest('.modal-overlay');
+  const pw = document.getElementById('vp-unlock')?.value;
+  const errEl = document.getElementById('vp-unlock-err');
+  if (!pw) { errEl.textContent = 'Please enter your password'; return; }
+  btn.textContent = 'Decrypting...';
+  btn.disabled = true;
+  try {
+    const stored = ls.get(VAULT_ENC_KEY);
+    if (!stored) throw new Error('No encrypted data found');
+    // Derive key from password
+    const salt = _unb64(stored.salt);
+    const key  = await _deriveKey(pw, salt);
+    // Try decrypting
+    const iv      = _unb64(stored.iv);
+    const cipher  = _unb64(stored.data);
+    const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, cipher);
+    const dec = new TextDecoder();
+    VDATA = JSON.parse(dec.decode(plainBuf));
+    VAULT_CRYPTO_KEY = key;
+    VAULT_UNLOCKED = true;
+    startVaultIdleTimer();
+    overlay.remove();
+    if (typeof renderVaultBody === 'function') renderVaultBody();
+  } catch(e) {
+    errEl.textContent = '✗ Wrong password or corrupted data';
+    btn.textContent = 'Unlock';
+    btn.disabled = false;
+    VAULT_CRYPTO_KEY = null;
+  }
+}
+
+// ── Override lockVault to clear memory ──
+function lockVaultCrypto() {
+  VAULT_UNLOCKED = false;
+  VAULT_CRYPTO_KEY = null;
+  VDATA = []; // Clear decrypted data from memory
+  clearTimeout(VAULT_IDLE_TIMER);
+  if (typeof renderVaultBody === 'function') renderVaultBody();
+}
+
+
 // ═══════════════════════════════════════════════════════
 //  LINK VAULT DATA & STATE
 // ═══════════════════════════════════════════════════════
@@ -30,26 +232,18 @@ function startVaultIdleTimer() {
 }
 
 function unlockVault() {
-  if (!getPin()) {
-    showPinModal(() => {
-      VAULT_UNLOCKED = true;
-      startVaultIdleTimer();
-      renderVaultBody();
-    });
+  const hasEncrypted = !!ls.get(VAULT_ENC_KEY);
+  const pwSet = ls.str('ac_vault_pw_set');
+  if (!pwSet || !hasEncrypted) {
+    // First time - setup password
+    showVaultPasswordSetup(() => {});
   } else {
-    showPinModal(() => {
-      VAULT_UNLOCKED = true;
-      startVaultIdleTimer();
-      renderVaultBody();
-    }, 'unlock');
+    // Has encrypted data - ask for password
+    showVaultPasswordUnlock(() => {});
   }
 }
 
-function lockVault() {
-  VAULT_UNLOCKED = false;
-  clearTimeout(VAULT_IDLE_TIMER);
-  renderVaultBody();
-}
+function lockVault() { lockVaultCrypto(); }
 
 // ── Favicon helper ──
 function faviconUrl(url) {
@@ -69,6 +263,7 @@ function renderVault(c) {
         <div class="sub-tabs">
           <button class="stab active">Links</button>
         </div>
+        <span style="font-size:10px;color:#4ade80;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.2);border-radius:4px;padding:2px 7px">🔐 Encrypted</span>
         <button id="vault-lock-btn" style="display:none;height:28px;border-radius:5px;background:rgba(251,113,133,.1);border:1px solid rgba(251,113,133,.25);color:#fb7185;font-size:11px;font-weight:600;padding:0 10px;cursor:pointer" onclick="lockVault()">🔓 Lock</button>
       </div>
       <button class="nb-btn ac" onclick="openAddLink()">+ Add Link</button>
@@ -233,7 +428,7 @@ function saveVaultLink() {
   else VDATA.unshift(entry);
 
   addLog('vault', existing?'Updated link':'Added link', entry.desc, entry.url);
-  saveVault(VDATA);
+  if (VAULT_CRYPTO_KEY) { saveVaultEncrypted(VDATA); } else { saveVault(VDATA); }
   PANEL=null;
   document.getElementById('rpanel').classList.remove('open');
   document.getElementById('poverlay').classList.remove('show');
@@ -246,7 +441,7 @@ function askDelLink(id) {
   showConfirm('Delete this link?', () => {
     const _vdel=VDATA.find(l=>l.id===id);
     VDATA = VDATA.filter(l => l.id !== id);
-    saveVault(VDATA);
+    if (VAULT_CRYPTO_KEY) { saveVaultEncrypted(VDATA); } else { saveVault(VDATA); }
     document.getElementById('rpanel').classList.remove('open');
     document.getElementById('poverlay').classList.remove('show');
     document.getElementById('content').classList.remove('pushed');
