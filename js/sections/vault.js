@@ -209,6 +209,21 @@ const VAULT_KEY = 'ac_v4_vault';
 function loadVault()  { return []; } // Always empty - real data comes from encrypted store
 function saveVault(d) { /* disabled - use saveVaultEncrypted instead */ }
 
+// Auto-migrate: if plain data exists and no encryption set up yet, prompt setup
+function checkVaultMigration() {
+  const plainData = ls.get(VAULT_KEY);
+  const pwSet     = ls.str('ac_vault_pw_set');
+  const hasEnc    = !!ls.get(VAULT_ENC_KEY);
+  if (plainData?.length && !pwSet && !hasEnc) {
+    // Has plain data, not yet encrypted — force setup with migration
+    showAlert(
+      '🔐 Your Vault needs to be encrypted.<br><br>Set a password to protect your ' + plainData.length + ' saved link' + (plainData.length!==1?'s':'') + '. Your data will be migrated automatically.',
+      { title: 'Vault Encryption Required' }
+    );
+    setTimeout(() => showVaultPasswordSetup(() => {}), 300);
+  }
+}
+
 let VDATA          = []; // Always starts empty — populated after password decrypt
 let VSEARCH        = '';
 let VAULT_UNLOCKED = false;
@@ -234,13 +249,17 @@ function startVaultIdleTimer() {
 
 function unlockVault() {
   const hasEncrypted = !!ls.get(VAULT_ENC_KEY);
-  const pwSet = ls.str('ac_vault_pw_set');
-  if (!pwSet || !hasEncrypted) {
-    // First time - setup password
+  const pwSet        = ls.str('ac_vault_pw_set');
+  const hasPlain     = !!(ls.get(VAULT_KEY)?.length);
+
+  if (hasEncrypted && pwSet) {
+    // Normal flow - ask for password
+    showVaultPasswordUnlock(() => {});
+  } else if (hasPlain || !hasEncrypted) {
+    // Has plain data or first time - setup password + migrate
     showVaultPasswordSetup(() => {});
   } else {
-    // Has encrypted data - ask for password
-    showVaultPasswordUnlock(() => {});
+    showVaultPasswordSetup(() => {});
   }
 }
 
@@ -258,6 +277,7 @@ function faviconUrl(url) {
 //  VAULT RENDER
 // ═══════════════════════════════════════════════════════
 function renderVault(c) {
+  checkVaultMigration();
   c.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
