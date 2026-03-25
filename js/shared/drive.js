@@ -13,84 +13,91 @@ function _updateDriveBtn(state){
   btn.title=state==='connected'?'Drive synced — click to disconnect':state==='syncing'?'Syncing...':state==='error'?'Sync error — click to retry':'Connect to Google Drive';
 }
 
-const _isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 const _REDIRECT_KEY = 'ac_oauth_redirect';
+const _WORKER = 'https://aether-codex-ai.nadeempubgmobile2-0.workers.dev';
+const K_REFRESH = 'ac_v4_refresh';
 
-// ── Mobile redirect OAuth flow ──
-function _mobileOAuthRedirect() {
-  // Save current section so we can restore after redirect
+// ── Authorization Code Flow — works on all devices, gets refresh token ──
+function _startOAuthFlow() {
   localStorage.setItem(_REDIRECT_KEY, '1');
   const params = new URLSearchParams({
-    client_id: CLIENT_ID,
-    redirect_uri: location.origin + location.pathname,
-    response_type: 'token',
-    scope: DRIVE_SCOPE,
-    include_granted_scopes: 'true',
-    state: location.hash || '#/',
+    client_id:     CLIENT_ID,
+    redirect_uri:  location.origin + location.pathname,
+    response_type: 'code',
+    scope:         DRIVE_SCOPE + ' ' + YT_SCOPE_CONST,
+    access_type:   'offline',
+    prompt:        'consent',
+    state:         localStorage.getItem('ac_last_section') || 'home',
   });
   location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
 }
 
-function _handleOAuthRedirect() {
-  // Check for token in URL hash after redirect
-  if (!localStorage.getItem(_REDIRECT_KEY)) return false;
+async function _handleOAuthRedirect() {
+  const params = new URLSearchParams(location.search);
+  const code  = params.get('code');
+  const state = params.get('state');
+  if (!code || !localStorage.getItem(_REDIRECT_KEY)) return false;
   localStorage.removeItem(_REDIRECT_KEY);
-
-  const hash = location.hash;
-  const params = new URLSearchParams(hash.replace(/^#/, ''));
-  const token = params.get('access_token');
-  const expiresIn = parseInt(params.get('expires_in') || '3600');
-
-  if (token) {
-    ls.setStr(K.DTOKEN, token);
-    ls.setStr(K.DEXP, String(Date.now() + (expiresIn - 60) * 1000));
-    // Clean up URL — remove token from hash
-    history.replaceState({}, '', location.pathname + (localStorage.getItem('ac_last_section') ? '#/' + localStorage.getItem('ac_last_section') : ''));
+  // Clean URL immediately
+  history.replaceState({}, '', location.pathname + (state ? '#/' + state : ''));
+  try {
+    const res = await fetch(_WORKER, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Action': 'exchange_code' },
+      body: JSON.stringify({ code, redirect_uri: location.origin + location.pathname })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    ls.setStr(K.DTOKEN, data.access_token);
+    ls.setStr(K.DEXP, String(Date.now() + (data.expires_in - 60) * 1000));
+    if (data.refresh_token) ls.setStr(K_REFRESH, data.refresh_token);
     _updateDriveBtn('syncing');
     _driveInit();
     return true;
+  } catch(e) {
+    toast('Drive auth failed: ' + e.message, 'var(--cr)');
+    _updateDriveBtn('error');
+    return false;
   }
-  return false;
 }
 
-function initGIS(){
-  // Handle redirect return first
-  if (_handleOAuthRedirect()) return;
+async function _refreshAccessToken() {
+  const refreshToken = ls.str(K_REFRESH);
+  if (!refreshToken) return false;
+  try {
+    const res = await fetch(_WORKER, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Action': 'refresh_token' },
+      body: JSON.stringify({ refresh_token: refreshToken })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    ls.setStr(K.DTOKEN, data.access_token);
+    ls.setStr(K.DEXP, String(Date.now() + (data.expires_in - 60) * 1000));
+    return true;
+  } catch(e) {
+    console.warn('Token refresh failed:', e.message);
+    return false;
+  }
+}
 
-  if(!window.google?.accounts?.oauth2){setTimeout(initGIS,600);return;}
+async function initGIS(){
+  // Handle redirect return (authorization code in URL)
+  const handled = await _handleOAuthRedirect();
+  if (handled) return;
 
-  // Silent token client - tries to get token without showing popup
-  _tokenClient=google.accounts.oauth2.initTokenClient({
-    client_id:CLIENT_ID, scope:DRIVE_SCOPE,
-    prompt:'',  // empty = silent, no popup unless truly needed
-    callback:resp=>{
-      if(resp.error==='interaction_required'||resp.error==='user_logged_out'){
-        // Silent failed - need user interaction, create a new client with prompt
-        _tokenClient=google.accounts.oauth2.initTokenClient({
-          client_id:CLIENT_ID, scope:DRIVE_SCOPE,
-          callback:resp2=>{
-            if(resp2.error){toast('Drive auth failed: '+resp2.error,'var(--cr)');_updateDriveBtn('error');return;}
-            _saveToken(resp2);
-          }
-        });
-        _tokenClient.requestAccessToken();
-        return;
-      }
-      if(resp.error){toast('Drive auth failed: '+resp.error,'var(--cr)');_updateDriveBtn('error');return;}
-      _saveToken(resp);
-    }
-  });
+  _gisReady = true;
 
-  _gisReady=true;
-
-  if(_isConnected()){
-    // Token still valid - reconnect silently, no popup
+  if (_isConnected()) {
+    // Token still valid
     _updateDriveBtn('syncing');
     _driveInit();
-  } else if(ls.str(K.DTOKEN)){
-    // Had a token before but it expired - try silent refresh
+  } else if (ls.str(K_REFRESH)) {
+    // Have refresh token - silently get new access token
     _updateDriveBtn('syncing');
-    _tokenClient.requestAccessToken();
+    const ok = await _refreshAccessToken();
+    if (ok) _driveInit();
+    else _updateDriveBtn('off');
   } else {
     _updateDriveBtn('off');
   }
@@ -111,35 +118,40 @@ function _showDriveHint(){
 }
 
 function driveAction(){
-  if(_isConnected()){
+  if(_isConnected() || ls.str(K_REFRESH)){
     showConfirm('Your data will stay in localStorage. You can reconnect anytime.',()=>{
-    ls.del(K.DTOKEN);ls.del(K.DEXP);ls.del(K.DFILE);ls.del(K.DSYNC);
-    _driveFolderId=null;_updateDriveBtn('off');toast('Disconnected from Drive');
-  },{title:'Disconnect Drive?',okLabel:'Disconnect',danger:false});
+      ls.del(K.DTOKEN);ls.del(K.DEXP);ls.del(K.DFILE);ls.del(K.DSYNC);ls.del(K_REFRESH);
+      _driveFolderId=null;_updateDriveBtn('off');toast('Disconnected from Drive');
+    },{title:'Disconnect Drive?',okLabel:'Disconnect',danger:false});
   } else {
-    // Mobile: use redirect flow — no popup issues
-    if (_isMobile) {
-      _mobileOAuthRedirect();
-      return;
-    }
-    if(!_gisReady){toast('Google API loading, try again','var(--ch)');return;}
-    // Desktop: use popup flow
-    _tokenClient=google.accounts.oauth2.initTokenClient({
-      client_id:CLIENT_ID, scope:DRIVE_SCOPE,
-      callback:resp=>{
-        if(resp.error){toast('Drive auth failed: '+resp.error,'var(--cr)');_updateDriveBtn('error');return;}
-        _saveToken(resp);
-      }
-    });
-    _tokenClient.requestAccessToken();
+    // Use authorization code flow (works on both mobile and desktop)
+    _startOAuthFlow();
   }
 }
 
 async function _req(url,opts={}){
-  const token=_getToken();if(!token)return null;
+  let token=_getToken();
+  if(!token){
+    // Try to refresh silently
+    if(ls.str(K_REFRESH)){
+      const ok=await _refreshAccessToken();
+      if(ok) token=_getToken();
+    }
+    if(!token){_updateDriveBtn('off');return null;}
+  }
   try{
     const r=await fetch(url,{...opts,headers:{Authorization:`Bearer ${token}`,... (opts.headers||{})}});
-    if(r.status===401){ls.del(K.DTOKEN);ls.del(K.DEXP);_updateDriveBtn('off');return null;}
+    if(r.status===401){
+      // Token rejected - try refresh once
+      if(ls.str(K_REFRESH)){
+        const ok=await _refreshAccessToken();
+        if(ok){
+          const t2=_getToken();
+          if(t2) return fetch(url,{...opts,headers:{Authorization:`Bearer ${t2}`,... (opts.headers||{})}});
+        }
+      }
+      ls.del(K.DTOKEN);ls.del(K.DEXP);_updateDriveBtn('off');return null;
+    }
     return r;
   }catch{return null;}
 }
