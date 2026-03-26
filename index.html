@@ -20,7 +20,7 @@
   const bg = {
     home:'#070d0b', media:'#07000f', games:'#080600',
     books:'#f5f0e8', music:'#080400', vault:'#f0eefa',
-    log:'#010c14', settings:'#0a0a12', tools:'#080006'
+    log:'#010c14', settings:'#0a0a12'
   };
   const h = location.hash.replace('#/','').replace('#','')
          || localStorage.getItem('ac_last_section')
@@ -46,7 +46,6 @@
   <div class="mob-ni" data-r="books" onclick="nav('books')"><span>◎</span>Books</div>
   <div class="mob-ni" data-r="music" onclick="nav('music')"><span>♪</span>Music</div>
   <div class="mob-ni" data-r="vault" onclick="nav('vault')"><span>⛓</span>Vault</div>
-  <div class="mob-ni" data-r="tools" onclick="nav('tools')"><span>⬇</span>Tools</div>
   <div class="mob-ni" data-r="log" onclick="nav('log')"><span>◎</span>Log</div>
   <div class="mob-sep"></div>
   <div class="mob-ni" data-r="settings" onclick="nav('settings')"><span>⚙</span>Settings</div>
@@ -63,7 +62,6 @@
     <div class="ni" data-r="music" data-tip="Music" onclick="nav('music')"><span class="ni-ico">♪</span><span class="ni-lbl">Music</span></div>
     <div class="ni" data-r="vault" data-tip="Vault" onclick="nav('vault')"><span class="ni-ico">◈</span><span class="ni-lbl">Vault</span></div>
     <div class="ni" data-r="log" data-tip="Activity" onclick="nav('log')"><span class="ni-ico">◎</span><span class="ni-lbl">Log</span></div>
-    <div class="ni" data-r="tools" data-tip="Tools" onclick="nav('tools')"><span class="ni-ico">⬇</span><span class="ni-lbl">Tools</span></div>
     <div class="sb-bot">
       <div class="sb-sep"></div>
       <div class="ni" data-r="settings" data-tip="Settings" onclick="nav('settings')"><span class="ni-ico">⚙</span><span class="ni-lbl">Settings</span></div>
@@ -192,7 +190,6 @@
 <script defer src="js/sections/wrapped.js"></script>
 <script defer src="js/sections/public.js"></script>
 <script defer src="js/sections/log.js"></script>
-<script defer src="js/sections/tools.js"></script>
 <script defer src="js/shared/extras.js"></script>
 <script defer src="js/main.js"></script>
 <script>
