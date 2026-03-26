@@ -133,4 +133,5 @@ const SECTION_META={
   vault:   {title:'Link Vault',       label:'Vault'},
   log:     {title:'Activity Log',      label:'Log'},
   settings:{title:'Settings',        label:'Settings'},
+  tools:   {title:'Tool',            label:'Tools'},
 };
