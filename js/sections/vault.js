@@ -359,11 +359,27 @@ function renderVault(c) {
 
 function renderVaultBody() {
   const el = document.getElementById('vault-body'); if (!el) return;
-  // If locked and has plain data - show migration needed
+  const hasEncData = !!ls.get(VAULT_ENC_KEY);
+
+  // Show/hide lock button
+  const lockBtn = document.getElementById('vault-lock-btn');
+  if (lockBtn) lockBtn.style.display = VAULT_UNLOCKED ? 'block' : 'none';
+
+  // If locked and has encrypted data — show unlock prompt, don't render content
+  if (!VAULT_UNLOCKED && hasEncData) {
+    el.innerHTML = `<div style="text-align:center;padding:40px 20px">
+      <div style="font-size:32px;margin-bottom:12px">🔐</div>
+      <div style="font-size:14px;font-weight:600;color:var(--tx);margin-bottom:6px">Vault is Locked</div>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:16px">Your links are encrypted. Enter your password to view them.</div>
+      <button onclick="unlockVault()" style="background:var(--ac);color:#000;border:none;border-radius:6px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">🔐 Unlock Vault</button>
+    </div>`;
+    return;
+  }
+
+  // If locked and has plain unencrypted data — show migration prompt
   if (!VAULT_UNLOCKED) {
     const plainData = ls.get(VAULT_KEY);
-    const hasEnc    = !!ls.get(VAULT_ENC_KEY);
-    if (plainData?.length && !hasEnc) {
+    if (plainData?.length) {
       el.innerHTML = `<div style="text-align:center;padding:30px 20px">
         <div style="font-size:32px;margin-bottom:12px">🔐</div>
         <div style="font-size:14px;font-weight:600;color:var(--tx);margin-bottom:6px">Encrypt Your Vault</div>
@@ -372,11 +388,10 @@ function renderVaultBody() {
       </div>`;
       return;
     }
+    // No data at all
+    el.innerHTML = `<div class="empty"><div class="empty-ico">🔗</div><p>No links yet — add your first one!</p></div>`;
+    return;
   }
-
-  // Show/hide lock button like games section
-  const lockBtn = document.getElementById('vault-lock-btn');
-  if (lockBtn) lockBtn.style.display = VAULT_UNLOCKED ? 'block' : 'none';
 
   const all = VDATA;
   const q = VSEARCH.toLowerCase();
@@ -387,17 +402,6 @@ function renderVaultBody() {
   const priv   = filtered.filter(l => l.locked).sort((a,b) => b.addedAt-a.addedAt);
 
   if (!pub.length && !priv.length) {
-    const hasEncData = !!ls.get(VAULT_ENC_KEY);
-    if (!VAULT_UNLOCKED && hasEncData) {
-      // Has encrypted data but locked - show unlock prompt
-      el.innerHTML = `<div style="text-align:center;padding:40px 20px">
-        <div style="font-size:32px;margin-bottom:12px">🔐</div>
-        <div style="font-size:14px;font-weight:600;color:var(--tx);margin-bottom:6px">Vault is Locked</div>
-        <div style="font-size:12px;color:var(--mu);margin-bottom:16px">Your links are encrypted. Enter your password to view them.</div>
-        <button onclick="unlockVault()" style="background:var(--ac);color:#000;border:none;border-radius:6px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">🔐 Unlock Vault</button>
-      </div>`;
-      return;
-    }
     el.innerHTML = `<div class="empty"><div class="empty-ico">🔗</div><p>No links yet — add your first one!</p></div>`;
     return;
   }
