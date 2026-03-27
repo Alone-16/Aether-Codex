@@ -59,20 +59,17 @@ async function vaultDecrypt(stored, password) {
 
 // ── Save encrypted vault ──
 async function saveVaultEncrypted(data) {
-  if (!VAULT_CRYPTO_KEY) { console.warn('Vault not unlocked'); return; }
-  // Use new IV each save (salt stays same — stored in existing encrypted blob header)
-  const existing = ls.get(VAULT_ENC_KEY);
-  // Keep same salt for key consistency, new IV each save
-  const salt = existing ? _unb64(existing.salt) : crypto.getRandomValues(new Uint8Array(16));
-  const iv   = crypto.getRandomValues(new Uint8Array(12));
-  const enc  = new TextEncoder();
+  if (!VAULT_CRYPTO_KEY || !VAULT_CRYPTO_SALT) { console.warn('Vault not unlocked'); return; }
+  // Always use the salt from memory — it matches the derived VAULT_CRYPTO_KEY
+  const iv  = crypto.getRandomValues(new Uint8Array(12));
+  const enc = new TextEncoder();
   const cipherBuf = await crypto.subtle.encrypt(
     { name:'AES-GCM', iv },
     VAULT_CRYPTO_KEY,
     enc.encode(JSON.stringify(data))
   );
   const stored = {
-    salt: _b64(salt),
+    salt: _b64(VAULT_CRYPTO_SALT),
     iv:   _b64(iv),
     data: _b64(cipherBuf),
     v:    1
