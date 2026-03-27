@@ -5,6 +5,7 @@
 const VAULT_ENC_KEY  = 'ac_v4_vault_enc';  // stores {salt, iv, ciphertext} — all base64
 const VAULT_SALT_KEY = 'ac_v4_vault_salt'; // persistent salt for this device
 let   VAULT_CRYPTO_KEY = null;             // in-memory only, cleared on lock
+let   VAULT_CRYPTO_SALT = null;            // salt used to derive current key
 
 // ── Helpers ──
 function _b64(buf) {
@@ -209,7 +210,8 @@ async function handleVaultUnlock(btn) {
 // ── Override lockVault to clear memory ──
 function lockVaultCrypto() {
   VAULT_UNLOCKED = false;
-  VAULT_CRYPTO_KEY = null;
+  VAULT_CRYPTO_KEY  = null;
+  VAULT_CRYPTO_SALT = null; // Clear salt from memory
   VDATA = []; // Clear decrypted data from memory
   clearTimeout(VAULT_IDLE_TIMER);
   if (typeof renderVaultBody === 'function') renderVaultBody();
