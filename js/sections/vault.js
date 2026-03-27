@@ -402,7 +402,11 @@ function renderVaultBody() {
   const priv   = filtered.filter(l => l.locked).sort((a,b) => b.addedAt-a.addedAt);
 
   if (!pub.length && !priv.length) {
-    el.innerHTML = `<div class="empty"><div class="empty-ico">🔗</div><p>No links yet — add your first one!</p></div>`;
+    el.innerHTML = `<div class="empty">
+      <div class="empty-ico">🔗</div>
+      <p>No links yet — add your first one!</p>
+      <button onclick="openAddLink()" style="margin-top:8px;background:var(--ac);color:#000;border:none;border-radius:6px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">+ Add Link</button>
+    </div>`;
     return;
   }
 
