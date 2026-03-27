@@ -59,7 +59,7 @@ async function vaultDecrypt(stored, password) {
 
 // ── Save encrypted vault ──
 async function saveVaultEncrypted(data) {
-  if (!VAULT_CRYPTO_KEY || !VAULT_CRYPTO_SALT) { console.warn('Vault not unlocked'); return; }
+  if (!VAULT_CRYPTO_KEY || !VAULT_CRYPTO_SALT) { console.warn('Vault not unlocked — cannot save'); return; }
   // Always use the salt from memory — it matches the derived VAULT_CRYPTO_KEY
   const iv  = crypto.getRandomValues(new Uint8Array(12));
   const enc = new TextEncoder();
@@ -95,14 +95,10 @@ function showVaultPasswordSetup(onSuccess) {
       <div id="vp-err" style="color:#fb7185;font-size:12px;margin-top:6px;min-height:16px"></div>
       <div class="modal-btns">
         <button class="modal-btn cancel" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
-        <button class="modal-btn confirm" onclick="handleVaultPasswordSetup(this, onSuccessCallback)">Create</button>
+        <button class="modal-btn confirm" onclick="handleVaultPasswordSetup(this)">Create</button>
       </div>
     </div>`;
-  // Store callback
   el.querySelector('.modal-btn.confirm')._cb = onSuccess;
-  el.querySelector('.modal-btn.confirm').onclick = function() {
-    handleVaultPasswordSetup(this);
-  };
   document.body.appendChild(el);
   setTimeout(() => el.querySelector('#vp-new')?.focus(), 50);
 }
@@ -127,9 +123,10 @@ async function handleVaultPasswordSetup(btn) {
     if (bestSource.length > 0) {
       VDATA = bestSource;
     }
-    // Derive key
+    // Derive key — FIX: assign salt to VAULT_CRYPTO_SALT so saveVaultEncrypted can use it
     const salt = crypto.getRandomValues(new Uint8Array(16));
-    VAULT_CRYPTO_KEY = await _deriveKey(pw1, salt);
+    VAULT_CRYPTO_KEY  = await _deriveKey(pw1, salt);
+    VAULT_CRYPTO_SALT = salt; // ← CRITICAL FIX: was missing, caused saveVaultEncrypted to silently bail
     // Encrypt VDATA (contains migrated plain data)
     await saveVaultEncrypted(VDATA);
     // Delete ALL plain text copies permanently
@@ -146,6 +143,8 @@ async function handleVaultPasswordSetup(btn) {
     errEl.textContent = 'Error: ' + e.message;
     btn.textContent = 'Create';
     btn.disabled = false;
+    VAULT_CRYPTO_KEY  = null;
+    VAULT_CRYPTO_SALT = null;
   }
 }
 
@@ -184,12 +183,13 @@ async function handleVaultUnlock(btn) {
     const salt = _unb64(stored.salt);
     const key  = await _deriveKey(pw, salt);
     // Try decrypting — will throw DOMException if wrong password
-    const iv      = _unb64(stored.iv);
-    const cipher  = _unb64(stored.data);
+    const iv       = _unb64(stored.iv);
+    const cipher   = _unb64(stored.data);
     const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, cipher);
     const dec = new TextDecoder();
     VDATA = JSON.parse(dec.decode(plainBuf));
-    VAULT_CRYPTO_KEY = key;
+    VAULT_CRYPTO_KEY  = key;
+    VAULT_CRYPTO_SALT = salt; // ← CRITICAL FIX: was missing, caused subsequent saves to silently bail
     VAULT_UNLOCKED = true;
     ls.del(VAULT_KEY);      // Always delete plain text on unlock
     ls.del('ac_v4_vault');  // Belt and suspenders
@@ -200,16 +200,17 @@ async function handleVaultUnlock(btn) {
     errEl.textContent = '✗ Wrong password or corrupted data';
     btn.textContent = 'Unlock';
     btn.disabled = false;
-    VAULT_CRYPTO_KEY = null;
+    VAULT_CRYPTO_KEY  = null;
+    VAULT_CRYPTO_SALT = null;
   }
 }
 
-// ── Override lockVault to clear memory ──
+// ── Lock vault — clear all sensitive data from memory ──
 function lockVaultCrypto() {
-  VAULT_UNLOCKED = false;
+  VAULT_UNLOCKED    = false;
   VAULT_CRYPTO_KEY  = null;
-  VAULT_CRYPTO_SALT = null; // Clear salt from memory
-  VDATA = []; // Clear decrypted data from memory
+  VAULT_CRYPTO_SALT = null;
+  VDATA = [];
   clearTimeout(VAULT_IDLE_TIMER);
   if (typeof renderVaultBody === 'function') renderVaultBody();
 }
@@ -220,8 +221,8 @@ function lockVaultCrypto() {
 // ═══════════════════════════════════════════════════════
 const VAULT_KEY = 'ac_v4_vault';
 
-function loadVault()  { return []; } // Always empty - real data comes from encrypted store
-function saveVault(d) { /* disabled - use saveVaultEncrypted instead */ }
+function loadVault()  { return []; } // Always empty — real data comes from encrypted store
+function saveVault(d) { /* disabled — use saveVaultEncrypted instead */ }
 
 // Auto-migrate: if plain data exists and no encryption set up yet, prompt setup
 function checkVaultMigration() {
@@ -243,16 +244,19 @@ function checkVaultMigration() {
 
 // Read any existing plain data for migration BEFORE clearing
 const _PLAIN_VAULT_MIGRATE = ls.get(VAULT_KEY) || [];
-let VDATA = []; // Always starts empty — populated after password decrypt
-let VSEARCH        = '';
-let VAULT_UNLOCKED = false;
+let VDATA        = []; // Always starts empty — populated after password decrypt
+let VSEARCH      = '';
+let VAULT_UNLOCKED   = false;
 let VAULT_IDLE_TIMER = null;
-let VEDIT_ID       = null;
+let VEDIT_ID     = null;
 
 // ── Auto-lock on navigate away ──
 function lockVaultOnNav() {
   if (VAULT_UNLOCKED) {
-    VAULT_UNLOCKED = false;
+    VAULT_UNLOCKED    = false;
+    VAULT_CRYPTO_KEY  = null;
+    VAULT_CRYPTO_SALT = null;
+    VDATA = [];
     clearTimeout(VAULT_IDLE_TIMER);
   }
 }
@@ -261,7 +265,10 @@ function startVaultIdleTimer() {
   clearTimeout(VAULT_IDLE_TIMER);
   const mins = SETTINGS.idleTimeout || 5;
   VAULT_IDLE_TIMER = setTimeout(() => {
-    VAULT_UNLOCKED = false;
+    VAULT_UNLOCKED    = false;
+    VAULT_CRYPTO_KEY  = null;
+    VAULT_CRYPTO_SALT = null;
+    VDATA = [];
     if (CURRENT === 'vault') renderVaultBody();
   }, mins * 60 * 1000);
 }
@@ -272,10 +279,10 @@ function unlockVault() {
   const hasPlain     = !!(ls.get(VAULT_KEY)?.length);
 
   if (hasEncrypted && pwSet) {
-    // Normal flow - ask for password
+    // Normal flow — ask for password
     showVaultPasswordUnlock(() => {});
   } else if (hasPlain || !hasEncrypted) {
-    // Has plain data or first time - setup password + migrate
+    // Has plain data or first time — setup password + migrate
     showVaultPasswordSetup(() => {});
   } else {
     showVaultPasswordSetup(() => {});
@@ -295,23 +302,22 @@ function faviconUrl(url) {
 // ═══════════════════════════════════════════════════════
 //  VAULT RENDER
 // ═══════════════════════════════════════════════════════
+
 // ── Reset vault encryption (for re-migration) ──
 function resetVaultEncryption() {
   showConfirm(
     'This will clear your current vault password and re-run encryption setup. Your links will be re-migrated. Continue?',
     () => {
-      // Restore plain data temporarily so migration can pick it up
       const enc = ls.get(VAULT_ENC_KEY);
       localStorage.removeItem('ac_vault_pw_set');
-      VAULT_UNLOCKED = false;
-      VAULT_CRYPTO_KEY = null;
+      VAULT_UNLOCKED    = false;
+      VAULT_CRYPTO_KEY  = null;
+      VAULT_CRYPTO_SALT = null;
       VDATA = [];
-      // If we have encrypted data, we need password to decrypt first
       if (enc) {
         showAlert('To re-encrypt, first unlock your vault with your current password, then go to Settings → Security → Reset Vault Password.', {title:'Unlock First'});
         return;
       }
-      // No encrypted data - straight to setup
       showVaultPasswordSetup(() => {});
     },
     {title:'Reset Vault Encryption?', okLabel:'Reset', danger:false}
@@ -327,7 +333,6 @@ async function forceReEncryptVault() {
   // Check for any remaining plain data
   const plain = JSON.parse(localStorage.getItem('ac_v4_vault') || '[]');
   if (plain.length > 0) {
-    // Merge plain data into current VDATA
     const existingIds = new Set(VDATA.map(l => l.id));
     const newLinks = plain.filter(l => !existingIds.has(l.id));
     VDATA = [...VDATA, ...newLinks];
@@ -365,7 +370,7 @@ function renderVaultBody() {
   const lockBtn = document.getElementById('vault-lock-btn');
   if (lockBtn) lockBtn.style.display = VAULT_UNLOCKED ? 'block' : 'none';
 
-  // If locked and has encrypted data — show unlock prompt, don't render content
+  // If locked and has encrypted data — show unlock prompt
   if (!VAULT_UNLOCKED && hasEncData) {
     el.innerHTML = `<div style="text-align:center;padding:40px 20px">
       <div style="font-size:32px;margin-bottom:12px">🔐</div>
@@ -388,8 +393,13 @@ function renderVaultBody() {
       </div>`;
       return;
     }
-    // No data at all
-    el.innerHTML = `<div class="empty"><div class="empty-ico">🔗</div><p>No links yet — add your first one!</p></div>`;
+    // No encrypted data and no plain data — fresh vault
+    el.innerHTML = `<div class="empty">
+      <div class="empty-ico">🔗</div>
+      <p>No links yet</p>
+      <div style="font-size:12px;color:var(--mu);margin-top:4px;margin-bottom:12px">Links are saved encrypted. You'll set a password when you add your first one.</div>
+      <button onclick="openAddLink()" style="background:var(--ac);color:#000;border:none;border-radius:6px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">+ Add First Link</button>
+    </div>`;
     return;
   }
 
@@ -398,8 +408,8 @@ function renderVaultBody() {
   const filtered = q ? all.filter(l => l.desc?.toLowerCase().includes(q) || l.url?.toLowerCase().includes(q)) : all;
 
   // Sort: pinned first, then by date desc
-  const pub    = filtered.filter(l => !l.locked).sort((a,b) => (b.pinned?1:0)-(a.pinned?1:0) || b.addedAt-a.addedAt);
-  const priv   = filtered.filter(l => l.locked).sort((a,b) => b.addedAt-a.addedAt);
+  const pub  = filtered.filter(l => !l.locked).sort((a,b) => (b.pinned?1:0)-(a.pinned?1:0) || b.addedAt-a.addedAt);
+  const priv = filtered.filter(l => l.locked).sort((a,b) => b.addedAt-a.addedAt);
 
   if (!pub.length && !priv.length) {
     el.innerHTML = `<div class="empty">
@@ -416,16 +426,8 @@ function renderVaultBody() {
       <span style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#fb7185">🔒 Private Links</span>
       <div style="flex:1;height:1px;background:rgba(251,113,133,.2)"></div>
       <span style="font-size:11px;color:var(--mu)">${priv.length} link${priv.length!==1?'s':''}</span>
-      ${!VAULT_UNLOCKED ? `<button onclick="unlockVault()" style="background:rgba(251,113,133,.1);color:#fb7185;border:1px solid rgba(251,113,133,.25);border-radius:4px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer">🔒 Unlock</button>` : ''}
     </div>
-    ${!VAULT_UNLOCKED
-      ? `<div style="background:rgba(251,113,133,.04);border:1px dashed rgba(251,113,133,.2);border-radius:8px;padding:20px;text-align:center">
-           <div style="font-size:24px;margin-bottom:8px">🔐</div>
-           <div style="font-size:13px;color:#fb7185;font-weight:600">${priv.length} encrypted link${priv.length!==1?'s':''}</div>
-           <div style="font-size:11px;color:var(--mu);margin-top:4px">Unlock to view — content is not in the DOM</div>
-         </div>`
-      : `<div style="display:flex;flex-direction:column;gap:6px">${priv.map(l => vaultCardHtml(l, true)).join('')}</div>`
-    }` : '';
+    <div style="display:flex;flex-direction:column;gap:6px">${priv.map(l => vaultCardHtml(l, true)).join('')}</div>` : '';
 
   el.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px">${pubHtml}</div>${privHtml}`;
 }
@@ -450,7 +452,6 @@ function vaultCardHtml(l, isPrivate) {
         style="width:28px;height:28px;border-radius:5px;background:var(--surf2);border:1px solid var(--brd);color:var(--tx2);font-size:12px;cursor:pointer">📋</button>
       <button onclick="window.open('${esc(l.url)}','_blank')" title="Open in new tab"
         style="width:28px;height:28px;border-radius:5px;background:var(--surf2);border:1px solid var(--brd);color:var(--tx2);font-size:12px;cursor:pointer">↗</button>
-
       <button onclick="openEditLink('${l.id}')" title="Edit"
         style="width:28px;height:28px;border-radius:5px;background:var(--surf2);border:1px solid var(--brd);color:var(--tx2);font-size:12px;cursor:pointer">✏</button>
       <button onclick="askDelLink('${l.id}')" title="Delete"
@@ -485,6 +486,16 @@ function openPrivateTab(url) {
 
 // ── ADD / EDIT FORM ──
 function openAddLink() {
+  if (!VAULT_UNLOCKED) {
+    // Auto-trigger password flow for fresh vault (no enc data) or unlock for existing
+    const hasEncData = !!ls.get(VAULT_ENC_KEY);
+    if (!hasEncData) {
+      showVaultPasswordSetup(() => { VEDIT_ID = null; renderVaultForm(null); });
+    } else {
+      showVaultPasswordUnlock(() => { VEDIT_ID = null; renderVaultForm(null); });
+    }
+    return;
+  }
   VEDIT_ID = null;
   renderVaultForm(null);
 }
