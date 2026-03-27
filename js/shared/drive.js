@@ -188,8 +188,9 @@ async function _pushToDrive(){
   try{
     const fileId=await _getOrCreateFile();if(!fileId)throw new Error('No file');
     // Vault syncs as encrypted blob — never plain data
-    const vaultEnc = ls.get(VAULT_ENC_KEY) || null;
-    const payload=JSON.stringify({version:DATA_VERSION,savedAt:parseInt(ls.str(K.SAVED)||'0'),data:DATA,genres:GENRES,games:GDATA,music:MDATA,playlists:MPLAYLISTS,books:BDATA,vault_enc:vaultEnc,log:LDATA});
+    const vaultEnc    = ls.get(VAULT_ENC_KEY)    || null;
+    const vaultPublic = ls.get(VAULT_PUBLIC_KEY) || null;
+    const payload=JSON.stringify({version:DATA_VERSION,savedAt:parseInt(ls.str(K.SAVED)||'0'),data:DATA,genres:GENRES,games:GDATA,music:MDATA,playlists:MPLAYLISTS,books:BDATA,vault_enc:vaultEnc,vault_public:vaultPublic,log:LDATA});
     const r=await _req(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:payload});
     if(!r||!r.ok)throw new Error('Upload failed');
     ls.setStr(K.DSYNC,String(Date.now()));
@@ -248,7 +249,14 @@ async function _driveInit(){
       saveBooks(BDATA);
     }
     if(remote.vault_enc){
-      ls.set(VAULT_ENC_KEY, remote.vault_enc); // Restore encrypted blob only
+      ls.set(VAULT_ENC_KEY, remote.vault_enc);
+    }
+    if(remote.vault_public){
+      const local = ls.get(VAULT_PUBLIC_KEY) || [];
+      const remIds = new Set(local.map(l=>l.id));
+      const merged = [...local, ...(remote.vault_public||[]).filter(l=>!remIds.has(l.id))];
+      ls.set(VAULT_PUBLIC_KEY, merged);
+      if(typeof VDATA_PUBLIC !== 'undefined') VDATA_PUBLIC = merged;
     }
     if(remote.log&&Array.isArray(remote.log)){
       LDATA=remote.log;
