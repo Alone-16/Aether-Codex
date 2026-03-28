@@ -1073,21 +1073,20 @@ function _toolsLazyLoadGrid(items, prefix) {
   }
   if (!queue.length) return;
 
-  // Load strictly one at a time, left-to-right.
-  async function runQueue() {
-    for (const { img, loader, errEl } of queue) {
-      try {
-        await toolsLoadPreview(img);
-        img.style.display = 'block';
-        if (loader) loader.style.display = 'none';
-      } catch {
-        if (loader) loader.style.display = 'none';
-        if (errEl)  errEl.style.display  = 'flex';
-      }
-    }
-  }
-
-  requestAnimationFrame(runQueue);
+  // Fire all images at once — wsrv.nl is reliable enough to handle parallel loads.
+  requestAnimationFrame(() => {
+    queue.forEach(({ img, loader, errEl }) => {
+      toolsLoadPreview(img)
+        .then(() => {
+          img.style.display = 'block';
+          if (loader) loader.style.display = 'none';
+        })
+        .catch(() => {
+          if (loader) loader.style.display = 'none';
+          if (errEl)  errEl.style.display  = 'flex';
+        });
+    });
+  });
 }
 
 // ──────────────────────────────────────────────────────
