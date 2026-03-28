@@ -90,10 +90,14 @@ async function toolsFetch() {
   const errorDiv   = document.getElementById('tools-error');
   const resultDiv  = document.getElementById('tools-result');
 
-  const url = urlInput.value.trim();
-  if (!url)                          return toolsError('Please paste an Instagram post URL.');
-  if (!TOOLS_API_KEY)                return toolsError('API key not set. Enter your RapidAPI key above first.');
-  if (!url.includes('instagram.com')) return toolsError("That doesn't look like an Instagram URL.");
+  const raw = urlInput.value.trim();
+  if (!raw)           return toolsError('Please paste an Instagram post URL.');
+  if (!TOOLS_API_KEY) return toolsError('API key not set. Enter your RapidAPI key above first.');
+
+  // Extract shortcode from URL e.g. instagram.com/p/DV9cq63kd3u/ → DV9cq63kd3u
+  const match     = raw.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+  const shortcode = match ? match[1] : (/^[A-Za-z0-9_-]{9,14}$/.test(raw) ? raw : null);
+  if (!shortcode) return toolsError("Could not find a shortcode in that URL. Make sure it's a valid Instagram post link.");
 
   errorDiv.style.display  = 'none';
   resultDiv.style.display = 'none';
@@ -101,14 +105,14 @@ async function toolsFetch() {
   fetchLabel.textContent  = '...';
 
   try {
-    const res = await fetch('https://instagram120.p.rapidapi.com/posts', {
+    const res = await fetch('https://instagram120.p.rapidapi.com/mediaByShortcode', {
       method: 'POST',
       headers: {
         'Content-Type':   'application/json',
         'X-RapidAPI-Key':  TOOLS_API_KEY,
         'X-RapidAPI-Host': 'instagram120.p.rapidapi.com'
       },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ shortcode })
     });
 
     if (!res.ok) {
