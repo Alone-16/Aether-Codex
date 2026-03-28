@@ -105,12 +105,12 @@ async function toolsFetch() {
   fetchLabel.textContent  = '...';
 
   try {
-    const res = await fetch('https://instagram120.p.rapidapi.com/mediaByShortcode', {
+    const res = await fetch('https://instagram120.p.rapidapi.com/api/instagram/mediaByShortcode', {
       method: 'POST',
       headers: {
-        'Content-Type':   'application/json',
-        'X-RapidAPI-Key':  TOOLS_API_KEY,
-        'X-RapidAPI-Host': 'instagram120.p.rapidapi.com'
+        'Content-Type':    'application/json',
+        'x-rapidapi-key':  TOOLS_API_KEY,
+        'x-rapidapi-host': 'instagram120.p.rapidapi.com'
       },
       body: JSON.stringify({ shortcode })
     });
