@@ -38,114 +38,49 @@ function toolsApiHeaders() {
   };
 }
 
+// ── Image proxy: wsrv.nl re-serves any image with full CORS headers via Cloudflare CDN.
+// Unlike generic CORS proxies, it is purpose-built for images and works with
+// Instagram's CDN which enforces Cross-Origin-Resource-Policy: same-origin.
+// Usage: set directly as <img src> — no fetch(), no blob(), no AbortController needed.
+const TOOLS_IMG_PROXY = u => `https://wsrv.nl/?url=${encodeURIComponent(u)}&n=-1`;
+
+// Fallback proxies used only for downloads (toolsDownload / toolsDownloadZIP).
 const TOOLS_PREVIEW_PROXIES = [
+  u => `https://wsrv.nl/?url=${encodeURIComponent(u)}&n=-1`,
   u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
   u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u => `https://proxy.cors.sh/${u}`,
 ];
 
-// ── Strategy cache: remembers which strategy worked last (-1 = direct, 0/1/2 = proxy index) ──
-let _toolsWinningStrategy = null;
-
-// Fetch via one proxy with a hard timeout; resolves with blob or rejects.
-function _toolsProxyFetch(proxyUrl, timeoutMs = 5000) {
-  return new Promise((resolve, reject) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, timeoutMs);
-    fetch(proxyUrl, { signal: controller.signal })
-      .then(async res => {
-        clearTimeout(timer);
-        if (!res.ok) { reject(new Error('not ok')); return; }
-        const blob = await res.blob();
-        if (!blob || blob.size === 0) { reject(new Error('empty')); return; }
-        resolve(blob);
-      })
-      .catch(err => { clearTimeout(timer); reject(err); });
-  });
-}
-
-// Try direct <img> load with a short timeout; resolves true/false.
-function _toolsDirectLoad(url, timeoutMs = 2000) {
-  return new Promise(resolve => {
-    const t = new Image();
-    const timer = setTimeout(() => { t.src = ''; resolve(false); }, timeoutMs);
-    t.onload  = () => { clearTimeout(timer); resolve(true); };
-    t.onerror = () => { clearTimeout(timer); resolve(false); };
-    t.src = url;
-  });
-}
-
-// Apply a loaded blob to an img element.
-function _toolsApplyBlob(imgEl, blob) {
-  if (imgEl._blobUrl) URL.revokeObjectURL(imgEl._blobUrl);
-  imgEl._blobUrl = URL.createObjectURL(blob);
-  imgEl.src = imgEl._blobUrl;
-  imgEl.style.display = 'block';
-}
-
 /**
- * Load a preview image — races all proxies + direct load simultaneously.
- * First one to succeed wins. If ALL fail, waits 800ms then retries the race.
- * Never gives up. Resolves only on success (no reject).
+ * Load a preview image via wsrv.nl — set as plain <img src>, resolves on load.
+ * Falls back to direct URL if wsrv.nl fails. One round-trip, no blob fetching.
+ * Resolves only on success; never rejects (retries up to 3x with 600ms gap).
  */
 async function toolsLoadPreview(imgEl) {
   const url = decodeURIComponent(imgEl.dataset.url);
+  const candidates = [TOOLS_IMG_PROXY(url), url];
 
-  // If we have a cached winning strategy, try it first alone (fast path).
-  if (_toolsWinningStrategy !== null) {
-    try {
-      if (_toolsWinningStrategy === -1) {
-        const ok = await _toolsDirectLoad(url, 2000);
-        if (ok) { imgEl.src = url; imgEl.style.display = 'block'; return; }
-      } else {
-        const blob = await _toolsProxyFetch(TOOLS_PREVIEW_PROXIES[_toolsWinningStrategy](url), 5000);
-        _toolsApplyBlob(imgEl, blob); return;
-      }
-    } catch { /* cached strategy missed — fall through to full race */ }
-  }
-
-  // Full race: fire direct + all proxies at once, first blob wins.
-  // Retry the entire race until something loads.
-  let attempt = 0;
-  while (true) {
-    if (attempt > 0) await new Promise(r => setTimeout(r, 800));
-    attempt++;
-
-    const result = await new Promise(resolve => {
-      let done = false;
-      let failed = 0;
-      const total = TOOLS_PREVIEW_PROXIES.length + 1; // +1 for direct
-
-      // Direct load attempt
-      _toolsDirectLoad(url, 2000).then(ok => {
-        if (ok && !done) { done = true; resolve({ type: 'direct' }); }
-        else { failed++; if (failed === total && !done) resolve(null); }
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 600));
+    for (const src of candidates) {
+      const ok = await new Promise(resolve => {
+        const t = new Image();
+        const timer = setTimeout(() => { t.src = ''; resolve(false); }, 8000);
+        t.onload  = () => { clearTimeout(timer); resolve(true); };
+        t.onerror = () => { clearTimeout(timer); resolve(false); };
+        t.src = src;
       });
-
-      // All proxies in parallel
-      TOOLS_PREVIEW_PROXIES.forEach((build, idx) => {
-        _toolsProxyFetch(build(url), 5000).then(blob => {
-          if (!done) { done = true; resolve({ type: 'proxy', blob, idx }); }
-        }).catch(() => {
-          failed++;
-          if (failed === total && !done) resolve(null);
-        });
-      });
-    });
-
-    if (result) {
-      if (result.type === 'direct') {
-        _toolsWinningStrategy = -1;
-        imgEl.src = url; imgEl.style.display = 'block';
-      } else {
-        _toolsWinningStrategy = result.idx;
-        _toolsApplyBlob(imgEl, result.blob);
+      if (ok) {
+        imgEl.src = src;
+        imgEl.style.display = 'block';
+        return;
       }
-      return;
     }
-    // All failed → loop and retry
   }
+  // All attempts failed — show error tile silently (caller handles UI)
+  throw new Error('preview failed');
 }
+
 
 /** Download a file via CORS proxy; falls back to window.open. */
 async function toolsDownload(encodedUrl, filename) {
@@ -1133,17 +1068,22 @@ function _toolsLazyLoadGrid(items, prefix) {
     if (items[i].ext === 'mp4') continue;
     const img    = document.getElementById(`${prefix}-img-${i}`);
     const loader = document.getElementById(`${prefix}-load-${i}`);
-    if (img) queue.push({ img, loader });
+    const errEl  = document.getElementById(`${prefix}-err-${i}`);
+    if (img) queue.push({ img, loader, errEl });
   }
   if (!queue.length) return;
 
-  // Process strictly one at a time — never moves to the next until the current
-  // image has fully loaded (toolsLoadPreview retries until success, no skips).
+  // Load strictly one at a time, left-to-right.
   async function runQueue() {
-    for (const { img, loader } of queue) {
-      await toolsLoadPreview(img);
-      img.style.display = 'block';
-      if (loader) loader.style.display = 'none';
+    for (const { img, loader, errEl } of queue) {
+      try {
+        await toolsLoadPreview(img);
+        img.style.display = 'block';
+        if (loader) loader.style.display = 'none';
+      } catch {
+        if (loader) loader.style.display = 'none';
+        if (errEl)  errEl.style.display  = 'flex';
+      }
     }
   }
 
