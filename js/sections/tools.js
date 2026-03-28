@@ -187,7 +187,7 @@ function renderTools(c) {
       <!-- ── Module Tabs ── -->
       <div class="sub-tabs" id="tools-tabs" style="width:fit-content;flex-wrap:nowrap;overflow-x:auto">
         ${[
-          ['posts',      '⬇ Posts'],
+          ['posts',      '⬇ Post'],
           ['profilepic', '👤 Profile Pic'],
           ['profile',    '📁 Profile DL'],
           ['story',      '📖 Story'],
@@ -237,29 +237,43 @@ function toolsSaveKey() {
 }
 
 // ──────────────────────────────────────────────────────
-//  TAB 1 — POSTS DOWNLOADER
-//  POST /api/instagram/posts  { username, maxId: "" }
-//  Response: edges[].node → image_versions2.candidates[0].url
+//  TAB 1 — SINGLE POST DOWNLOADER
+//  POST /api/instagram/mediaByShortcode  { shortcode }
+//  Response: array of { urls[{url,extension}], pictureUrl, meta }
 // ──────────────────────────────────────────────────────
+
+/** Extract shortcode from a post URL or return the raw value if it looks like one. */
+function toolsExtractShortcode(input) {
+  // Full URL: instagram.com/p/ABC123/ or /reel/ABC123/ or /tv/ABC123/
+  const m = input.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+  if (m) return m[1];
+  // Direct shortcode — alphanumeric + _ and - only, reasonable length
+  if (/^[A-Za-z0-9_-]{6,20}$/.test(input)) return input;
+  return null;
+}
 
 function renderToolsPosts(el) {
   el.innerHTML = `
     <div class="tools-card">
       <div class="tools-card-head">
-        <span class="tools-card-label">⬇ Posts by Username</span>
-        <span class="tools-card-hint">Fetches latest posts from a public account</span>
+        <span class="tools-card-label">⬇ Single Post Downloader</span>
+        <span class="tools-card-hint">Paste a post link — gets every image/video inside</span>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <div class="srch-wrap" style="max-width:100%;flex:1;margin:0">
-          <span class="srch-ico" style="font-size:11px;font-weight:700">@</span>
+          <span class="srch-ico">🔗</span>
           <input class="srch tools-url-input" id="posts-input"
-            placeholder="username  or  instagram.com/username/"
+            placeholder="instagram.com/p/ABC123/  or  shortcode"
             onkeydown="if(event.key==='Enter')toolsFetchPosts()"
             style="padding-left:30px;border-radius:var(--cr)">
         </div>
         <button class="tools-fetch-btn" id="posts-btn" onclick="toolsFetchPosts()">
           <span id="posts-label">Fetch</span>
         </button>
+      </div>
+      <div style="font-size:11px;color:var(--mu);margin-top:7px">
+        Paste any post URL to download all photos &amp; videos in that post at highest quality.
+        Use <b>Profile DL</b> tab to download an entire account.
       </div>
     </div>
     <div id="posts-error"  style="display:none" class="tools-error"></div>
@@ -273,10 +287,10 @@ async function toolsFetchPosts() {
   const errDiv = document.getElementById('posts-error');
   const resDiv = document.getElementById('posts-result');
 
-  if (!input) return toolsPostsError('Please enter a username or profile URL.');
+  if (!input) return toolsPostsError('Please paste a post URL or shortcode.');
 
-  const username = toolsExtractUsername(input);
-  if (!username) return toolsPostsError('Could not extract a username. Please check the input.');
+  const shortcode = toolsExtractShortcode(input);
+  if (!shortcode) return toolsPostsError('Could not find a shortcode — paste a full post URL like instagram.com/p/ABC123/');
 
   errDiv.style.display = 'none';
   resDiv.style.display = 'none';
@@ -284,10 +298,10 @@ async function toolsFetchPosts() {
   label.textContent    = '…';
 
   try {
-    const res = await fetch(`${TOOLS_API_BASE}/api/instagram/posts`, {
+    const res = await fetch(`${TOOLS_API_BASE}/api/instagram/mediaByShortcode`, {
       method:  'POST',
       headers: toolsApiHeaders(),
-      body:    JSON.stringify({ username, maxId: '' }),
+      body:    JSON.stringify({ shortcode }),
     });
 
     if (!res.ok) {
@@ -295,12 +309,16 @@ async function toolsFetchPosts() {
       throw new Error(`API error ${res.status}: ${txt.slice(0, 160)}`);
     }
 
-    const data  = await res.json();
-    const files = toolsExtractPostFiles(data);
-    if (!files.length) throw new Error('No media found — account may be private or have no posts.');
-    toolsRenderPostsResult(files, username, resDiv);
+    const raw = await res.json();
+    // Response is an array-like object with numeric keys (0,1,2…) or a plain array
+    const items = Array.isArray(raw)
+      ? raw
+      : Object.keys(raw).filter(k => !isNaN(k)).sort((a,b)=>+a-+b).map(k => raw[k]);
+
+    if (!items.length) throw new Error('No media found — the post may be private or the link is invalid.');
+    toolsRenderSinglePostResult(items, shortcode, resDiv);
   } catch(e) {
-    toolsPostsError(e.message || 'Something went wrong. Check the username and try again.');
+    toolsPostsError(e.message || 'Something went wrong. Check the post URL and try again.');
   } finally {
     btn.disabled      = false;
     label.textContent = 'Fetch';
@@ -312,17 +330,37 @@ function toolsPostsError(msg) {
   if (el) { el.textContent = '⚠ ' + msg; el.style.display = 'block'; }
 }
 
-function toolsRenderPostsResult(files, username, resDiv) {
-  const preview = files.slice(0, 36);
+function toolsRenderSinglePostResult(items, shortcode, resDiv) {
+  // Each item: urls[0].url = highest quality DL, pictureUrl = preview, meta = post info
+  const files = items.map((item, i) => {
+    const dlUrl    = item.urls?.[0]?.url  || item.pictureUrl;
+    const ext      = (item.urls?.[0]?.extension || 'jpg').toLowerCase();
+    const preview  = item.pictureUrl || dlUrl;
+    return { dlUrl, preview, ext, meta: item.meta || {}, idx: i };
+  }).filter(f => f.dlUrl);
+
+  if (!files.length) {
+    resDiv.style.display = 'block';
+    resDiv.innerHTML = `<div class="tools-card"><div style="color:var(--mu);text-align:center;padding:20px">No downloadable media found in this post.</div></div>`;
+    return;
+  }
+
+  const meta     = files[0].meta;
+  const username = meta.username || shortcode;
+  const caption  = meta.title   || '';
+  const likes    = meta.likeCount    ? Number(meta.likeCount).toLocaleString()    : '';
+  const comments = meta.commentCount ? Number(meta.commentCount).toLocaleString() : '';
+
   const dlFiles = files.map((f, i) => ({
-    url:  encodeURIComponent(f.url),
-    name: `${username}_${String(i + 1).padStart(4, '0')}.${f.ext}`,
+    url:  encodeURIComponent(f.dlUrl),
+    name: `${username}_${shortcode}_${String(i + 1).padStart(2, '0')}.${f.ext}`,
   }));
   const dlData = JSON.stringify(dlFiles).replace(/"/g, '&quot;');
 
-  const tilesHtml = preview.map((f, i) => {
-    const enc  = encodeURIComponent(f.url);
-    const name = dlFiles[i].name;
+  const tilesHtml = files.map((f, i) => {
+    const dlEnc      = encodeURIComponent(f.dlUrl);
+    const prevEnc    = encodeURIComponent(f.preview);
+    const name       = dlFiles[i].name;
     if (f.ext === 'mp4') {
       return `<div class="tools-img-item" style="aspect-ratio:1">
         <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surf2);gap:4px">
@@ -331,7 +369,7 @@ function toolsRenderPostsResult(files, username, resDiv) {
         </div>
         <div class="tools-img-overlay">
           <span style="font-size:9px;color:rgba(255,255,255,.7)">#${i + 1}</span>
-          <button class="tools-dl-btn" onclick="toolsDownload('${enc}','${name}')">⬇</button>
+          <button class="tools-dl-btn" onclick="toolsDownload('${dlEnc}','${name}')">⬇</button>
         </div>
       </div>`;
     }
@@ -340,14 +378,14 @@ function toolsRenderPostsResult(files, username, resDiv) {
         <div class="tools-spinner"></div>
       </div>
       <img id="ptile-img-${i}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none"
-        data-url="${enc}" data-idx="${i}">
+        data-url="${prevEnc}" data-idx="${i}">
       <div id="ptile-err-${i}" style="display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:4px">
         <span style="font-size:18px;opacity:.3">◉</span>
         <span style="font-size:9px;color:var(--mu)">No preview</span>
       </div>
       <div class="tools-img-overlay">
         <span style="font-size:9px;color:rgba(255,255,255,.7)">#${i + 1}</span>
-        <button class="tools-dl-btn" onclick="toolsDownload('${enc}','${name}')">⬇</button>
+        <button class="tools-dl-btn" onclick="toolsDownload('${dlEnc}','${name}')">⬇</button>
       </div>
     </div>`;
   }).join('');
@@ -358,33 +396,34 @@ function toolsRenderPostsResult(files, username, resDiv) {
       <div class="tools-user-row">
         <div>
           <div class="tools-username">@${esc(username)}</div>
-          <div class="tools-meta-row">
-            <span class="stag st-watching" style="font-size:9px">${files.length} file${files.length !== 1 ? 's' : ''}</span>
+          <div class="tools-meta-row" style="margin-top:5px">
+            <span class="stag st-watching" style="font-size:9px">${files.length} file${files.length !== 1 ? 's' : ''} in post</span>
+            ${likes    ? `<span style="font-size:11px;color:var(--mu)">❤ ${likes}</span>`    : ''}
+            ${comments ? `<span style="font-size:11px;color:var(--mu)">💬 ${comments}</span>` : ''}
           </div>
         </div>
+        <a href="https://www.instagram.com/p/${esc(shortcode)}/" target="_blank"
+          style="font-size:11px;color:var(--ac);text-decoration:none;margin-left:auto;flex-shrink:0">
+          View Post ↗
+        </a>
       </div>
+      ${caption ? `<div class="tools-caption">${esc(caption.slice(0, 220))}${caption.length > 220 ? '…' : ''}</div>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button id="posts-zip-btn" class="tools-fetch-btn"
-          onclick="toolsDownloadZIP('${esc(username)}', JSON.parse(this.dataset.files), 'posts-zip-btn', 'posts-zip-progress')"
-          data-files="${dlData}">📦 Download All as ZIP (${files.length})</button>
+        ${files.length > 1
+          ? `<button id="posts-zip-btn" class="tools-fetch-btn"
+              onclick="toolsDownloadZIP('${esc(username)}_${esc(shortcode)}', JSON.parse(this.dataset.files), 'posts-zip-btn', 'posts-zip-progress')"
+              data-files="${dlData}">📦 ZIP All (${files.length})</button>`
+          : ''}
         <button class="tools-fetch-btn"
           style="background:var(--surf2);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3)"
           onclick="toolsDownloadAll(JSON.parse(this.dataset.files))"
-          data-files="${dlData}">⬇ Download Individually</button>
+          data-files="${dlData}">⬇ Download${files.length > 1 ? ' All' : ''}</button>
       </div>
       <div id="posts-zip-progress" style="display:none"></div>
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mu);margin-bottom:8px">
-        Preview — ${preview.length} of ${files.length} files
-      </div>
-      <div class="tools-grid-4" style="position:relative">${tilesHtml}</div>
-      ${files.length > 36
-        ? `<div style="font-size:12px;color:var(--mu);text-align:center;margin-top:10px;padding:8px;background:var(--surf2);border-radius:5px">
-             +${files.length - 36} more — use ZIP to get everything
-           </div>`
-        : ''}
+      <div class="tools-grid-4" style="position:relative;margin-top:4px">${tilesHtml}</div>
     </div>`;
 
-  _toolsLazyLoadGrid(preview, 'ptile');
+  _toolsLazyLoadGrid(files, 'ptile');
 }
 
 // ──────────────────────────────────────────────────────
