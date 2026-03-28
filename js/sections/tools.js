@@ -1,4 +1,4 @@
-// ═══════════════════════════════
+    // ═══════════════════════════════
 //  TOOLS SECTION — Instagram Downloader
 // ═══════════════════════════════
 
@@ -179,12 +179,17 @@ function toolsRenderResult(items) {
       <!-- Files grid -->
       <div class="tools-img-grid" style="--cols:${Math.min(files.length, 3)}">
         ${files.map((f, i) => `
-          <div class="tools-img-item">
-            ${f.ext === 'mp4'
-              ? `<video src="https://corsproxy.io/?${encodeURIComponent(f.url)}" class="tools-img-preview" style="object-fit:cover;width:100%;height:100%" muted playsinline preload="metadata"></video>`
-              : `<img src="https://corsproxy.io/?${encodeURIComponent(f.url)}" class="tools-img-preview" alt="Image ${f.index}" loading="lazy" onerror="this.parentElement.querySelector('.tools-img-error').style.display='flex';this.style.display='none'"/>
-                <div class="tools-img-error" style="display:none"><span style="font-size:11px;color:var(--mu);text-align:center">Preview blocked<br>Download still works</span></div>`
-            }
+          ${files.map((f, i) => `
+            <div class="tools-img-item">
+              ${f.ext === 'mp4'
+                ? `<video src="${f.url}" class="tools-img-preview" style="object-fit:cover;width:100%;height:100%" muted playsinline preload="metadata"></video>`
+                : `<img src="${f.url}" class="tools-img-preview" alt="Image ${f.index}" loading="lazy"
+                      id="tools-preview-${i}"
+                      onerror="toolsTryNextProxy(this, '${encodeURIComponent(f.url)}', 0)"/>`
+              }
+              <div class="tools-img-error" id="tools-img-error-${i}" style="display:none">
+                <span style="font-size:11px;color:var(--mu);text-align:center">Preview unavailable<br>Download still works</span>
+              </div>
             <div class="tools-img-overlay">
               <span style="font-size:10px;color:rgba(255,255,255,.8);font-weight:700;text-transform:uppercase">${f.ext}</span>
               <div style="display:flex;gap:6px">
