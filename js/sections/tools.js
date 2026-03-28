@@ -75,63 +75,57 @@ function _toolsDirectLoad(url, timeoutMs = 2000) {
   });
 }
 
+// Apply a loaded blob to an img element.
+function _toolsApplyBlob(imgEl, blob) {
+  if (imgEl._blobUrl) URL.revokeObjectURL(imgEl._blobUrl);
+  imgEl._blobUrl = URL.createObjectURL(blob);
+  imgEl.src = imgEl._blobUrl;
+  imgEl.style.display = 'block';
+}
+
+/**
+ * Load a preview image — retries every proxy in a round-robin loop until one
+ * succeeds. Never gives up: keeps cycling through all strategies indefinitely
+ * (direct → proxy0 → proxy1 → proxy2 → direct → …) with a short pause between
+ * full rounds so we don't hammer servers. Resolves only on success.
+ */
 async function toolsLoadPreview(imgEl) {
   const url = decodeURIComponent(imgEl.dataset.url);
 
-  // ── Fast path: replay the strategy that worked last time ──
-  if (_toolsWinningStrategy !== null) {
-    try {
-      if (_toolsWinningStrategy === -1) {
-        const ok = await _toolsDirectLoad(url, 2000);
-        if (ok) { imgEl.src = url; imgEl.style.display = 'block'; return; }
-      } else {
-        const build = TOOLS_PREVIEW_PROXIES[_toolsWinningStrategy];
-        const blob  = await _toolsProxyFetch(build(url), 5000);
-        if (imgEl._blobUrl) URL.revokeObjectURL(imgEl._blobUrl);
-        imgEl._blobUrl = URL.createObjectURL(blob);
-        imgEl.src = imgEl._blobUrl;
-        imgEl.style.display = 'block';
-        return;
-      }
-    } catch { /* cached strategy failed this time — fall through to full discovery */ }
+  // Build the ordered strategy list: cached winner first, then everything else.
+  const allStrategies = [-1, 0, 1, 2]; // -1 = direct, 0-2 = proxy indices
+  const ordered = _toolsWinningStrategy !== null
+    ? [_toolsWinningStrategy, ...allStrategies.filter(s => s !== _toolsWinningStrategy)]
+    : allStrategies;
+
+  let round = 0;
+  while (true) {
+    // Small pause between retry rounds so we don't hammer servers
+    if (round > 0) await new Promise(r => setTimeout(r, 800 * round));
+    round++;
+
+    for (const strategy of ordered) {
+      try {
+        if (strategy === -1) {
+          // Direct load
+          const ok = await _toolsDirectLoad(url, 2000);
+          if (ok) {
+            _toolsWinningStrategy = -1;
+            imgEl.src = url;
+            imgEl.style.display = 'block';
+            return;
+          }
+        } else {
+          // Proxy load
+          const blob = await _toolsProxyFetch(TOOLS_PREVIEW_PROXIES[strategy](url), 5000);
+          _toolsWinningStrategy = strategy;
+          _toolsApplyBlob(imgEl, blob);
+          return;
+        }
+      } catch { /* this strategy failed — try the next one */ }
+    }
+    // All strategies failed this round → loop again with a backoff pause
   }
-
-  // ── Strategy 1: direct <img> src (2 s timeout — fast fail) ──
-  const direct = await _toolsDirectLoad(url, 2000);
-  if (direct) {
-    _toolsWinningStrategy = -1;
-    imgEl.src = url;
-    imgEl.style.display = 'block';
-    return;
-  }
-
-  // ── Strategy 2: race all proxies simultaneously, first blob wins ──
-  const result = await new Promise((resolve) => {
-    let settled = false;
-    let failed  = 0;
-    const total = TOOLS_PREVIEW_PROXIES.length;
-    TOOLS_PREVIEW_PROXIES.forEach((build, idx) => {
-      _toolsProxyFetch(build(url), 5000).then(blob => {
-        if (!settled) { settled = true; resolve({ blob, idx }); }
-      }).catch(() => {
-        failed++;
-        if (failed === total && !settled) resolve(null);
-      });
-    });
-  });
-
-  if (result) {
-    _toolsWinningStrategy = result.idx;          // cache the winner for next time
-    if (imgEl._blobUrl) URL.revokeObjectURL(imgEl._blobUrl);
-    imgEl._blobUrl = URL.createObjectURL(result.blob);
-    imgEl.src = imgEl._blobUrl;
-    imgEl.style.display = 'block';
-    return;
-  }
-
-  // All strategies failed
-  imgEl.style.display = 'none';
-  throw new Error('preview failed');
 }
 
 /** Download a file via CORS proxy; falls back to window.open. */
@@ -1114,40 +1108,27 @@ function toolsRenderStoryResult(items, username, resDiv) {
 // ──────────────────────────────────────────────────────
 
 function _toolsLazyLoadGrid(items, prefix) {
-  // Build work queue — skip videos
+  // Build work queue in DOM order (left-to-right, top-to-bottom) — skip videos
   const queue = [];
   for (let i = 0; i < items.length; i++) {
     if (items[i].ext === 'mp4') continue;
     const img    = document.getElementById(`${prefix}-img-${i}`);
     const loader = document.getElementById(`${prefix}-load-${i}`);
-    const errEl  = document.getElementById(`${prefix}-err-${i}`);
-    if (img) queue.push({ img, loader, errEl });
+    if (img) queue.push({ img, loader });
   }
   if (!queue.length) return;
 
-  // Process up to CONCURRENCY images at the same time
-  const CONCURRENCY = 4;
-  let next = 0;
-
-  function runOne() {
-    if (next >= queue.length) return;
-    const { img, loader, errEl } = queue[next++];
-    toolsLoadPreview(img)
-      .then(() => {
-        img.style.display = 'block';
-        if (loader) loader.style.display = 'none';
-      })
-      .catch(() => {
-        if (loader) loader.style.display = 'none';
-        if (errEl)  errEl.style.display  = 'flex';
-      })
-      .finally(runOne); // start next as soon as this slot is free
+  // Process strictly one at a time — never moves to the next until the current
+  // image has fully loaded (toolsLoadPreview retries until success, no skips).
+  async function runQueue() {
+    for (const { img, loader } of queue) {
+      await toolsLoadPreview(img);
+      img.style.display = 'block';
+      if (loader) loader.style.display = 'none';
+    }
   }
 
-  // Kick off initial batch
-  requestAnimationFrame(() => {
-    for (let i = 0; i < Math.min(CONCURRENCY, queue.length); i++) runOne();
-  });
+  requestAnimationFrame(runQueue);
 }
 
 // ──────────────────────────────────────────────────────
