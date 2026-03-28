@@ -121,11 +121,10 @@ async function toolsFetch() {
     }
 
     const data = await res.json();
-    console.log('RAW API RESPONSE:', JSON.stringify(data, null, 2));
-    const node = data?.result?.edges?.[0]?.node ?? data?.result ?? data?.node ?? data;
-    if (!node) throw new Error('Could not parse response. Check the URL and try again.');
+    if (!Array.isArray(data) || data.length === 0) throw new Error('No media found for that post.');
 
-    toolsRenderResult(node);
+    toolsRenderResult(data);
+
   } catch (e) {
     toolsError(e.message || 'Something went wrong. Check your API key and URL.');
   } finally {
@@ -140,100 +139,69 @@ function toolsError(msg) {
   el.style.display  = 'block';
 }
 
-function toolsRenderResult(node) {
+function toolsRenderResult(items) {
   const resultDiv = document.getElementById('tools-result');
+  const meta = items[0]?.meta || {};
+  const title = meta.title || '';
+  const likes = meta.likeCount || 0;
+  const shortcode = meta.shortcode || '';
 
-  // Collect all images
-  let images = [];
-
-  // Check if it's a carousel
-  if (node.carousel_media && node.carousel_media.length > 0) {
-    node.carousel_media.forEach((item, i) => {
-      if (item.media_type === 1) { // image
-        const candidates = item.image_versions2?.candidates;
-        if (candidates && candidates.length > 0) {
-          images.push({ url: candidates[0].url, w: candidates[0].width, h: candidates[0].height, index: i + 1 });
-        }
-      }
+  // Collect all downloadable files across all items
+  const files = [];
+  items.forEach((item, i) => {
+    (item.urls || []).forEach(u => {
+      files.push({ url: u.url, ext: u.extension || 'jpg', name: u.name || '', index: files.length + 1 });
     });
-  }
+  });
 
-  // Also add cover image (candidates[0] is highest quality)
-  const coverCandidates = node.image_versions2?.candidates;
-  if (coverCandidates && coverCandidates.length > 0) {
-    // Only add if not already captured from carousel
-    if (images.length === 0) {
-      images.push({ url: coverCandidates[0].url, w: coverCandidates[0].width, h: coverCandidates[0].height, index: 1 });
-    }
-  }
-
-  const username   = node.user?.username   || node.owner?.username   || 'unknown';
-  const fullName   = node.user?.full_name  || node.owner?.full_name  || '';
-  const caption    = node.caption?.text    || '';
-  const likes      = node.like_count       || 0;
-  const isCarousel = images.length > 1;
+  const isVideo = files.some(f => f.ext === 'mp4');
 
   resultDiv.style.display = 'block';
   resultDiv.innerHTML = `
     <div class="tools-card tools-result-card">
-      <!-- User row -->
+
+      <!-- Meta row -->
       <div class="tools-user-row">
-        <img
-          src="${node.user?.profile_pic_url || node.owner?.profile_pic_url || ''}"
-          class="tools-avatar"
-          onerror="this.style.display='none'"
-          alt=""
-        />
+        <div style="width:42px;height:42px;border-radius:10px;background:rgba(var(--ac-rgb),.12);border:1px solid rgba(var(--ac-rgb),.25);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">
+          ${isVideo ? '▶' : '◉'}
+        </div>
         <div>
-          <div class="tools-username">@${username}${fullName ? ` · ${fullName}` : ''}</div>
+          <div class="tools-username">${shortcode}</div>
           <div class="tools-meta-row">
-            <span class="stag st-watching" style="font-size:9px">
-              ${isCarousel ? `◈ ${images.length} images` : '◉ Single image'}
-            </span>
+            <span class="stag st-watching" style="font-size:9px">${files.length} file${files.length > 1 ? 's' : ''}</span>
             <span style="font-size:11px;color:var(--mu)">♥ ${likes.toLocaleString()}</span>
-            ${node.original_width ? `<span style="font-size:11px;color:var(--mu)">${node.original_width}×${node.original_height}</span>` : ''}
           </div>
         </div>
       </div>
 
-      ${caption ? `
-        <div class="tools-caption">
-          ${caption.slice(0, 200)}${caption.length > 200 ? '...' : ''}
-        </div>
-      ` : ''}
+      ${title ? `<div class="tools-caption">${title.slice(0, 200)}${title.length > 200 ? '...' : ''}</div>` : ''}
 
-      <!-- Image grid -->
-      <div class="tools-img-grid" id="tools-img-grid" style="--cols:${Math.min(images.length, 3)}">
-        ${images.map((img, i) => `
-          <div class="tools-img-item" id="tools-img-${i}">
-            <img
-              src="${img.url}"
-              class="tools-img-preview"
-              alt="Image ${img.index}"
-              loading="lazy"
-              onerror="this.parentElement.querySelector('.tools-img-error').style.display='flex';this.style.display='none'"
-            />
-            <div class="tools-img-error" style="display:none">
-              <span style="font-size:11px;color:var(--mu);text-align:center">Preview blocked by Instagram.<br>Download still works.</span>
-            </div>
+      <!-- Files grid -->
+      <div class="tools-img-grid" style="--cols:${Math.min(files.length, 3)}">
+        ${files.map((f, i) => `
+          <div class="tools-img-item">
+            ${f.ext === 'mp4'
+              ? `<video src="${f.url}" class="tools-img-preview" style="object-fit:cover;width:100%;height:100%" muted playsinline preload="metadata"></video>`
+              : `<img src="${f.url}" class="tools-img-preview" alt="Image ${f.index}" loading="lazy" onerror="this.parentElement.querySelector('.tools-img-error').style.display='flex';this.style.display='none'"/>
+                 <div class="tools-img-error" style="display:none"><span style="font-size:11px;color:var(--mu);text-align:center">Preview blocked<br>Download still works</span></div>`
+            }
             <div class="tools-img-overlay">
-              <span style="font-size:10px;color:rgba(255,255,255,.7);font-weight:600">${img.w}×${img.h}</span>
+              <span style="font-size:10px;color:rgba(255,255,255,.8);font-weight:700;text-transform:uppercase">${f.ext}</span>
               <div style="display:flex;gap:6px">
-                <button class="tools-dl-btn" onclick="toolsDownload('${encodeURIComponent(img.url)}', '${username}_${i + 1}.jpg')" title="Download">⬇ Download</button>
-                <button class="tools-open-btn" onclick="window.open('${img.url}','_blank')" title="Open full size">⤢</button>
+                <button class="tools-dl-btn" onclick="toolsDownload('${encodeURIComponent(f.url)}','${shortcode}_${f.index}.${f.ext}')">⬇ Download</button>
+                <button class="tools-open-btn" onclick="window.open('${f.url}','_blank')">⤢</button>
               </div>
             </div>
           </div>
         `).join('')}
       </div>
 
-      ${images.length > 1 ? `
-        <div style="margin-top:10px">
-          <button class="tools-fetch-btn" style="width:100%;justify-content:center" onclick="toolsDownloadAll(${JSON.stringify(images.map(img => ({ url: encodeURIComponent(img.url), name: `${username}_${img.index}.jpg` })))})">
-            ⬇ Download All (${images.length})
-          </button>
-        </div>
+      ${files.length > 1 ? `
+        <button class="tools-fetch-btn" style="width:100%;justify-content:center" onclick="toolsDownloadAll(${JSON.stringify(files.map(f => ({ url: encodeURIComponent(f.url), name: shortcode + '_' + f.index + '.' + f.ext })))})">
+          ⬇ Download All (${files.length})
+        </button>
       ` : ''}
+
     </div>
   `;
 }
