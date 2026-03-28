@@ -38,31 +38,72 @@ function toolsApiHeaders() {
   };
 }
 
-/** Try each CORS proxy in order; loads an image via blob URL. */
 const TOOLS_PREVIEW_PROXIES = [
   u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
   u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
   u => `https://proxy.cors.sh/${u}`,
 ];
 
+// Fetch via one proxy with a hard timeout; resolves with blob or rejects.
+function _toolsProxyFetch(proxyUrl, timeoutMs = 9000) {
+  return new Promise((resolve, reject) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, timeoutMs);
+    fetch(proxyUrl, { signal: controller.signal })
+      .then(async res => {
+        clearTimeout(timer);
+        if (!res.ok) { reject(new Error('not ok')); return; }
+        const blob = await res.blob();
+        if (!blob || blob.size === 0) { reject(new Error('empty')); return; }
+        resolve(blob);
+      })
+      .catch(err => { clearTimeout(timer); reject(err); });
+  });
+}
+
 async function toolsLoadPreview(imgEl) {
   const url = decodeURIComponent(imgEl.dataset.url);
-  for (const build of TOOLS_PREVIEW_PROXIES) {
-    try {
-      const res = await fetch(build(url));
-      if (!res.ok) continue;
-      const blob = await res.blob();
-      if (!blob || blob.size === 0) continue;
-      if (imgEl._blobUrl) URL.revokeObjectURL(imgEl._blobUrl);
-      imgEl._blobUrl = URL.createObjectURL(blob);
-      imgEl.src = imgEl._blobUrl;
-      imgEl.style.display = 'block';
-      return;
-    } catch { /* next proxy */ }
+
+  // ── Strategy 1: direct <img> src (fast, works when only CORS blocks fetch) ──
+  const direct = await new Promise(resolve => {
+    const t = new Image();
+    const timer = setTimeout(() => { t.src = ''; resolve(false); }, 5000);
+    t.onload  = () => { clearTimeout(timer); resolve(true); };
+    t.onerror = () => { clearTimeout(timer); resolve(false); };
+    t.src = url;
+  });
+  if (direct) {
+    imgEl.src = url;
+    imgEl.style.display = 'block';
+    return;
   }
+
+  // ── Strategy 2: race all proxies simultaneously, first blob wins ──
+  const blob = await new Promise((resolve, reject) => {
+    let settled = false;
+    let failed  = 0;
+    const total = TOOLS_PREVIEW_PROXIES.length;
+    TOOLS_PREVIEW_PROXIES.forEach(build => {
+      _toolsProxyFetch(build(url)).then(b => {
+        if (!settled) { settled = true; resolve(b); }
+      }).catch(() => {
+        failed++;
+        if (failed === total && !settled) reject(new Error('all proxies failed'));
+      });
+    });
+  }).catch(() => null);
+
+  if (blob) {
+    if (imgEl._blobUrl) URL.revokeObjectURL(imgEl._blobUrl);
+    imgEl._blobUrl = URL.createObjectURL(blob);
+    imgEl.src = imgEl._blobUrl;
+    imgEl.style.display = 'block';
+    return;
+  }
+
+  // All strategies failed
   imgEl.style.display = 'none';
-  const errEl = document.getElementById('tools-img-error-' + imgEl.dataset.idx);
-  if (errEl) errEl.style.display = 'flex';
+  throw new Error('preview failed');
 }
 
 /** Download a file via CORS proxy; falls back to window.open. */
@@ -562,12 +603,14 @@ function toolsRenderProfilePicResult(user, dpUrl, resDiv, username) {
     const img     = document.getElementById('pp-preview');
     const spinner = document.getElementById('pp-spinner');
     if (!img) return;
-    img.onload  = () => { img.style.display = 'block'; if (spinner) spinner.style.display = 'none'; };
-    img.onerror = () => {
-      if (spinner) spinner.style.display = 'none';
-      toolsLoadPreview(img).then(() => img.style.display = 'block');
-    };
-    img.src = dpUrl;
+    toolsLoadPreview(img)
+      .then(() => { if (spinner) spinner.style.display = 'none'; })
+      .catch(() => {
+        if (spinner) spinner.style.display = 'none';
+        // Show a person icon placeholder
+        if (spinner) spinner.innerHTML = '<span style="font-size:48px;opacity:.2">👤</span>';
+        if (spinner) spinner.style.display = 'flex';
+      });
   });
 }
 
@@ -994,7 +1037,11 @@ function toolsRenderStoryResult(items, username, resDiv) {
         <div class="tools-spinner"></div>
       </div>
       <img id="stile-img-${i}" class="tools-img-preview" style="display:none"
-        data-url="${enc}" data-idx="s${i}">
+        data-url="${enc}" data-idx="${i}">
+      <div id="stile-err-${i}" style="display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:var(--surf2)">
+        <span style="font-size:18px;opacity:.3">◉</span>
+        <span style="font-size:9px;color:var(--mu)">No preview</span>
+      </div>
       <div class="tools-img-overlay">
         <span style="font-size:10px;color:rgba(255,255,255,.8);font-weight:700">JPG</span>
         <div style="display:flex;gap:6px">
@@ -1031,49 +1078,47 @@ function toolsRenderStoryResult(items, username, resDiv) {
       <div class="tools-img-grid" style="--cols:${Math.min(files.length, 3)}">${tilesHtml}</div>
     </div>`;
 
-  requestAnimationFrame(() => {
-    files.forEach((f, i) => {
-      if (f.ext === 'mp4') return;
-      const img    = document.getElementById(`stile-img-${i}`);
-      const loader = document.getElementById(`stile-load-${i}`);
-      if (!img) return;
-      toolsLoadPreview(img).then(() => {
-        img.style.display = 'block';
-        if (loader) loader.style.display = 'none';
-      }).catch(() => {
-        if (loader) loader.style.display = 'none';
-      });
-    });
-  });
+  _toolsLazyLoadGrid(files, 'stile');
 }
 
 // ──────────────────────────────────────────────────────
 //  SHARED — LAZY-LOAD GRID TILES
 // ──────────────────────────────────────────────────────
 
-function _toolsLazyLoadGrid(preview, prefix) {
+function _toolsLazyLoadGrid(items, prefix) {
+  // Build work queue — skip videos
+  const queue = [];
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].ext === 'mp4') continue;
+    const img    = document.getElementById(`${prefix}-img-${i}`);
+    const loader = document.getElementById(`${prefix}-load-${i}`);
+    const errEl  = document.getElementById(`${prefix}-err-${i}`);
+    if (img) queue.push({ img, loader, errEl });
+  }
+  if (!queue.length) return;
+
+  // Process up to CONCURRENCY images at the same time
+  const CONCURRENCY = 4;
+  let next = 0;
+
+  function runOne() {
+    if (next >= queue.length) return;
+    const { img, loader, errEl } = queue[next++];
+    toolsLoadPreview(img)
+      .then(() => {
+        img.style.display = 'block';
+        if (loader) loader.style.display = 'none';
+      })
+      .catch(() => {
+        if (loader) loader.style.display = 'none';
+        if (errEl)  errEl.style.display  = 'flex';
+      })
+      .finally(runOne); // start next as soon as this slot is free
+  }
+
+  // Kick off initial batch
   requestAnimationFrame(() => {
-    const BATCH = 6;
-    let idx = 0;
-    function loadBatch() {
-      const end = Math.min(idx + BATCH, preview.length);
-      for (; idx < end; idx++) {
-        if (preview[idx].ext === 'mp4') continue;
-        const img    = document.getElementById(`${prefix}-img-${idx}`);
-        const loader = document.getElementById(`${prefix}-load-${idx}`);
-        const errEl  = document.getElementById(`${prefix}-err-${idx}`);
-        if (!img) continue;
-        toolsLoadPreview(img).then(() => {
-          img.style.display = 'block';
-          if (loader) loader.style.display = 'none';
-        }).catch(() => {
-          if (loader) loader.style.display = 'none';
-          if (errEl)  errEl.style.display  = 'flex';
-        });
-      }
-      if (idx < preview.length) setTimeout(loadBatch, 400);
-    }
-    loadBatch();
+    for (let i = 0; i < Math.min(CONCURRENCY, queue.length); i++) runOne();
   });
 }
 
