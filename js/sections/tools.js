@@ -110,6 +110,67 @@ async function toolsDownloadAll(files) {
   }
 }
 
+/**
+ * Download a reel video — if the URL is on the RapidAPI host it must be fetched
+ * with the x-rapidapi-key header; generic CORS proxies don't forward it and the
+ * API returns "Invalid API key". Falls back to toolsDownload for CDN URLs.
+ */
+/**
+ * Download a single reel video.
+ *
+ * url_wrapped is a GET proxy on instagram120.p.rapidapi.com — browsers can't
+ * fetch it with custom headers (CORS preflight is rejected for GET + custom headers).
+ * Instead, if we have the reel's shortcode we call /api/instagram/mediaByShortcode
+ * which returns a direct Instagram CDN URL that the normal CORS proxies can handle.
+ *
+ * @param {string} encodedUrl  - fallback: encoded url_wrapped / CDN url
+ * @param {string} shortcode   - reel shortcode (preferred resolution path)
+ * @param {string} filename    - desired download filename
+ */
+async function toolsDownloadReel(encodedUrl, shortcode, filename) {
+  // ── Path 1: resolve real CDN URL via mediaByShortcode (preferred) ──
+  if (shortcode) {
+    try {
+      const res = await fetch(`${TOOLS_API_BASE}/api/instagram/mediaByShortcode`, {
+        method:  'POST',
+        headers: toolsApiHeaders(),
+        body:    JSON.stringify({ shortcode }),
+      });
+      if (res.ok) {
+        const raw   = await res.json();
+        const items = Array.isArray(raw)
+          ? raw
+          : Object.keys(raw).filter(k => !isNaN(k)).sort((a, b) => +a - +b).map(k => raw[k]);
+        // Prefer mp4, fall back to first item
+        const item     = items.find(it => (it.urls?.[0]?.extension || '').toLowerCase() === 'mp4') || items[0];
+        const videoUrl = item?.urls?.[0]?.url;
+        if (videoUrl) {
+          await toolsDownload(encodeURIComponent(videoUrl), filename);
+          return;
+        }
+      }
+    } catch { /* fall through */ }
+  }
+
+  // ── Path 2: if URL is a plain CDN link, use normal proxy download ──
+  const url = decodeURIComponent(encodedUrl);
+  if (!url.includes(TOOLS_API_HOST)) {
+    await toolsDownload(encodedUrl, filename);
+    return;
+  }
+
+  // ── Path 3: last resort — open in new tab so the user can save manually ──
+  window.open(url, '_blank');
+}
+
+/** Download multiple reel files sequentially. */
+async function toolsDownloadReelAll(files) {
+  for (let i = 0; i < files.length; i++) {
+    await new Promise(r => setTimeout(r, 800 * i));
+    toolsDownloadReel(files[i].url, files[i].shortcode || '', files[i].name);
+  }
+}
+
 /** Extract a clean username from @handle or instagram.com URL. */
 function toolsExtractUsername(input) {
   const t = (input || '').trim();
@@ -208,6 +269,7 @@ function renderTools(c) {
           ['profilepic', '👤 Profile Pic'],
           ['profile',    '📁 Profile DL'],
           ['story',      '📖 Story'],
+          ['reels',      '🎬 Reels'],
         ].map(([id, label]) =>
           `<button class="stab${TOOLS_ACTIVE_TAB === id ? ' active' : ''}"
               data-tab="${id}" onclick="setToolsTab('${id}')">${label}</button>`
@@ -239,6 +301,7 @@ function renderToolsTabContent() {
   else if (TOOLS_ACTIVE_TAB === 'profilepic') renderToolsProfilePicTab(el);
   else if (TOOLS_ACTIVE_TAB === 'profile')    renderToolsProfile(el);
   else if (TOOLS_ACTIVE_TAB === 'story')      renderToolsStory(el);
+  else if (TOOLS_ACTIVE_TAB === 'reels')      renderToolsReels(el);
 }
 
 function toolsSaveKey() {
@@ -929,37 +992,26 @@ async function toolsFetchStory() {
   label.textContent    = '…';
 
   try {
-    // Step 1: get user ID (storyId must be the numeric user ID)
-    const profileRes = await fetch(`${TOOLS_API_BASE}/api/instagram/profile`, {
+    const res = await fetch(`${TOOLS_API_BASE}/api/instagram/stories`, {
       method:  'POST',
       headers: toolsApiHeaders(),
       body:    JSON.stringify({ username }),
     });
-    if (!profileRes.ok) throw new Error(`Profile lookup failed (${profileRes.status}).`);
-    const profileData = await profileRes.json();
-    const profileUser = profileData?.result || profileData?.user || profileData?.data || profileData;
-    const userId = profileUser?.id || profileUser?.pk;
-    if (!userId) throw new Error('Could not get user ID for story fetch.');
-
-    // Step 2: fetch stories using numeric user ID as storyId
-    const res = await fetch(`${TOOLS_API_BASE}/api/instagram/story`, {
-      method:  'POST',
-      headers: toolsApiHeaders(),
-      body:    JSON.stringify({ username, storyId: userId }),
-    });
-
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`API error ${res.status}: ${txt.slice(0, 160)}`);
-    }
 
     const data = await res.json();
-    // Defensive parse — handle multiple response shapes
-    const items = data?.result?.items
+    if (!res.ok || data?.success === false) {
+      throw new Error(data?.message || `API error ${res.status}`);
+    }
+
+    // API returns { result: [...] } — flat array of story items directly
+    const raw = (Array.isArray(data?.result) ? data.result : null)
+      || data?.result?.items
       || data?.items
       || data?.data?.items
       || data?.reels_media?.[0]?.items
       || (Array.isArray(data) ? data : []);
+    // Unwrap edges[].node.media if present (reels/clips structure)
+    const items = raw.map(r => r?.node?.media || r).filter(Boolean);
 
     if (!items.length) throw new Error('No active stories found — account may be private or have no active stories.');
     toolsRenderStoryResult(items, username, resDiv);
@@ -977,12 +1029,12 @@ function toolsStoryError(msg) {
 }
 
 function toolsRenderStoryResult(items, username, resDiv) {
-  // Always pick candidates[0] — highest resolution
+  // Detect video: media_type===2 means video. Fall back to checking video_versions.
   const files = items.map((item, i) => {
-    const isVideo = item.media_type === 2 || item.is_video;
-    const url = isVideo
-      ? (item.video_versions?.[0]?.url || item.video_url)
-      : (item.image_versions2?.candidates?.[0]?.url || item.display_url);
+    const isVideo  = item.media_type === 2 || !!item.video_versions?.[0]?.url || !!item.video_url;
+    const videoUrl = item.video_versions?.[0]?.url || item.video_url || null;
+    const imageUrl = item.image_versions2?.candidates?.[0]?.url || item.display_url || null;
+    const url      = isVideo ? (videoUrl || imageUrl) : imageUrl;
     return { url, ext: isVideo ? 'mp4' : 'jpg', idx: i };
   }).filter(f => f.url);
 
@@ -1012,8 +1064,9 @@ function toolsRenderStoryResult(items, username, resDiv) {
       <div id="stile-load-${i}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--surf2)">
         <div class="tools-spinner"></div>
       </div>
-      <img id="stile-img-${i}" class="tools-img-preview" style="display:none"
-        data-url="${enc}" data-idx="${i}">
+      <img id="stile-img-${i}" class="tools-img-preview" style="display:none;cursor:zoom-in"
+        data-url="${enc}" data-idx="${i}"
+        onclick="toolsOpenFullView('${enc}')">
       <div id="stile-err-${i}" style="display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:var(--surf2)">
         <span style="font-size:18px;opacity:.3">◉</span>
         <span style="font-size:9px;color:var(--mu)">No preview</span>
@@ -1022,7 +1075,7 @@ function toolsRenderStoryResult(items, username, resDiv) {
         <span style="font-size:10px;color:rgba(255,255,255,.8);font-weight:700">JPG</span>
         <div style="display:flex;gap:6px">
           <button class="tools-dl-btn" onclick="toolsDownload('${enc}','${name}')">⬇ Download</button>
-          <button class="tools-open-btn" onclick="window.open('${esc(f.url)}','_blank')">⤢</button>
+          <button class="tools-open-btn" onclick="toolsOpenFullView('${enc}')">⤢</button>
         </div>
       </div>
     </div>`;
@@ -1090,6 +1143,229 @@ function _toolsLazyLoadGrid(items, prefix) {
 }
 
 // ──────────────────────────────────────────────────────
+//  FULL-VIEW LIGHTBOX
+// ──────────────────────────────────────────────────────
+
+function toolsOpenFullView(encodedUrl) {
+  const url = decodeURIComponent(encodedUrl);
+  // Use wsrv.nl proxy so the image actually loads cross-origin
+  const src = `https://wsrv.nl/?url=${encodeURIComponent(url)}&n=-1`;
+
+  // Remove existing lightbox if any
+  const existing = document.getElementById('tools-lightbox');
+  if (existing) existing.remove();
+
+  const box = document.createElement('div');
+  box.id = 'tools-lightbox';
+  box.style.cssText = `
+    position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);
+    display:flex;align-items:center;justify-content:center;cursor:zoom-out;
+  `;
+  box.innerHTML = `
+    <img src="${src}" style="max-width:98vw;max-height:98vh;object-fit:contain;border-radius:4px;box-shadow:0 8px 40px rgba(0,0,0,.6)">
+    <button onclick="document.getElementById('tools-lightbox').remove()" style="
+      position:absolute;top:14px;right:18px;background:rgba(255,255,255,.12);border:none;
+      color:#fff;font-size:22px;cursor:pointer;border-radius:50%;width:36px;height:36px;
+      display:flex;align-items:center;justify-content:center;line-height:1
+    ">✕</button>
+  `;
+  box.addEventListener('click', e => { if (e.target === box) box.remove(); });
+  document.body.appendChild(box);
+}
+
+// ──────────────────────────────────────────────────────
+//  TAB 5 — REELS DOWNLOADER
+//  POST /api/instagram/reels  { username, maxId }
+//  Response: { result: { edges: [{ node: { media: {...} } }] } }
+// ──────────────────────────────────────────────────────
+
+function renderToolsReels(el) {
+  el.innerHTML = `
+    <div class="tools-card">
+      <div class="tools-card-head">
+        <span class="tools-card-label">🎬 Reels Downloader</span>
+        <span class="tools-card-hint">Download reels from any public account</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="srch-wrap" style="max-width:100%;flex:1;margin:0">
+          <span class="srch-ico" style="font-size:11px;font-weight:700">@</span>
+          <input class="srch tools-url-input" id="reels-input"
+            placeholder="username  or  instagram.com/username/"
+            onkeydown="if(event.key==='Enter')toolsFetchReels()"
+            style="padding-left:30px;border-radius:var(--cr)">
+        </div>
+        <button class="tools-fetch-btn" id="reels-btn" onclick="toolsFetchReels()">
+          <span id="reels-label">Fetch</span>
+        </button>
+      </div>
+      <div style="font-size:11px;color:var(--mu);margin-top:6px">
+        Fetches the latest reels from a public account. Videos open in a new tab.
+      </div>
+    </div>
+    <div id="reels-error"  style="display:none" class="tools-error"></div>
+    <div id="reels-result" style="display:none"></div>`;
+}
+
+async function toolsFetchReels() {
+  const input  = document.getElementById('reels-input')?.value?.trim();
+  const btn    = document.getElementById('reels-btn');
+  const label  = document.getElementById('reels-label');
+  const errDiv = document.getElementById('reels-error');
+  const resDiv = document.getElementById('reels-result');
+
+  if (!input) return _toolsReelsError('Please enter a username or profile URL.');
+
+  const username = toolsExtractUsername(input);
+  if (!username) return _toolsReelsError('Could not extract a username.');
+
+  errDiv.style.display = 'none';
+  resDiv.style.display = 'none';
+  btn.disabled         = true;
+  label.textContent    = '…';
+
+  try {
+    const res = await fetch(`${TOOLS_API_BASE}/api/instagram/reels`, {
+      method:  'POST',
+      headers: toolsApiHeaders(),
+      body:    JSON.stringify({ username, maxId: '' }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || data?.success === false) {
+      throw new Error(data?.message || `API error ${res.status}`);
+    }
+
+    // Response: { result: { edges: [{ node: { media: {...} } }] } }
+    const edges = data?.result?.edges || data?.edges || [];
+    if (!edges.length) throw new Error('No reels found — account may be private or have no reels.');
+
+    _toolsRenderReelsResult(edges, username, resDiv);
+  } catch(e) {
+    _toolsReelsError(e.message || 'Could not fetch reels.');
+  } finally {
+    btn.disabled      = false;
+    label.textContent = 'Fetch';
+  }
+}
+
+function _toolsReelsError(msg) {
+  const el = document.getElementById('reels-error');
+  if (el) { el.textContent = '⚠ ' + msg; el.style.display = 'block'; }
+}
+
+function _toolsRenderReelsResult(edges, username, resDiv) {
+  const files = edges.map((edge, i) => {
+    const media = edge?.node?.media || edge?.node || edge?.media || edge;
+
+    // This API returns video via url_wrapped on the first image candidate.
+    // url_wrapped is a proxied /api/instagram/get?... endpoint that serves the actual video.
+    const firstCandidate = media?.image_versions2?.candidates?.[0];
+    const videoUrl = firstCandidate?.url_wrapped
+      ? (firstCandidate.url_wrapped.startsWith('http')
+          ? firstCandidate.url_wrapped
+          : `${TOOLS_API_BASE}${firstCandidate.url_wrapped}`)
+      : (media?.video_versions?.[0]?.url || media?.video_url || null);
+
+    const imageUrl = firstCandidate?.url || media?.display_url || null;
+    const likes    = media?.like_count || 0;
+    const plays    = media?.play_count || media?.view_count || 0;
+    const code     = media?.code || media?.shortcode || '';
+    return { videoUrl, imageUrl, likes, plays, code, idx: i };
+  }).filter(f => f.imageUrl || f.videoUrl);
+
+  if (!files.length) {
+    resDiv.style.display = 'block';
+    resDiv.innerHTML = `<div class="tools-card"><div style="color:var(--mu);text-align:center;padding:20px">No downloadable reels found.</div></div>`;
+    return;
+  }
+
+  // dlFiles stores both the fallback encoded URL and the shortcode so we can
+  // resolve the real CDN video URL via mediaByShortcode on download.
+  const dlFiles = files.map((f, i) => ({
+    url:       encodeURIComponent(f.videoUrl || f.imageUrl),
+    shortcode: f.code || '',
+    name:      `${username}_reel_${i + 1}.mp4`,
+  }));
+  const dlData = JSON.stringify(dlFiles).replace(/"/g, '&quot;');
+
+  const tilesHtml = files.map((f, i) => {
+    const previewEnc = encodeURIComponent(f.imageUrl || f.videoUrl);
+    const dlEnc      = encodeURIComponent(f.videoUrl || f.imageUrl);
+    const dlName     = `${username}_reel_${i + 1}.mp4`;
+    const igUrl      = f.code ? `https://www.instagram.com/reel/${f.code}/` : null;
+    const fmtNum     = n => n >= 1000000 ? (n/1000000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'K' : n;
+
+    return `<div style="display:flex;flex-direction:column;gap:4px">
+      <div class="tools-img-item" style="aspect-ratio:9/16">
+        <div id="rtile-load-${i}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--surf2)">
+          <div class="tools-spinner"></div>
+        </div>
+        <img id="rtile-img-${i}" class="tools-img-preview" style="display:none;cursor:zoom-in"
+          data-url="${previewEnc}" data-idx="${i}"
+          onclick="toolsOpenFullView('${previewEnc}')">
+        <div id="rtile-err-${i}" style="display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:var(--surf2)">
+          <span style="font-size:24px;opacity:.3">▶</span>
+          <span style="font-size:9px;color:var(--mu)">No preview</span>
+        </div>
+        <div class="tools-img-overlay" style="flex-direction:column;align-items:flex-start;gap:4px">
+          <div style="display:flex;gap:8px;font-size:10px;color:rgba(255,255,255,.85)">
+            ${f.plays ? `<span>▶ ${fmtNum(f.plays)}</span>` : ''}
+            ${f.likes ? `<span>❤ ${fmtNum(f.likes)}</span>` : ''}
+          </div>
+        </div>
+      </div>
+      <!-- Always-visible action bar below each tile -->
+      <div style="display:flex;gap:4px">
+        <button class="tools-dl-btn" style="flex:1;justify-content:center;font-size:10px;padding:5px 4px"
+          onclick="toolsDownloadReel('${dlEnc}','${f.code}','${dlName}')">⬇ MP4</button>
+        ${igUrl ? `<button class="tools-open-btn" style="font-size:11px;padding:5px 7px"
+          onclick="window.open('${igUrl}','_blank')" title="Open on Instagram">⤢</button>` : ''}
+        <button class="tools-open-btn" style="font-size:11px;padding:5px 7px"
+          onclick="toolsOpenFullView('${previewEnc}')" title="Preview">🔍</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  resDiv.style.display = 'block';
+  resDiv.innerHTML = `
+    <div class="tools-card tools-result-card">
+      <div class="tools-user-row">
+        <div>
+          <div class="tools-username">@${esc(username)}'s Reels</div>
+          <div class="tools-meta-row">
+            <span class="stag st-watching" style="font-size:9px">${files.length} reel${files.length !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="reels-zip-btn" class="tools-fetch-btn"
+          onclick="toolsDownloadZIP('${esc(username)}_reels', JSON.parse(this.dataset.files), 'reels-zip-btn', 'reels-zip-progress')"
+          data-files="${dlData}">📦 ZIP All (${dlFiles.length})</button>
+        <button class="tools-fetch-btn"
+          style="background:var(--surf2);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3)"
+          onclick="toolsDownloadReelAll(JSON.parse(this.dataset.files))"
+          data-files="${dlData}">⬇ Download All (${dlFiles.length})</button>
+      </div>
+      <div id="reels-zip-progress" style="display:none"></div>
+      <div class="tools-grid-4">${tilesHtml}</div>
+    </div>`;
+
+  _toolsLazyLoadGrid(files.map(f => ({ ext: 'jpg' })), 'rtile');
+  // Manually trigger since ext detection is irrelevant here
+  requestAnimationFrame(() => {
+    files.forEach((f, i) => {
+      const img    = document.getElementById(`rtile-img-${i}`);
+      const loader = document.getElementById(`rtile-load-${i}`);
+      const errEl  = document.getElementById(`rtile-err-${i}`);
+      if (!img) return;
+      toolsLoadPreview(img)
+        .then(() => { img.style.display = 'block'; if (loader) loader.style.display = 'none'; })
+        .catch(() => { if (loader) loader.style.display = 'none'; if (errEl) errEl.style.display = 'flex'; });
+    });
+  });
+}
+
+// ──────────────────────────────────────────────────────
 //  ZIP DOWNLOAD  (shared across Posts + Profile DL tabs)
 // ──────────────────────────────────────────────────────
 
@@ -1133,13 +1409,42 @@ async function toolsDownloadZIP(username, files, btnId, progressId) {
   for (let i = 0; i < total; i += BATCH) {
     const batch = files.slice(i, i + BATCH);
     await Promise.all(batch.map(async (f) => {
-      const url = decodeURIComponent(f.url);
+      const url      = decodeURIComponent(f.url);
+      const isApiUrl = url.includes(TOOLS_API_HOST);
       let blob = null;
-      for (const build of [...TOOLS_PREVIEW_PROXIES, u => u]) {
+
+      if (isApiUrl && f.shortcode) {
+        // Reel with a shortcode — resolve the real CDN URL via mediaByShortcode
         try {
-          const res = await fetch(build(url));
-          if (res.ok) { blob = await res.blob(); break; }
-        } catch { /* next */ }
+          const res = await fetch(`${TOOLS_API_BASE}/api/instagram/mediaByShortcode`, {
+            method:  'POST',
+            headers: toolsApiHeaders(),
+            body:    JSON.stringify({ shortcode: f.shortcode }),
+          });
+          if (res.ok) {
+            const raw   = await res.json();
+            const items = Array.isArray(raw)
+              ? raw
+              : Object.keys(raw).filter(k => !isNaN(k)).sort((a, b) => +a - +b).map(k => raw[k]);
+            const item     = items.find(it => (it.urls?.[0]?.extension || '').toLowerCase() === 'mp4') || items[0];
+            const videoUrl = item?.urls?.[0]?.url;
+            if (videoUrl) {
+              for (const build of [...TOOLS_PREVIEW_PROXIES, u => u]) {
+                try {
+                  const r = await fetch(build(videoUrl));
+                  if (r.ok) { blob = await r.blob(); break; }
+                } catch { /* next */ }
+              }
+            }
+          }
+        } catch { /* blob stays null */ }
+      } else if (!isApiUrl) {
+        for (const build of [...TOOLS_PREVIEW_PROXIES, u => u]) {
+          try {
+            const res = await fetch(build(url));
+            if (res.ok) { blob = await res.blob(); break; }
+          } catch { /* next */ }
+        }
       }
       if (blob && blob.size > 0) folder.file(f.name, blob);
       done++;
