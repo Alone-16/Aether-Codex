@@ -4,28 +4,35 @@
 
 let TOOLS_API_KEY = localStorage.getItem('ac_tools_rapidapi_key') || '';
 
-const TOOLS_PROXIES = [
-  u => `https://images.weserv.nl/?url=${decodeURIComponent(u).replace('https://','').replace('http://','')}`,
-  u => `https://api.allorigins.win/raw?url=${u}`,
-  u => `https://corsproxy.io/?${u}`,
-  u => `https://proxy.cors.sh/${decodeURIComponent(u)}`
+// ── Fetch image as blob then display as object URL (bypasses CORP) ──
+const TOOLS_PREVIEW_PROXIES = [
+  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://proxy.cors.sh/${u}`,
 ];
 
-function toolsTryNextProxy(img) {
-  const encodedUrl = img.dataset.url;
-  const attempt    = parseInt(img.dataset.attempt || '0');
+async function toolsLoadPreview(imgEl) {
+  const url = decodeURIComponent(imgEl.dataset.url);
+  const idx = imgEl.dataset.idx;
 
-  if (attempt >= TOOLS_PROXIES.length) {
-    img.style.display = 'none';
-    const id    = img.id.replace('tools-preview-', '');
-    const errEl = document.getElementById('tools-img-error-' + id);
-    if (errEl) errEl.style.display = 'flex';
-    return;
+  for (const buildProxy of TOOLS_PREVIEW_PROXIES) {
+    try {
+      const res = await fetch(buildProxy(url));
+      if (!res.ok) continue;
+      const blob = await res.blob();
+      if (!blob || blob.size === 0) continue;
+      if (imgEl._blobUrl) URL.revokeObjectURL(imgEl._blobUrl);
+      imgEl._blobUrl = URL.createObjectURL(blob);
+      imgEl.src = imgEl._blobUrl;
+      imgEl.style.display = 'block';
+      return; // success — stop trying proxies
+    } catch { /* try next */ }
   }
 
-  img.dataset.attempt = attempt + 1;
-  img.onerror = () => toolsTryNextProxy(img);
-  img.src = TOOLS_PROXIES[attempt](encodedUrl);
+  // All proxies failed — show placeholder
+  imgEl.style.display = 'none';
+  const errEl = document.getElementById('tools-img-error-' + idx);
+  if (errEl) errEl.style.display = 'flex';
 }
 
 function renderTools(c) {
@@ -118,10 +125,9 @@ async function toolsFetch() {
   if (!raw)           return toolsError('Please paste an Instagram post URL.');
   if (!TOOLS_API_KEY) return toolsError('API key not set. Enter your RapidAPI key above first.');
 
-  // Extract shortcode from URL e.g. instagram.com/p/DV9cq63kd3u/ → DV9cq63kd3u
   const match     = raw.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
   const shortcode = match ? match[1] : (/^[A-Za-z0-9_-]{9,14}$/.test(raw) ? raw : null);
-  if (!shortcode) return toolsError("Could not find a shortcode in that URL. Make sure it's a valid Instagram post link.");
+  if (!shortcode) return toolsError("Could not find a shortcode. Make sure it's a valid Instagram post link.");
 
   errorDiv.style.display  = 'none';
   resultDiv.style.display = 'none';
@@ -170,7 +176,6 @@ function toolsRenderResult(items) {
   const likes     = meta.likeCount || 0;
   const shortcode = meta.shortcode || '';
 
-  // Collect all downloadable files across all items
   const files = [];
   items.forEach(item => {
     (item.urls || []).forEach(u => {
@@ -190,23 +195,31 @@ function toolsRenderResult(items) {
     const dlName     = shortcode + '_' + f.index + '.' + f.ext;
 
     const mediaHTML = f.ext === 'mp4'
-      ? `<video
-           src="${f.url}"
-           class="tools-img-preview"
-           style="object-fit:cover;width:100%;height:100%"
-           muted playsinline preload="metadata">
-         </video>`
-      : `<img
+      ? `<div class="tools-img-loading" id="tools-loading-${i}">
+           <span style="font-size:24px;opacity:.5">▶</span>
+           <span style="font-size:11px;color:var(--tx2);margin-top:6px">Video</span>
+         </div>
+         <video
            id="tools-preview-${i}"
-           src="${f.url}"
+           class="tools-img-preview"
+           style="display:none;object-fit:cover;width:100%;height:100%"
+           muted playsinline preload="metadata"
+           data-url="${encodedUrl}"
+           data-idx="${i}">
+         </video>`
+      : `<div class="tools-img-loading" id="tools-loading-${i}">
+           <div class="tools-img-spinner"></div>
+         </div>
+         <img
+           id="tools-preview-${i}"
            class="tools-img-preview"
            alt="Image ${f.index}"
-           loading="lazy"
+           style="display:none"
            data-url="${encodedUrl}"
-           data-attempt="0"
-           onerror="toolsTryNextProxy(this)"/>
-         <div class="tools-img-error" id="tools-img-error-${i}" style="display:none;align-items:center;justify-content:center;height:100%">
-           <span style="font-size:11px;color:var(--mu);text-align:center;padding:12px">Preview unavailable<br>Download still works</span>
+           data-idx="${i}"/>
+         <div class="tools-img-error" id="tools-img-error-${i}" style="display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:6px">
+           <span style="font-size:24px;opacity:.3">◉</span>
+           <span style="font-size:11px;color:var(--mu);text-align:center;padding:0 12px">Preview unavailable<br>Download still works</span>
          </div>`;
 
     return `
@@ -230,7 +243,6 @@ function toolsRenderResult(items) {
   resultDiv.innerHTML = `
     <div class="tools-card tools-result-card">
 
-      <!-- Meta row -->
       <div class="tools-user-row">
         <div style="width:42px;height:42px;border-radius:10px;background:rgba(var(--ac-rgb),.12);border:1px solid rgba(var(--ac-rgb),.25);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">
           ${isVideo ? '▶' : '◉'}
@@ -246,7 +258,6 @@ function toolsRenderResult(items) {
 
       ${title ? `<div class="tools-caption">${title.slice(0, 200)}${title.length > 200 ? '...' : ''}</div>` : ''}
 
-      <!-- Files grid -->
       <div class="tools-img-grid" style="--cols:${Math.min(files.length, 3)}">
         ${filesHTML}
       </div>
@@ -261,17 +272,39 @@ function toolsRenderResult(items) {
 
     </div>
   `;
+
+  // Kick off blob-fetch preview loading after DOM is painted
+  requestAnimationFrame(() => {
+    files.forEach((f, i) => {
+      const loader = document.getElementById('tools-loading-' + i);
+
+      if (f.ext === 'mp4') {
+        const vid = document.getElementById('tools-preview-' + i);
+        if (vid) {
+          vid.src = f.url;
+          vid.style.display = 'block';
+          if (loader) loader.style.display = 'none';
+        }
+      } else {
+        const imgEl = document.getElementById('tools-preview-' + i);
+        if (imgEl) {
+          toolsLoadPreview(imgEl).finally(() => {
+            if (loader) loader.style.display = 'none';
+          });
+        }
+      }
+    });
+  });
 }
 
 async function toolsDownload(encodedUrl, filename) {
   const url = decodeURIComponent(encodedUrl);
   try {
-    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
-    const res      = await fetch(proxyUrl);
-    if (!res.ok) throw new Error('proxy fail');
+    const res = await fetch('https://corsproxy.io/?' + encodeURIComponent(url));
+    if (!res.ok) throw new Error('fail');
     const blob = await res.blob();
-    const a    = document.createElement('a');
-    a.href     = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
     a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
