@@ -1,8 +1,32 @@
-    // ═══════════════════════════════
+// ═══════════════════════════════
 //  TOOLS SECTION — Instagram Downloader
 // ═══════════════════════════════
 
 let TOOLS_API_KEY = localStorage.getItem('ac_tools_rapidapi_key') || '';
+
+const TOOLS_PROXIES = [
+  u => `https://images.weserv.nl/?url=${decodeURIComponent(u).replace('https://','').replace('http://','')}`,
+  u => `https://api.allorigins.win/raw?url=${u}`,
+  u => `https://corsproxy.io/?${u}`,
+  u => `https://proxy.cors.sh/${decodeURIComponent(u)}`
+];
+
+function toolsTryNextProxy(img) {
+  const encodedUrl = img.dataset.url;
+  const attempt    = parseInt(img.dataset.attempt || '0');
+
+  if (attempt >= TOOLS_PROXIES.length) {
+    img.style.display = 'none';
+    const id    = img.id.replace('tools-preview-', '');
+    const errEl = document.getElementById('tools-img-error-' + id);
+    if (errEl) errEl.style.display = 'flex';
+    return;
+  }
+
+  img.dataset.attempt = attempt + 1;
+  img.onerror = () => toolsTryNextProxy(img);
+  img.src = TOOLS_PROXIES[attempt](encodedUrl);
+}
 
 function renderTools(c) {
   c.innerHTML = `
@@ -14,7 +38,7 @@ function renderTools(c) {
           <div class="tools-icon">⬇</div>
           <div>
             <div class="tools-title">Instagram Downloader</div>
-            <div class="tools-sub">Paste a post link and download full-quality images</div>
+            <div class="tools-sub">Paste a post link and download full-quality images &amp; videos</div>
           </div>
         </div>
       </div>
@@ -30,7 +54,7 @@ function renderTools(c) {
             class="fin tools-key-input"
             id="tools-apikey-input"
             type="password"
-            placeholder="Paste your X-RapidAPI-Key here..."
+            placeholder="Paste your x-rapidapi-key here..."
             value="${TOOLS_API_KEY}"
             autocomplete="off"
           />
@@ -135,26 +159,72 @@ async function toolsFetch() {
 
 function toolsError(msg) {
   const el = document.getElementById('tools-error');
-  el.textContent    = '⚠ ' + msg;
-  el.style.display  = 'block';
+  el.textContent   = '⚠ ' + msg;
+  el.style.display = 'block';
 }
 
 function toolsRenderResult(items) {
   const resultDiv = document.getElementById('tools-result');
-  const meta = items[0]?.meta || {};
-  const title = meta.title || '';
-  const likes = meta.likeCount || 0;
+  const meta      = items[0]?.meta || {};
+  const title     = meta.title || '';
+  const likes     = meta.likeCount || 0;
   const shortcode = meta.shortcode || '';
 
   // Collect all downloadable files across all items
   const files = [];
-  items.forEach((item, i) => {
+  items.forEach(item => {
     (item.urls || []).forEach(u => {
-      files.push({ url: u.url, ext: u.extension || 'jpg', name: u.name || '', index: files.length + 1 });
+      files.push({
+        url:   u.url,
+        ext:   u.extension || 'jpg',
+        name:  u.name || '',
+        index: files.length + 1
+      });
     });
   });
 
   const isVideo = files.some(f => f.ext === 'mp4');
+
+  const filesHTML = files.map((f, i) => {
+    const encodedUrl = encodeURIComponent(f.url);
+    const dlName     = shortcode + '_' + f.index + '.' + f.ext;
+
+    const mediaHTML = f.ext === 'mp4'
+      ? `<video
+           src="${f.url}"
+           class="tools-img-preview"
+           style="object-fit:cover;width:100%;height:100%"
+           muted playsinline preload="metadata">
+         </video>`
+      : `<img
+           id="tools-preview-${i}"
+           src="${f.url}"
+           class="tools-img-preview"
+           alt="Image ${f.index}"
+           loading="lazy"
+           data-url="${encodedUrl}"
+           data-attempt="0"
+           onerror="toolsTryNextProxy(this)"/>
+         <div class="tools-img-error" id="tools-img-error-${i}" style="display:none;align-items:center;justify-content:center;height:100%">
+           <span style="font-size:11px;color:var(--mu);text-align:center;padding:12px">Preview unavailable<br>Download still works</span>
+         </div>`;
+
+    return `
+      <div class="tools-img-item">
+        ${mediaHTML}
+        <div class="tools-img-overlay">
+          <span style="font-size:10px;color:rgba(255,255,255,.8);font-weight:700;text-transform:uppercase">${f.ext}</span>
+          <div style="display:flex;gap:6px">
+            <button class="tools-dl-btn" onclick="toolsDownload('${encodedUrl}','${dlName}')">⬇ Download</button>
+            <button class="tools-open-btn" onclick="window.open('${f.url}','_blank')">⤢</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const dlAllData = JSON.stringify(
+    files.map(f => ({ url: encodeURIComponent(f.url), name: shortcode + '_' + f.index + '.' + f.ext }))
+  ).replace(/"/g, '&quot;');
 
   resultDiv.style.display = 'block';
   resultDiv.innerHTML = `
@@ -178,31 +248,13 @@ function toolsRenderResult(items) {
 
       <!-- Files grid -->
       <div class="tools-img-grid" style="--cols:${Math.min(files.length, 3)}">
-        ${files.map((f, i) => `
-          ${files.map((f, i) => `
-            <div class="tools-img-item">
-              ${f.ext === 'mp4'
-                ? `<video src="${f.url}" class="tools-img-preview" style="object-fit:cover;width:100%;height:100%" muted playsinline preload="metadata"></video>`
-                : `<img src="${f.url}" class="tools-img-preview" alt="Image ${f.index}" loading="lazy"
-                      id="tools-preview-${i}"
-                      onerror="toolsTryNextProxy(this, '${encodeURIComponent(f.url)}', 0)"/>`
-              }
-              <div class="tools-img-error" id="tools-img-error-${i}" style="display:none">
-                <span style="font-size:11px;color:var(--mu);text-align:center">Preview unavailable<br>Download still works</span>
-              </div>
-            <div class="tools-img-overlay">
-              <span style="font-size:10px;color:rgba(255,255,255,.8);font-weight:700;text-transform:uppercase">${f.ext}</span>
-              <div style="display:flex;gap:6px">
-                <button class="tools-dl-btn" onclick="toolsDownload('${encodeURIComponent(f.url)}','${shortcode}_${f.index}.${f.ext}')">⬇ Download</button>
-                <button class="tools-open-btn" onclick="window.open('${f.url}','_blank')">⤢</button>
-              </div>
-            </div>
-          </div>
-        `).join('')}
+        ${filesHTML}
       </div>
 
       ${files.length > 1 ? `
-        <button class="tools-fetch-btn" style="width:100%;justify-content:center" onclick="toolsDownloadAll(${JSON.stringify(files.map(f => ({ url: encodeURIComponent(f.url), name: shortcode + '_' + f.index + '.' + f.ext })))})">
+        <button class="tools-fetch-btn" style="width:100%;justify-content:center;margin-top:4px"
+          onclick="toolsDownloadAll(JSON.parse(this.dataset.files))"
+          data-files="${dlAllData}">
           ⬇ Download All (${files.length})
         </button>
       ` : ''}
@@ -215,23 +267,22 @@ async function toolsDownload(encodedUrl, filename) {
   const url = decodeURIComponent(encodedUrl);
   try {
     const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
-    const res = await fetch(proxyUrl);
+    const res      = await fetch(proxyUrl);
     if (!res.ok) throw new Error('proxy fail');
     const blob = await res.blob();
-    const a = document.createElement('a');
+    const a    = document.createElement('a');
     a.href     = URL.createObjectURL(blob);
     a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
   } catch {
-    // Fallback: open in new tab for manual save
     window.open(url, '_blank');
   }
 }
 
 async function toolsDownloadAll(images) {
   for (let i = 0; i < images.length; i++) {
-    await new Promise(r => setTimeout(r, 600 * i));
+    await new Promise(r => setTimeout(r, 700 * i));
     toolsDownload(images[i].url, images[i].name);
   }
 }
