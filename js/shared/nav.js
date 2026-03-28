@@ -5,7 +5,7 @@ function nav(id,push=true){
   if(push) try{history.pushState({},'',' #/'+(id==='home'?'':id));}catch(e){}
   const c=document.getElementById('content');
   // Directional slide based on section order
-  const ORDER = ['home','media','games','books','music','vault','log','settings'];
+  const ORDER = ['home','media','games','books','music','vault','log','tools','settings'];
   const pi = ORDER.indexOf(prevId), ni = ORDER.indexOf(id);
   const goingRight = ni > pi;
   c.style.transition = 'none';
@@ -18,7 +18,7 @@ function nav(id,push=true){
     const sectionBg = {
       home:'#070d0b', media:'#07000f', games:'#080600',
       books:'#f5f0e8', music:'#080400', vault:'#f0eefa',
-      log:'#010c14', settings:'#0a0a12'
+      log:'#010c14', tools:'#080006', settings:'#0a0a12'
     };
     document.documentElement.style.background = sectionBg[id] || sectionBg.home;
     document.documentElement.style.backgroundColor = sectionBg[id] || sectionBg.home;
