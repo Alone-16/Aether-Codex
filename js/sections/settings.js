@@ -5,8 +5,8 @@ const SETTINGS_KEY = 'ac_v4_settings';
 
 function loadSettings() {
   const defaults = {
-    sectionOrder: ['home','media','games','books','music','vault','log','tools'],
-    sectionEnabled: { home:true, media:true, games:true, books:true, music:true, vault:true, log:true, tools:true },
+    sectionOrder: ['home','media','games','books','music','vault','log','tools','notes'],
+    sectionEnabled: { home:true, media:true, games:true, books:true, music:true, vault:true, log:true, tools:true, notes:true },
     density: 'comfortable',
     fontSize: 'medium',
     autoBackupDays: 10,
@@ -16,7 +16,7 @@ function loadSettings() {
   const saved = ls.get(SETTINGS_KEY);
   if (!saved) return defaults;
   // Ensure new sections are always added if missing
-  const allSections = ['home','media','games','books','music','vault','log','tools'];
+  const allSections = ['home','media','games','books','music','vault','log','tools','notes'];
   allSections.forEach(s => {
     if (!saved.sectionOrder.includes(s)) saved.sectionOrder.push(s);
     if (saved.sectionEnabled[s] === undefined) saved.sectionEnabled[s] = true;
@@ -53,6 +53,7 @@ function rebuildSidebar() {
     vault: { icon:'◈', label:'Vault' },
     tools: { icon:'⬇', label:'Tools' },
     log:   { icon:'◎', label:'Log' },
+    notes: { icon:'✎', label:'Notes' },
   };
   // Desktop sidebar
   const sb = document.getElementById('sidebar');
@@ -151,6 +152,7 @@ function renderSettingsSections(el) {
     music: { icon:'♪', color:'#fb923c', desc:'Music library & YouTube sync' },
     vault: { icon:'🔗', color:'#a78bfa', desc:'Save and manage links privately' },
     tools: { icon:'⬇', color:'#f43f5e', desc:'Instagram downloader & utilities' },
+    notes: { icon:'✎', color:'#14532d', desc:'Personal notes, checklists & ideas' },
   };
 
   el.innerHTML = `

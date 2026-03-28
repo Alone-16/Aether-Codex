@@ -6,6 +6,7 @@ function renderPage(id){
   else if(id==='music')    renderMusic(c);
   else if(id==='books')    renderBooks(c);
   else if(id==='vault')    renderVault(c);
+  else if(id==='notes')    renderNotes(c);
   else if(id==='log')      renderLog(c);
   else if(id==='tools')    renderTools(c);
   else if(id==='settings') renderSettings(c);

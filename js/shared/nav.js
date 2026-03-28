@@ -18,7 +18,7 @@ function nav(id,push=true){
     const sectionBg = {
       home:'#070d0b', media:'#07000f', games:'#080600',
       books:'#f5f0e8', music:'#080400', vault:'#f0eefa',
-      log:'#010c14', tools:'#080006', settings:'#0a0a12'
+      log:'#010c14', tools:'#080006', settings:'#0a0a12', notes:'#d0e8d0'
     };
     document.documentElement.style.background = sectionBg[id] || sectionBg.home;
     document.documentElement.style.backgroundColor = sectionBg[id] || sectionBg.home;
@@ -43,6 +43,7 @@ function nav(id,push=true){
   else if(id==='books') document.getElementById('srch').oninput=e=>{BSEARCH=e.target.value.toLowerCase();renderBooksBody();};
   else if(id==='vault') document.getElementById('srch').oninput=e=>{VSEARCH=e.target.value.toLowerCase();renderVaultBody();};
   else if(id==='log')   document.getElementById('srch').oninput=e=>{LSEARCH=e.target.value.toLowerCase();renderLogBody()};
+  else if(id==='notes') document.getElementById('srch').oninput=e=>{NSEARCH=e.target.value.toLowerCase();renderNotesBody();};
   else document.getElementById('srch').oninput=e=>{onSearch(e.target.value)};
     // Apply genre CSS vars for media section without triggering a re-render
     if(id==='media'){

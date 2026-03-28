@@ -5,10 +5,11 @@ function _isConnected(){return !!_getToken();}
 
 function _updateDriveBtn(state){
   const btn=document.getElementById('drive-btn');if(!btn)return;
-  const map={connected:['✓ Drive','var(--cd)'],syncing:['↻ Drive','var(--ch)'],pending:['… Drive','var(--ch)'],error:['✗ Drive','var(--cr)'],off:['☁ Drive','']};
-  const[label,color]=map[state||(_isConnected()?'connected':'off')];
-  btn.querySelector('span').textContent=label.split(' ')[1];
-  btn.firstChild.textContent=label.split(' ')[0]+' ';
+  const map={connected:['✓','Drive','var(--cd)'],syncing:['↻','Drive','var(--ch)'],pending:['…','Drive','var(--ch)'],error:['✗','Drive','var(--cr)'],off:['☁','Drive','']};
+  const[ico,txt,color]=map[state||(_isConnected()?'connected':'off')];
+  const spans=btn.querySelectorAll('span');
+  if(spans[0])spans[0].textContent=ico;
+  if(spans[1])spans[1].textContent=txt;
   btn.style.color=color;
   btn.title=state==='connected'?'Drive synced — click to disconnect':state==='syncing'?'Syncing...':state==='error'?'Sync error — click to retry':'Connect to Google Drive';
 }
@@ -190,7 +191,9 @@ async function _pushToDrive(){
     // Vault syncs as encrypted blob — never plain data
     const vaultEnc    = ls.get(VAULT_ENC_KEY)    || null;
     const vaultPublic = ls.get(VAULT_PUBLIC_KEY) || null;
-    const payload=JSON.stringify({version:DATA_VERSION,savedAt:parseInt(ls.str(K.SAVED)||'0'),data:DATA,genres:GENRES,games:GDATA,music:MDATA,playlists:MPLAYLISTS,books:BDATA,vault_enc:vaultEnc,vault_public:vaultPublic,log:LDATA});
+    const notesEnc    = (typeof NOTES_ENC_KEY!=='undefined'&&ls.get(NOTES_ENC_KEY)) || null;
+    const notesData   = (typeof NDATA!=='undefined'&&NDATA) || [];
+    const payload=JSON.stringify({version:DATA_VERSION,savedAt:parseInt(ls.str(K.SAVED)||'0'),data:DATA,genres:GENRES,games:GDATA,music:MDATA,playlists:MPLAYLISTS,books:BDATA,vault_enc:vaultEnc,vault_public:vaultPublic,log:LDATA,notes:notesData,notes_enc:notesEnc});
     const r=await _req(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:payload});
     if(!r||!r.ok)throw new Error('Upload failed');
     ls.setStr(K.DSYNC,String(Date.now()));
@@ -261,6 +264,13 @@ async function _driveInit(){
     if(remote.log&&Array.isArray(remote.log)){
       LDATA=remote.log;
       saveLog(LDATA);
+    }
+    if(remote.notes&&Array.isArray(remote.notes)&&typeof NDATA!=='undefined'){
+      NDATA=_mergeData(NDATA,remote.notes);
+      saveNotes(NDATA);
+    }
+    if(remote.notes_enc&&typeof NOTES_ENC_KEY!=='undefined'){
+      ls.set(NOTES_ENC_KEY, remote.notes_enc);
     }
     saveData(DATA);render();
     toast('✓ Synced from Drive','var(--cd)');

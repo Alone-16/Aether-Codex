@@ -128,6 +128,12 @@ function renderHome(c){
               <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${MPLAYLISTS.filter(p=>p.synced).length} playlist${MPLAYLISTS.filter(p=>p.synced).length!==1?'s':''} synced</div>
               <div style="height:2px;background:rgba(251,146,60,.15);border-radius:1px"></div>
             </div>
+            <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('notes')">
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>✎</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#14532d">Notes</span></div>
+              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#14532d">${typeof NDATA!=='undefined'?NDATA.length||'—':'—'}</div>
+              <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${typeof NDATA!=='undefined'?NDATA.filter(n=>n.pinned).length:0} pinned</div>
+              <div style="height:2px;background:rgba(20,83,45,.15);border-radius:1px"></div>
+            </div>
           </div>
         </div>
       </div>
