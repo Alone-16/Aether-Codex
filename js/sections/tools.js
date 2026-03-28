@@ -121,7 +121,8 @@ async function toolsFetch() {
     }
 
     const data = await res.json();
-    const node = data?.result?.edges?.[0]?.node;
+    console.log('RAW API RESPONSE:', JSON.stringify(data, null, 2));
+    const node = data?.result?.edges?.[0]?.node ?? data?.result ?? data?.node ?? data;
     if (!node) throw new Error('Could not parse response. Check the URL and try again.');
 
     toolsRenderResult(node);
