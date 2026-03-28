@@ -265,11 +265,11 @@ function renderTools(c) {
       <!-- ── Module Tabs ── -->
       <div class="sub-tabs" id="tools-tabs" style="width:fit-content;flex-wrap:nowrap;overflow-x:auto">
         ${[
-          ['posts',      '⬇ Post'],
           ['profilepic', '👤 Profile Pic'],
-          ['profile',    '📁 Profile DL'],
           ['story',      '📖 Story'],
+          ['posts',      '⬇ Post'],
           ['reels',      '🎬 Reels'],
+          ['profile',    '📁 Profile DL'],
         ].map(([id, label]) =>
           `<button class="stab${TOOLS_ACTIVE_TAB === id ? ' active' : ''}"
               data-tab="${id}" onclick="setToolsTab('${id}')">${label}</button>`
