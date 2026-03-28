@@ -44,8 +44,11 @@ const TOOLS_PREVIEW_PROXIES = [
   u => `https://proxy.cors.sh/${u}`,
 ];
 
+// ── Strategy cache: remembers which strategy worked last (-1 = direct, 0/1/2 = proxy index) ──
+let _toolsWinningStrategy = null;
+
 // Fetch via one proxy with a hard timeout; resolves with blob or rejects.
-function _toolsProxyFetch(proxyUrl, timeoutMs = 9000) {
+function _toolsProxyFetch(proxyUrl, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     const controller = new AbortController();
     const timer = setTimeout(() => { controller.abort(); reject(new Error('timeout')); }, timeoutMs);
@@ -61,41 +64,66 @@ function _toolsProxyFetch(proxyUrl, timeoutMs = 9000) {
   });
 }
 
-async function toolsLoadPreview(imgEl) {
-  const url = decodeURIComponent(imgEl.dataset.url);
-
-  // ── Strategy 1: direct <img> src (fast, works when only CORS blocks fetch) ──
-  const direct = await new Promise(resolve => {
+// Try direct <img> load with a short timeout; resolves true/false.
+function _toolsDirectLoad(url, timeoutMs = 2000) {
+  return new Promise(resolve => {
     const t = new Image();
-    const timer = setTimeout(() => { t.src = ''; resolve(false); }, 5000);
+    const timer = setTimeout(() => { t.src = ''; resolve(false); }, timeoutMs);
     t.onload  = () => { clearTimeout(timer); resolve(true); };
     t.onerror = () => { clearTimeout(timer); resolve(false); };
     t.src = url;
   });
+}
+
+async function toolsLoadPreview(imgEl) {
+  const url = decodeURIComponent(imgEl.dataset.url);
+
+  // ── Fast path: replay the strategy that worked last time ──
+  if (_toolsWinningStrategy !== null) {
+    try {
+      if (_toolsWinningStrategy === -1) {
+        const ok = await _toolsDirectLoad(url, 2000);
+        if (ok) { imgEl.src = url; imgEl.style.display = 'block'; return; }
+      } else {
+        const build = TOOLS_PREVIEW_PROXIES[_toolsWinningStrategy];
+        const blob  = await _toolsProxyFetch(build(url), 5000);
+        if (imgEl._blobUrl) URL.revokeObjectURL(imgEl._blobUrl);
+        imgEl._blobUrl = URL.createObjectURL(blob);
+        imgEl.src = imgEl._blobUrl;
+        imgEl.style.display = 'block';
+        return;
+      }
+    } catch { /* cached strategy failed this time — fall through to full discovery */ }
+  }
+
+  // ── Strategy 1: direct <img> src (2 s timeout — fast fail) ──
+  const direct = await _toolsDirectLoad(url, 2000);
   if (direct) {
+    _toolsWinningStrategy = -1;
     imgEl.src = url;
     imgEl.style.display = 'block';
     return;
   }
 
   // ── Strategy 2: race all proxies simultaneously, first blob wins ──
-  const blob = await new Promise((resolve, reject) => {
+  const result = await new Promise((resolve) => {
     let settled = false;
     let failed  = 0;
     const total = TOOLS_PREVIEW_PROXIES.length;
-    TOOLS_PREVIEW_PROXIES.forEach(build => {
-      _toolsProxyFetch(build(url)).then(b => {
-        if (!settled) { settled = true; resolve(b); }
+    TOOLS_PREVIEW_PROXIES.forEach((build, idx) => {
+      _toolsProxyFetch(build(url), 5000).then(blob => {
+        if (!settled) { settled = true; resolve({ blob, idx }); }
       }).catch(() => {
         failed++;
-        if (failed === total && !settled) reject(new Error('all proxies failed'));
+        if (failed === total && !settled) resolve(null);
       });
     });
-  }).catch(() => null);
+  });
 
-  if (blob) {
+  if (result) {
+    _toolsWinningStrategy = result.idx;          // cache the winner for next time
     if (imgEl._blobUrl) URL.revokeObjectURL(imgEl._blobUrl);
-    imgEl._blobUrl = URL.createObjectURL(blob);
+    imgEl._blobUrl = URL.createObjectURL(result.blob);
     imgEl.src = imgEl._blobUrl;
     imgEl.style.display = 'block';
     return;
