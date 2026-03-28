@@ -120,7 +120,7 @@ async function loadJSZip() {
  */
 function toolsExtractPostFiles(data) {
   const files = [];
-  const edges = data?.edges || data?.data?.edges || data?.items || [];
+  const edges = data?.result?.edges || data?.edges || data?.data?.edges || data?.items || [];
 
   for (const edge of edges) {
     const node    = edge.node || edge;
@@ -446,8 +446,8 @@ async function toolsFetchProfilePic() {
     }
 
     const data = await res.json();
-    // Defensive parse — handle common response shapes
-    const user = data?.user || data?.data || data;
+    // Defensive parse — handle result wrapper (new API) and legacy shapes
+    const user = data?.result || data?.user || data?.data || data;
     if (!user) throw new Error('Unexpected API response shape.');
 
     // Always prefer HD; fall back to SD
@@ -613,7 +613,7 @@ async function toolsFetchProfile() {
     });
     if (!profileRes.ok) throw new Error(`Profile lookup failed (${profileRes.status}). Check username / API key.`);
     const profileData = await profileRes.json();
-    user = profileData?.user || profileData?.data || profileData;
+    user = profileData?.result || profileData?.user || profileData?.data || profileData;
     if (!user?.username && !user?.id) throw new Error('Unexpected profile response. The API may have changed.');
 
     // Check if private
@@ -636,8 +636,8 @@ async function toolsFetchProfile() {
       if (!postsRes.ok) throw new Error(`Posts fetch failed (${postsRes.status}).`);
 
       const postsData = await postsRes.json();
-      const edges     = postsData?.edges || postsData?.data?.edges || postsData?.items || [];
-      const pageInfo  = postsData?.page_info || postsData?.data?.page_info || {};
+      const edges     = postsData?.result?.edges || postsData?.edges || postsData?.data?.edges || postsData?.items || [];
+      const pageInfo  = postsData?.result?.page_info || postsData?.page_info || postsData?.data?.page_info || {};
 
       if (!edges.length && !allFiles.length) {
         throw new Error('No posts returned. The account may be private or the endpoint is unavailable.');
@@ -871,10 +871,23 @@ async function toolsFetchStory() {
   label.textContent    = '…';
 
   try {
+    // Step 1: get user ID (storyId must be the numeric user ID)
+    const profileRes = await fetch(`${TOOLS_API_BASE}/api/instagram/profile`, {
+      method:  'POST',
+      headers: toolsApiHeaders(),
+      body:    JSON.stringify({ username }),
+    });
+    if (!profileRes.ok) throw new Error(`Profile lookup failed (${profileRes.status}).`);
+    const profileData = await profileRes.json();
+    const profileUser = profileData?.result || profileData?.user || profileData?.data || profileData;
+    const userId = profileUser?.id || profileUser?.pk;
+    if (!userId) throw new Error('Could not get user ID for story fetch.');
+
+    // Step 2: fetch stories using numeric user ID as storyId
     const res = await fetch(`${TOOLS_API_BASE}/api/instagram/story`, {
       method:  'POST',
       headers: toolsApiHeaders(),
-      body:    JSON.stringify({ username, storyId: '' }),
+      body:    JSON.stringify({ username, storyId: userId }),
     });
 
     if (!res.ok) {
@@ -884,7 +897,8 @@ async function toolsFetchStory() {
 
     const data = await res.json();
     // Defensive parse — handle multiple response shapes
-    const items = data?.items
+    const items = data?.result?.items
+      || data?.items
       || data?.data?.items
       || data?.reels_media?.[0]?.items
       || (Array.isArray(data) ? data : []);
