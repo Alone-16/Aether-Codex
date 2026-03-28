@@ -84,47 +84,66 @@ function _toolsApplyBlob(imgEl, blob) {
 }
 
 /**
- * Load a preview image — retries every proxy in a round-robin loop until one
- * succeeds. Never gives up: keeps cycling through all strategies indefinitely
- * (direct → proxy0 → proxy1 → proxy2 → direct → …) with a short pause between
- * full rounds so we don't hammer servers. Resolves only on success.
+ * Load a preview image — races all proxies + direct load simultaneously.
+ * First one to succeed wins. If ALL fail, waits 800ms then retries the race.
+ * Never gives up. Resolves only on success (no reject).
  */
 async function toolsLoadPreview(imgEl) {
   const url = decodeURIComponent(imgEl.dataset.url);
 
-  // Build the ordered strategy list: cached winner first, then everything else.
-  const allStrategies = [-1, 0, 1, 2]; // -1 = direct, 0-2 = proxy indices
-  const ordered = _toolsWinningStrategy !== null
-    ? [_toolsWinningStrategy, ...allStrategies.filter(s => s !== _toolsWinningStrategy)]
-    : allStrategies;
+  // If we have a cached winning strategy, try it first alone (fast path).
+  if (_toolsWinningStrategy !== null) {
+    try {
+      if (_toolsWinningStrategy === -1) {
+        const ok = await _toolsDirectLoad(url, 2000);
+        if (ok) { imgEl.src = url; imgEl.style.display = 'block'; return; }
+      } else {
+        const blob = await _toolsProxyFetch(TOOLS_PREVIEW_PROXIES[_toolsWinningStrategy](url), 5000);
+        _toolsApplyBlob(imgEl, blob); return;
+      }
+    } catch { /* cached strategy missed — fall through to full race */ }
+  }
 
-  let round = 0;
+  // Full race: fire direct + all proxies at once, first blob wins.
+  // Retry the entire race until something loads.
+  let attempt = 0;
   while (true) {
-    // Small pause between retry rounds so we don't hammer servers
-    if (round > 0) await new Promise(r => setTimeout(r, 800 * round));
-    round++;
+    if (attempt > 0) await new Promise(r => setTimeout(r, 800));
+    attempt++;
 
-    for (const strategy of ordered) {
-      try {
-        if (strategy === -1) {
-          // Direct load
-          const ok = await _toolsDirectLoad(url, 2000);
-          if (ok) {
-            _toolsWinningStrategy = -1;
-            imgEl.src = url;
-            imgEl.style.display = 'block';
-            return;
-          }
-        } else {
-          // Proxy load
-          const blob = await _toolsProxyFetch(TOOLS_PREVIEW_PROXIES[strategy](url), 5000);
-          _toolsWinningStrategy = strategy;
-          _toolsApplyBlob(imgEl, blob);
-          return;
-        }
-      } catch { /* this strategy failed — try the next one */ }
+    const result = await new Promise(resolve => {
+      let done = false;
+      let failed = 0;
+      const total = TOOLS_PREVIEW_PROXIES.length + 1; // +1 for direct
+
+      // Direct load attempt
+      _toolsDirectLoad(url, 2000).then(ok => {
+        if (ok && !done) { done = true; resolve({ type: 'direct' }); }
+        else { failed++; if (failed === total && !done) resolve(null); }
+      });
+
+      // All proxies in parallel
+      TOOLS_PREVIEW_PROXIES.forEach((build, idx) => {
+        _toolsProxyFetch(build(url), 5000).then(blob => {
+          if (!done) { done = true; resolve({ type: 'proxy', blob, idx }); }
+        }).catch(() => {
+          failed++;
+          if (failed === total && !done) resolve(null);
+        });
+      });
+    });
+
+    if (result) {
+      if (result.type === 'direct') {
+        _toolsWinningStrategy = -1;
+        imgEl.src = url; imgEl.style.display = 'block';
+      } else {
+        _toolsWinningStrategy = result.idx;
+        _toolsApplyBlob(imgEl, result.blob);
+      }
+      return;
     }
-    // All strategies failed this round → loop again with a backoff pause
+    // All failed → loop and retry
   }
 }
 
