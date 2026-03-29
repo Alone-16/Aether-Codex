@@ -91,8 +91,6 @@ function createMainWindow() {
   });
 
   // ── Navigation guard ──
-  // Allow: your app, Google OAuth pages (needed for Drive login redirect)
-  // Block: everything else (random external links) → open in system browser
   mainWindow.webContents.on('will-navigate', (e, url) => {
     if (!isAllowedInternal(url)) {
       e.preventDefault();
@@ -100,8 +98,49 @@ function createMainWindow() {
     }
   });
 
-  // New windows (target="_blank" links) always open in system browser
+  // ── New-window handler ──
+  // Google OAuth opens accounts.google.com in a new window — allow it inside Electron.
+  // Everything else opens in the system browser.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (isAllowedInternal(url)) {
+      // Open OAuth / Google pages inside a child BrowserWindow
+      const authWin = new BrowserWindow({
+        width: 520,
+        height: 660,
+        parent: mainWindow,
+        modal: false,
+        show: true,
+        backgroundColor: '#ffffff',
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+        },
+      });
+
+      authWin.loadURL(url);
+
+      // When Google redirects back to our app (the ?code= redirect),
+      // hand it off to the main window and close the auth popup.
+      authWin.webContents.on('will-navigate', (e2, redirectUrl) => {
+        if (redirectUrl.startsWith('https://alone-16.github.io/')) {
+          e2.preventDefault();
+          mainWindow.loadURL(redirectUrl);
+          authWin.close();
+        }
+      });
+
+      // Also catch did-navigate (some OAuth flows use this instead)
+      authWin.webContents.on('did-navigate', (e2, redirectUrl) => {
+        if (redirectUrl.startsWith('https://alone-16.github.io/')) {
+          mainWindow.loadURL(redirectUrl);
+          authWin.close();
+        }
+      });
+
+      return { action: 'deny' }; // we handle it above
+    }
+
+    // Non-Google links → system browser
     shell.openExternal(url);
     return { action: 'deny' };
   });
