@@ -1,0 +1,40 @@
+{
+  "name": "aether-codex-desktop",
+  "version": "1.0.0",
+  "description": "The Aether Codex Desktop",
+  "author": "Nadeem",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "set CSC_IDENTITY_AUTO_DISCOVERY=false && electron-builder --win --publish never"
+  },
+  "build": {
+    "appId": "com.aethercodex.app",
+    "productName": "Aether Codex",
+    "icon": "icon.ico",
+    "artifactName": "Aether-Codex-Setup.exe",
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico",
+      "sign": null,
+      "signingHashAlgorithms": null
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Aether Codex",
+      "runAfterFinish": true
+    },
+    "files": [
+      "main.js",
+      "mini.html",
+      "icon.ico"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}
