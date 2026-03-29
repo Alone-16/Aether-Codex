@@ -33,29 +33,46 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: npx electron-builder --win --publish never
 
-      - name: Create Release
+      # Shows what files were actually built — helps debug filename issues
+      - name: List dist folder
+        working-directory: electron-app
+        run: dir dist
+
+      # Upload as a GitHub artifact — always works, no tag needed
+      # Download from: Actions tab → click the run → scroll to Artifacts
+      - name: Upload installer as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aether-Codex-Installer
+          path: electron-app/dist/*.exe
+          retention-days: 30
+
+      # Also create/update a GitHub Release for a permanent download link
+      - name: Create or update Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: desktop-latest
           name: "Aether Codex Desktop (latest)"
+          make_latest: true
+          generate_release_notes: false
           body: |
             ## Aether Codex Desktop App
 
             ### Install
-            Download **Aether-Codex-Setup.exe** and run it.
-            > Windows may show a SmartScreen warning — click **More info → Run anyway**. This is normal for unsigned personal apps.
+            Download **Aether-Codex-Setup.exe** below and run it.
+            > Windows SmartScreen may warn you — click **More info → Run anyway**. Normal for unsigned personal apps.
 
             ### Shortcuts
             | Shortcut | Action |
             |---|---|
             | `Ctrl+Alt+Space` | Open full app |
             | `Ctrl+Alt+N` | Open quick clipboard |
-            | Tray icon click | Toggle app |
+            | Tray icon left-click | Toggle app |
+            | Tray icon right-click | Menu (quit, reload, auto-start) |
 
             ### Updates
-            Web changes → no reinstall needed, app loads live from GitHub Pages automatically.
-            Desktop shell changes (main.js / mini.html) → download and reinstall this .exe.
-          files: electron-app/dist/Aether-Codex-Setup.exe
-          prerelease: false
+            - **Web changes** → no reinstall needed, app loads live automatically
+            - **Shell changes** (main.js / mini.html) → download and reinstall this .exe
+          files: electron-app/dist/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
