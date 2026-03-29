@@ -18,28 +18,77 @@ const _REDIRECT_KEY = 'ac_oauth_redirect';
 const _WORKER = 'https://aether-codex-ai.nadeempubgmobile2-0.workers.dev';
 const K_REFRESH = 'ac_v4_refresh';
 
-// ── Authorization Code Flow — works on all devices, gets refresh token ──
+// ── Detect Electron environment ──
+const _IS_ELECTRON = typeof window !== 'undefined' && window.process && window.process.type === 'renderer';
+
+// ── Authorization Code Flow ──
+// In Electron: opens a popup via IPC, gets code back without reloading the app.
+// In browser:  uses the classic redirect flow (location.href).
 function _startOAuthFlow() {
-  localStorage.setItem(_REDIRECT_KEY, '1');
+  const redirectUri = location.origin + location.pathname;
   const params = new URLSearchParams({
     client_id:     CLIENT_ID,
-    redirect_uri:  location.origin + location.pathname,
+    redirect_uri:  redirectUri,
     response_type: 'code',
     scope:         DRIVE_SCOPE + ' ' + YT_SCOPE_CONST,
     access_type:   'offline',
     prompt:        'consent',
     state:         localStorage.getItem('ac_last_section') || 'home',
   });
-  location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+  const oauthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
+
+  if (_IS_ELECTRON) {
+    // Ask main process to open a popup window — no page reload
+    const { ipcRenderer } = require('electron');
+    _updateDriveBtn('syncing');
+
+    // Listen for the result (code or error) sent back from main process
+    ipcRenderer.once('oauth-result', async (_, result) => {
+      if (result.error) {
+        if (result.error !== 'popup_closed') {
+          toast('Drive auth failed: ' + result.error, 'var(--cr)');
+        }
+        _updateDriveBtn('off');
+        return;
+      }
+      // Exchange code for tokens via worker
+      try {
+        const res = await fetch(_WORKER, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Action': 'exchange_code' },
+          body: JSON.stringify({ code: result.code, redirect_uri: redirectUri })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        ls.setStr(K.DTOKEN, data.access_token);
+        ls.setStr(K.DEXP, String(Date.now() + (data.expires_in - 60) * 1000));
+        if (data.refresh_token) ls.setStr(K_REFRESH, data.refresh_token);
+        _updateDriveBtn('syncing');
+        _driveInit();
+        // Navigate to saved section
+        if (result.state) nav(result.state);
+      } catch(e) {
+        toast('Drive auth failed: ' + e.message, 'var(--cr)');
+        _updateDriveBtn('error');
+      }
+    });
+
+    ipcRenderer.send('open-oauth', oauthUrl);
+  } else {
+    // Browser: classic redirect flow
+    localStorage.setItem(_REDIRECT_KEY, '1');
+    location.href = oauthUrl;
+  }
 }
 
 async function _handleOAuthRedirect() {
+  // Only runs in browser (non-Electron) — Electron uses IPC above
+  if (_IS_ELECTRON) return false;
   const params = new URLSearchParams(location.search);
   const code  = params.get('code');
   const state = params.get('state');
   if (!code || !localStorage.getItem(_REDIRECT_KEY)) return false;
   localStorage.removeItem(_REDIRECT_KEY);
-  // Clean URL immediately
   history.replaceState({}, '', location.pathname + (state ? '#/' + state : ''));
   try {
     const res = await fetch(_WORKER, {
