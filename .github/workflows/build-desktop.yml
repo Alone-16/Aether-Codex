@@ -8,6 +8,10 @@ on:
 
   workflow_dispatch:
 
+# Give the workflow permission to create releases
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -33,13 +37,10 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: npx electron-builder --win --publish never
 
-      # Shows what files were actually built — helps debug filename issues
       - name: List dist folder
         working-directory: electron-app
         run: dir dist
 
-      # Upload as a GitHub artifact — always works, no tag needed
-      # Download from: Actions tab → click the run → scroll to Artifacts
       - name: Upload installer as artifact
         uses: actions/upload-artifact@v4
         with:
@@ -47,7 +48,6 @@ jobs:
           path: electron-app/dist/*.exe
           retention-days: 30
 
-      # Also create/update a GitHub Release for a permanent download link
       - name: Create or update Release
         uses: softprops/action-gh-release@v2
         with:
