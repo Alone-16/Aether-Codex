@@ -20,8 +20,10 @@ if (!gotLock) { app.quit(); process.exit(0); }
 // ── Your GitHub Pages URL ──
 const APP_URL = 'https://alone-16.github.io/Aether-Codex/';
 
+// ── Spoof a real Chrome user-agent so Google OAuth doesn't reject Electron ──
+const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
 // ── URLs that are allowed to load inside the app window ──
-// Google OAuth + accounts pages must stay inside so the redirect flow works
 const ALLOWED_INTERNAL = [
   'https://alone-16.github.io/',
   'https://accounts.google.com/',
@@ -73,6 +75,9 @@ function createMainWindow() {
     },
   });
 
+  // ── Spoof user-agent so Google OAuth accepts the request ──
+  mainWindow.webContents.setUserAgent(CHROME_UA);
+
   mainWindow.loadURL(APP_URL);
 
   mainWindow.once('ready-to-show', () => {
@@ -91,6 +96,8 @@ function createMainWindow() {
   });
 
   // ── Navigation guard ──
+  // Allow: your app + all Google OAuth/API pages (needed for Drive login flow)
+  // Block: everything else → open in system browser
   mainWindow.webContents.on('will-navigate', (e, url) => {
     if (!isAllowedInternal(url)) {
       e.preventDefault();
@@ -98,12 +105,20 @@ function createMainWindow() {
     }
   });
 
+  // ── Also catch HTTP 301/302 redirects in the main window ──
+  // Google redirects back to alone-16.github.io after Allow — let it through
+  mainWindow.webContents.on('will-redirect', (e, url) => {
+    if (!isAllowedInternal(url)) {
+      e.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
   // ── New-window handler ──
-  // Google OAuth opens accounts.google.com in a new window — allow it inside Electron.
-  // Everything else opens in the system browser.
+  // Any popup Google opens (e.g. account picker) → open inside Electron child window
+  // Everything else → system browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isAllowedInternal(url)) {
-      // Open OAuth / Google pages inside a child BrowserWindow
       const authWin = new BrowserWindow({
         width: 520,
         height: 660,
@@ -117,30 +132,30 @@ function createMainWindow() {
         },
       });
 
+      // Same Chrome UA spoof for the popup
+      authWin.webContents.setUserAgent(CHROME_UA);
       authWin.loadURL(url);
 
-      // When Google redirects back to our app (the ?code= redirect),
-      // hand it off to the main window and close the auth popup.
-      authWin.webContents.on('will-navigate', (e2, redirectUrl) => {
+      let handled = false;
+      function handleRedirect(e2, redirectUrl) {
+        if (handled) return;
         if (redirectUrl.startsWith('https://alone-16.github.io/')) {
-          e2.preventDefault();
+          handled = true;
+          if (e2 && e2.preventDefault) e2.preventDefault();
+          mainWindow.show();
+          mainWindow.focus();
           mainWindow.loadURL(redirectUrl);
-          authWin.close();
+          setTimeout(() => { if (!authWin.isDestroyed()) authWin.close(); }, 500);
         }
-      });
+      }
 
-      // Also catch did-navigate (some OAuth flows use this instead)
-      authWin.webContents.on('did-navigate', (e2, redirectUrl) => {
-        if (redirectUrl.startsWith('https://alone-16.github.io/')) {
-          mainWindow.loadURL(redirectUrl);
-          authWin.close();
-        }
-      });
+      authWin.webContents.on('will-navigate',  (e2, u) => handleRedirect(e2, u));
+      authWin.webContents.on('will-redirect',  (e2, u) => handleRedirect(e2, u));
+      authWin.webContents.on('did-navigate',   (e2, u) => handleRedirect(null, u));
 
-      return { action: 'deny' }; // we handle it above
+      return { action: 'deny' };
     }
 
-    // Non-Google links → system browser
     shell.openExternal(url);
     return { action: 'deny' };
   });
