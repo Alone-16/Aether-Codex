@@ -180,25 +180,50 @@
 #ai-messages::-webkit-scrollbar{width:3px}
 </style>
 
-<script defer src="js/shared/utils.js"></script>
-<script defer src="js/shared/drive.js"></script>
-<script defer src="js/shared/nav.js"></script>
-<script defer src="js/shared/routing.js"></script>
-<script defer src="js/sections/home.js"></script>
-<script defer src="js/sections/media.js"></script>
-<script defer src="js/sections/settings.js"></script>
-<script defer src="js/sections/games.js"></script>
-<script defer src="js/sections/music.js"></script>
-<script defer src="js/sections/books.js"></script>
-<script defer src="js/sections/ai.js"></script>
-<script defer src="js/sections/vault.js"></script>
-<script defer src="js/sections/notes.js"></script>
-<script defer src="js/sections/wrapped.js"></script>
-<script defer src="js/sections/public.js"></script>
-<script defer src="js/sections/log.js"></script>
-<script defer src="js/sections/tools.js"></script>
-<script defer src="js/shared/extras.js"></script>
-<script defer src="js/main.js"></script>
+<!-- ═══════════════════════════════════════
+     ALL SCRIPTS — paths corrected to root
+     ═══════════════════════════════════════ -->
+<script defer src="utils.js"></script>
+<script defer src="drive.js"></script>
+<script defer src="nav.js"></script>
+<script defer src="routing.js"></script>
+<script defer src="home.js"></script>
+<script defer src="media.js"></script>
+<script defer src="settings.js"></script>
+<script defer src="games.js"></script>
+<script defer src="music.js"></script>
+<script defer src="books.js"></script>
+<script defer src="ai.js"></script>
+<script defer src="vault.js"></script>
+<script defer src="notes.js"></script>
+<script defer src="wrapped.js"></script>
+<script defer src="public.js"></script>
+<script defer src="log.js"></script>
+<script defer src="tools.js"></script>
+<script defer src="extras.js"></script>
+
+<!-- Bootstrap: replaces the missing js/main.js -->
+<script defer>
+window.addEventListener('load', function() {
+  // Apply persisted settings (density, font size, sidebar order)
+  if (typeof applySettings === 'function') applySettings();
+
+  // Check if we are rendering a public share link (?share=...)
+  if (typeof checkPublicView === 'function' && checkPublicView()) return;
+
+  // Keyboard shortcuts
+  if (typeof initKeyboardShortcuts === 'function') initKeyboardShortcuts();
+
+  // Browser notifications for airing shows
+  if (typeof initNotifications === 'function') initNotifications();
+
+  // Navigate to the last-used section (or hash, or home)
+  var hash    = location.hash.replace('#/', '').replace('#', '');
+  var section = hash || localStorage.getItem('ac_last_section') || 'home';
+  if (typeof nav === 'function') nav(section, false);
+});
+</script>
+
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
