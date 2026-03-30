@@ -1,4 +1,6 @@
 let _gisReady=false, _tokenClient=null, _syncTimer=null, _driveFolderId=null;
+// Guard: prevent initGIS running twice (once from load event, once from main.js)
+let _gisInitDone = false;
 
 function _getToken(){return Date.now()<parseInt(ls.str(K.DEXP)||'0')?ls.str(K.DTOKEN):null;}
 function _isConnected(){return !!_getToken();}
@@ -152,10 +154,13 @@ async function _exchangeCode(code, redirectUri, stateParam, skipNonceCheck=false
     });
     if (!res.ok) {
       const txt = await res.text();
-      throw new Error(`Worker ${res.status}: ${txt.slice(0,120)}`);
+      throw new Error(`Worker ${res.status}: ${txt.slice(0,200)}`);
     }
     const data = await res.json();
+    // Worker may return { error, error_description } on failure
     if (data.error) throw new Error(data.error_description || data.error);
+    // Validate we actually got a token back
+    if (!data.access_token) throw new Error('No access token received from worker');
 
     ls.setStr(K.DTOKEN,  data.access_token);
     ls.setStr(K.DEXP,    String(Date.now() + (data.expires_in - 60) * 1000));
@@ -203,6 +208,12 @@ async function _handleOAuthRedirect() {
   // Nothing in the URL that looks like an OAuth return
   if (!code && !error) return false;
 
+  // FIX: Capture redirectUri BEFORE we mutate the URL with replaceState.
+  // _getRedirectUri() reads location.origin + location.pathname — after
+  // replaceState the pathname is unchanged but capturing it early is safer
+  // and makes the intent clear.
+  const redirectUri = _getRedirectUri();
+
   // Clean the URL immediately so a page refresh doesn't re-try the exchange
   try {
     const section = (state || '').split(':')[1] || 'home';
@@ -214,7 +225,8 @@ async function _handleOAuthRedirect() {
   if (ov) ov.remove();
 
   if (error) {
-    toast('Google sign-in cancelled or denied: ' + error, '#fb7185');
+    // Delay toast slightly so the DOM / toast function is guaranteed ready
+    setTimeout(() => toast('Google sign-in cancelled or denied: ' + error, '#fb7185'), 100);
     _updateDriveBtn('off');
     return true;  // handled (with error)
   }
@@ -222,7 +234,7 @@ async function _handleOAuthRedirect() {
   // Show a subtle "Completing sign-in…" indicator while we hit the Worker
   _showSigningInBanner();
 
-  const redirectUri = _getRedirectUri();
+  // Use the pre-captured redirectUri (before URL was mutated above)
   await _exchangeCode(code, redirectUri, state || '');
 
   _hideSigningInBanner();
@@ -278,6 +290,12 @@ async function _refreshAccessToken() {
 //  BOOTSTRAP — called once on page load
 // ══════════════════════════════════════════════════════════════════
 async function initGIS() {
+  // FIX: Guard against being called twice (e.g. from both js/main.js and the
+  // window 'load' listener below). The second call would be a no-op here but
+  // could still trigger an unnecessary _driveInit round-trip.
+  if (_gisInitDone) return;
+  _gisInitDone = true;
+
   // 1. Check if we're returning from an OAuth redirect
   const handled = await _handleOAuthRedirect();
   if (handled) return;
@@ -493,4 +511,15 @@ function closeMob(){document.getElementById('mob-ov').classList.remove('show');d
 
 // ══════════════════════════════════════════════════════════════════
 //  BOOTSTRAP
+//  FIX: initGIS() was defined but never called. The function name
+//  suggests it was once a Google Identity Services callback that got
+//  removed when the flow was migrated to the custom code flow.
+//  We now hook it onto the window 'load' event, which fires after ALL
+//  deferred scripts have executed — guaranteeing that nav(), toast(),
+//  render(), etc. are all available when _handleOAuthRedirect() runs.
+//  The _gisInitDone guard means calling initGIS() from js/main.js as
+//  well is safe — the second call is a no-op.
 // ══════════════════════════════════════════════════════════════════
+window.addEventListener('load', function _driveBootstrap() {
+  initGIS().catch(function(e){ console.error('[Drive] initGIS error:', e); });
+});
