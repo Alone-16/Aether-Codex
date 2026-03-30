@@ -15,4 +15,11 @@ contextBridge.exposeInMainWorld('electronBridge', {
       ipcRenderer.send('open-oauth', oauthUrl);
     });
   },
+
+  // Returns Promise<{ mainKey: string, miniKey: string }>
+  getShortcuts: () => ipcRenderer.invoke('shortcuts:get'),
+
+  // type: 'main' | 'mini',  key: single letter/digit e.g. 'A'
+  // Returns Promise<{ success: boolean, mainKey?, miniKey?, error? }>
+  setShortcut: (type, key) => ipcRenderer.invoke('shortcuts:set', { type, key }),
 });

@@ -12,6 +12,7 @@ const {
 } = require('electron');
 
 const path = require('path');
+const fs   = require('fs');
 
 // ── Single instance lock — only one copy ever runs ──
 const gotLock = app.requestSingleInstanceLock();
@@ -25,6 +26,67 @@ let miniWindow = null;
 let tray       = null;
 let isQuitting = false;
 
+// FIX (Bug 3): blur race-condition guard for mini window
+let miniJustShown = false;
+
+// ═══════════════════════════════════════════════════════
+//  SHORTCUT CONFIG — persisted to userData/config.json
+//  Users can customise the last key; Ctrl+Alt is fixed.
+// ═══════════════════════════════════════════════════════
+const CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
+
+const DEFAULT_CONFIG = {
+  mainKey: 'A',   // Ctrl+Alt+A  (Space conflicts with Windows IME — Bug 2 fix)
+  miniKey: 'N',   // Ctrl+Alt+N
+};
+
+function loadConfig() {
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      const raw  = fs.readFileSync(CONFIG_PATH, 'utf8');
+      const data = JSON.parse(raw);
+      return {
+        mainKey: (data.mainKey || DEFAULT_CONFIG.mainKey).toUpperCase().charAt(0),
+        miniKey: (data.miniKey || DEFAULT_CONFIG.miniKey).toUpperCase().charAt(0),
+      };
+    }
+  } catch (e) {
+    console.warn('[Config] Failed to load config, using defaults:', e.message);
+  }
+  return { ...DEFAULT_CONFIG };
+}
+
+function saveConfig(cfg) {
+  try {
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
+  } catch (e) {
+    console.error('[Config] Failed to save config:', e.message);
+  }
+}
+
+let config = loadConfig();
+
+// ── Build the accelerator string from a single key letter ──
+function accel(key) {
+  return `CommandOrControl+Alt+${key}`;
+}
+
+// ── Re-register both global shortcuts (called on startup & after any change) ──
+function registerShortcuts() {
+  globalShortcut.unregisterAll();
+
+  const ok1 = globalShortcut.register(accel(config.mainKey), toggleMain);
+  const ok2 = globalShortcut.register(accel(config.miniKey), toggleMini);
+
+  // FIX (Bug 1): log registration results so failures are visible
+  console.log(`[Shortcuts] Ctrl+Alt+${config.mainKey} (main):`, ok1 ? 'OK' : 'FAILED — key may be taken by another app');
+  console.log(`[Shortcuts] Ctrl+Alt+${config.miniKey} (mini):`, ok2 ? 'OK' : 'FAILED — key may be taken by another app');
+
+  // Refresh tray menu labels to match current shortcuts
+  if (tray) tray.setContextMenu(buildTrayMenu());
+  if (tray) tray.setToolTip(`The Aether Codex  •  Ctrl+Alt+${config.mainKey}`);
+}
+
 // ═══════════════════════════════════════════════════════
 //  AUTO-START ON WINDOWS LOGIN
 // ═══════════════════════════════════════════════════════
@@ -32,7 +94,7 @@ function setAutoStart(enable) {
   app.setLoginItemSettings({
     openAtLogin: enable,
     path: process.execPath,
-    args: ['--hidden'],   // start hidden in tray, no window popup
+    args: ['--hidden'],
   });
 }
 
@@ -57,13 +119,13 @@ function createMainWindow() {
       nodeIntegration:  false,
       contextIsolation: true,
       spellcheck:       true,
+      preload:          path.join(__dirname, 'preload.js'),
     },
   });
 
   mainWindow.loadURL(APP_URL);
 
   mainWindow.once('ready-to-show', () => {
-    // If launched at login with --hidden, stay in tray
     if (!process.argv.includes('--hidden')) {
       mainWindow.show();
       mainWindow.focus();
@@ -111,8 +173,11 @@ function createMiniWindow() {
 
   miniWindow.loadFile(path.join(__dirname, 'mini.html'));
 
-  // Hide when losing focus
+  // FIX (Bug 3): Ignore blur events fired during the show/focus transition.
+  // Without this, the OS fires blur immediately after show(), hiding the
+  // window before the user ever sees it.
   miniWindow.on('blur', () => {
+    if (miniJustShown) return;
     if (miniWindow && !miniWindow.isDestroyed()) miniWindow.hide();
   });
 
@@ -128,25 +193,36 @@ function buildTrayMenu() {
   return Menu.buildFromTemplate([
     { label: 'The Aether Codex', enabled: false },
     { type: 'separator' },
-    { label: 'Open App',         click: toggleMain,  accelerator: 'CommandOrControl+Alt+Space' },
-    { label: 'Quick Clipboard',  click: toggleMini,  accelerator: 'CommandOrControl+Alt+N'     },
+    {
+      label:       `Open App  (Ctrl+Alt+${config.mainKey})`,
+      click:       toggleMain,
+      accelerator: accel(config.mainKey),
+    },
+    {
+      label:       `Quick Clipboard  (Ctrl+Alt+${config.miniKey})`,
+      click:       toggleMini,
+      accelerator: accel(config.miniKey),
+    },
     { type: 'separator' },
     {
       label: `Start with Windows: ${isAutoStartEnabled() ? 'ON ✓' : 'OFF'}`,
       click() {
         setAutoStart(!isAutoStartEnabled());
-        tray.setContextMenu(buildTrayMenu());   // refresh label
+        tray.setContextMenu(buildTrayMenu());
       },
     },
-    { label: 'Reload App', click: () => mainWindow && !mainWindow.isDestroyed() && mainWindow.reload() },
+    {
+      label: 'Reload App',
+      click: () => mainWindow && !mainWindow.isDestroyed() && mainWindow.reload(),
+    },
     { type: 'separator' },
-    { label: 'Quit',       click: quitApp },
+    { label: 'Quit', click: quitApp },
   ]);
 }
 
 function createTray() {
   tray = new Tray(path.join(__dirname, 'icon.png'));
-  tray.setToolTip('The Aether Codex  •  Ctrl+Alt+Space');
+  tray.setToolTip(`The Aether Codex  •  Ctrl+Alt+${config.mainKey}`);
   tray.setContextMenu(buildTrayMenu());
   tray.on('click',        toggleMain);
   tray.on('double-click', toggleMain);
@@ -161,6 +237,8 @@ function toggleMain() {
   else { mainWindow.show(); mainWindow.focus(); }
 }
 
+// FIX (Bug 3): Set miniJustShown = true during show/focus so the blur
+// handler ignores the spurious blur that fires during the transition.
 function toggleMini() {
   if (!miniWindow || miniWindow.isDestroyed()) return;
   if (miniWindow.isVisible()) {
@@ -168,8 +246,10 @@ function toggleMini() {
   } else {
     const { width, height } = screen.getPrimaryDisplay().workAreaSize;
     miniWindow.setPosition(width - 450, height - 390);
+    miniJustShown = true;
     miniWindow.show();
     miniWindow.focus();
+    setTimeout(() => { miniJustShown = false; }, 300); // 300ms grace period
   }
 }
 
@@ -187,10 +267,46 @@ ipcMain.on('mini:hide',      () => miniWindow && !miniWindow.isDestroyed() && mi
 ipcMain.on('mini:open-main', () => { miniWindow && miniWindow.hide(); toggleMain(); });
 
 // ═══════════════════════════════════════════════════════
+//  IPC — shortcut settings (called from settings.js via preload)
+// ═══════════════════════════════════════════════════════
+
+// GET current shortcut keys → renderer can read them to populate UI
+ipcMain.handle('shortcuts:get', () => ({
+  mainKey: config.mainKey,
+  miniKey: config.miniKey,
+}));
+
+// SET a new key for either 'main' or 'mini'
+// payload: { type: 'main' | 'mini', key: 'A' }
+ipcMain.handle('shortcuts:set', (_, { type, key }) => {
+  // Validate: must be a single alphanumeric character
+  const sanitised = String(key).toUpperCase().replace(/[^A-Z0-9]/g, '').charAt(0);
+  if (!sanitised) {
+    return { success: false, error: 'Invalid key — must be a single letter or digit.' };
+  }
+
+  // Prevent both shortcuts from using the same key
+  if (type === 'main' && sanitised === config.miniKey) {
+    return { success: false, error: `Key "${sanitised}" is already used for Quick Clipboard.` };
+  }
+  if (type === 'mini' && sanitised === config.mainKey) {
+    return { success: false, error: `Key "${sanitised}" is already used for Open App.` };
+  }
+
+  // Apply
+  if (type === 'main') config.mainKey = sanitised;
+  if (type === 'mini') config.miniKey = sanitised;
+
+  saveConfig(config);
+  registerShortcuts();   // re-registers with the new key
+
+  return { success: true, mainKey: config.mainKey, miniKey: config.miniKey };
+});
+
+// ═══════════════════════════════════════════════════════
 //  APP LIFECYCLE
 // ═══════════════════════════════════════════════════════
 app.whenReady().then(() => {
-  // Auto-enable start-with-windows on first install (packaged builds only)
   if (app.isPackaged && !isAutoStartEnabled()) {
     setAutoStart(true);
   }
@@ -199,8 +315,7 @@ app.whenReady().then(() => {
   createMiniWindow();
   createTray();
 
-  globalShortcut.register('CommandOrControl+Alt+Space', toggleMain);
-  globalShortcut.register('CommandOrControl+Alt+N',     toggleMini);
+  registerShortcuts(); // uses config.mainKey / config.miniKey
 });
 
 app.on('second-instance', () => {

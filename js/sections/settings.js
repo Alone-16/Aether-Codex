@@ -111,8 +111,9 @@ function rebuildSidebar() {
 
 // ─── SETTINGS RENDER ───
 function renderSettings(c) {
-  const tabs = ['sections','drive','storage','ai','security','share'];
-  const tabLabels = ['Sections','Drive','Storage','AI Assistant','Security','Public Share'];
+  const isElectron = !!(window.electronBridge);
+  const tabs       = ['sections','drive','storage','ai','security','share', ...(isElectron ? ['desktop'] : [])];
+  const tabLabels  = ['Sections','Drive','Storage','AI Assistant','Security','Public Share', ...(isElectron ? ['Desktop App'] : [])];
 
   c.innerHTML = `
     <div style="font-family:var(--fd);font-size:20px;font-weight:700;margin-bottom:20px;color:var(--tx)">⚙ Settings</div>
@@ -133,6 +134,7 @@ function renderSettingsBody() {
   else if (SETTINGS_TAB === 'ai')         renderSettingsAI(el);
   else if (SETTINGS_TAB === 'share')       renderSettingsPublicShare(el);
   else if (SETTINGS_TAB === 'security')   renderSettingsSecurity(el);
+  else if (SETTINGS_TAB === 'desktop')    renderSettingsDesktop(el);
   // Update active tab
   document.querySelectorAll('.stab').forEach(t => {
     const tabs = ['sections','drive','storage','appearance','security'];
@@ -434,6 +436,87 @@ function renderSettingsSecurity(el) {
         <button onclick="saveIdleTimeout()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
       </div>
     </div>`;
+}
+
+// ── DESKTOP APP TAB — shortcut key customisation ──
+// Only visible when running inside Electron (window.electronBridge present).
+// Ctrl+Alt is fixed; the user picks the final letter/digit for each action.
+function renderSettingsDesktop(el) {
+  if (!window.electronBridge) {
+    el.innerHTML = `<div style="color:var(--mu);font-size:13px;padding:20px 0">Not running in the desktop app.</div>`;
+    return;
+  }
+
+  el.innerHTML = `<div style="color:var(--mu);font-size:13px;padding:20px 0">Loading shortcuts…</div>`;
+
+  window.electronBridge.getShortcuts().then(({ mainKey, miniKey }) => {
+    el.innerHTML = `
+      <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
+        <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+          <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">⌨ Global Shortcuts</div>
+          <div style="font-size:12px;color:var(--mu)"><b>Ctrl + Alt</b> is fixed. Pick the last key for each action (letter or digit).</div>
+        </div>
+        <div style="padding:14px 16px;display:flex;flex-direction:column;gap:16px">
+
+          <!-- Open App -->
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--tx)">Open App</div>
+              <div style="font-size:11px;color:var(--mu);margin-top:2px">Toggle the main Aether Codex window</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:12px;color:var(--tx2);white-space:nowrap">Ctrl + Alt +</span>
+              <input id="shortcut-main-key" type="text" maxlength="1" value="${mainKey}"
+                style="width:42px;text-align:center;text-transform:uppercase;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:7px 6px;font-size:15px;font-weight:700;color:var(--tx);outline:none;letter-spacing:1px"
+                oninput="this.value=this.value.replace(/[^a-zA-Z0-9]/g,'').toUpperCase().slice(-1)"
+                onkeydown="if(event.key==='Enter')saveDesktopShortcut('main')">
+              <button onclick="saveDesktopShortcut('main')"
+                style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
+            </div>
+          </div>
+
+          <div style="height:1px;background:var(--brd)"></div>
+
+          <!-- Quick Clipboard -->
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--tx)">Quick Clipboard</div>
+              <div style="font-size:11px;color:var(--mu);margin-top:2px">Toggle the mini clipboard scratchpad</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:12px;color:var(--tx2);white-space:nowrap">Ctrl + Alt +</span>
+              <input id="shortcut-mini-key" type="text" maxlength="1" value="${miniKey}"
+                style="width:42px;text-align:center;text-transform:uppercase;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:7px 6px;font-size:15px;font-weight:700;color:var(--tx);outline:none;letter-spacing:1px"
+                oninput="this.value=this.value.replace(/[^a-zA-Z0-9]/g,'').toUpperCase().slice(-1)"
+                onkeydown="if(event.key==='Enter')saveDesktopShortcut('mini')">
+              <button onclick="saveDesktopShortcut('mini')"
+                style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
+            </div>
+          </div>
+
+        </div>
+        <div style="padding:10px 16px;border-top:1px solid var(--brd);background:rgba(var(--ac-rgb),.04)">
+          <div style="font-size:11px;color:var(--mu);line-height:1.6">
+            ⚠ Avoid keys claimed by Windows (e.g. <b>Space</b> conflicts with IME). Letters <b>A–Z</b> and digits <b>0–9</b> work reliably. Changes take effect immediately — no restart needed.
+          </div>
+        </div>
+      </div>`;
+  }).catch(() => {
+    el.innerHTML = `<div style="color:#fb7185;font-size:13px;padding:20px 0">Could not load shortcuts from the main process.</div>`;
+  });
+}
+
+async function saveDesktopShortcut(type) {
+  if (!window.electronBridge) return;
+  const key = document.getElementById(type === 'main' ? 'shortcut-main-key' : 'shortcut-mini-key')?.value?.trim().toUpperCase();
+  if (!key) { toast('Please enter a key (A–Z or 0–9)', 'var(--cr)'); return; }
+  const result = await window.electronBridge.setShortcut(type, key);
+  if (result.success) {
+    toast(`✓ Shortcut set: Ctrl+Alt+${key}`, 'var(--cd)');
+    renderSettingsDesktop(document.getElementById('settings-body'));
+  } else {
+    toast(`✗ ${result.error}`, '#fb7185');
+  }
 }
 
 function clearPin() {
