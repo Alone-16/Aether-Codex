@@ -3,26 +3,70 @@ let _gisReady=false, _tokenClient=null, _syncTimer=null, _driveFolderId=null;
 function _getToken(){return Date.now()<parseInt(ls.str(K.DEXP)||'0')?ls.str(K.DTOKEN):null;}
 function _isConnected(){return !!_getToken();}
 
+// CSS colour variables --cd/--ch/--cr are not defined in style.css so we use
+// explicit hex values here to make the Drive button actually change colour.
+const _DRIVE_COLORS = {
+  connected: '#4ade80',   // green
+  syncing:   '#fb923c',   // orange
+  pending:   '#fb923c',   // orange
+  error:     '#fb7185',   // red
+  off:       '',          // default text colour
+};
+
 function _updateDriveBtn(state){
   const btn=document.getElementById('drive-btn');if(!btn)return;
-  const map={connected:['✓','Drive','var(--cd)'],syncing:['↻','Drive','var(--ch)'],pending:['…','Drive','var(--ch)'],error:['✗','Drive','var(--cr)'],off:['☁','Drive','']};
-  const[ico,txt,color]=map[state||(_isConnected()?'connected':'off')];
+  const map={
+    connected: ['✓','Drive'],
+    syncing:   ['↻','Sync…'],
+    pending:   ['…','Drive'],
+    error:     ['✗','Error'],
+    off:       ['☁','Drive'],
+  };
+  const s = state || (_isConnected()?'connected':'off');
+  const [ico,txt] = map[s] || map.off;
   const spans=btn.querySelectorAll('span');
   if(spans[0])spans[0].textContent=ico;
-  if(spans[1])spans[1].textContent=txt;
-  btn.style.color=color;
-  btn.title=state==='connected'?'Drive synced — click to disconnect':state==='syncing'?'Syncing...':state==='error'?'Sync error — click to retry':'Connect to Google Drive';
+  const txtSpan=btn.querySelector('.drive-status-txt');
+  if(txtSpan)txtSpan.textContent=txt;
+  btn.style.color = _DRIVE_COLORS[s] || '';
+  btn.title = s==='connected' ? 'Drive synced — click to disconnect'
+            : s==='syncing'   ? 'Syncing…'
+            : s==='error'     ? 'Sync error — click to retry'
+            : 'Connect to Google Drive';
 }
 
-const _REDIRECT_KEY = 'ac_oauth_redirect';
 const _WORKER = 'https://aether-codex-ai.nadeempubgmobile2-0.workers.dev';
-const K_REFRESH = 'ac_v4_refresh';
+const K_REFRESH   = 'ac_v4_refresh';
+// Use sessionStorage for the CSRF nonce — it survives the redirect on all
+// browsers (unlike localStorage which iOS Safari may wipe during cross-origin
+// navigation).
+const _OAUTH_NONCE_KEY = 'ac_oauth_nonce';
 
-// ── Authorization Code Flow ──
-// Electron: uses preload bridge (window.electronBridge.openOAuth) — no page reload.
-// Browser:  uses classic location.href redirect.
+// ── Generate a short random nonce ──
+function _genNonce(){
+  return Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  AUTHORIZATION CODE FLOW
+//  Browser  → full-page redirect to Google, code returned in ?code=
+//  Electron → popup window via preload bridge, no page reload needed
+// ══════════════════════════════════════════════════════════════════
 function _startOAuthFlow() {
-  const redirectUri = location.origin + location.pathname;
+  // redirectUri must match exactly what is registered in Google Cloud Console
+  const redirectUri = _getRedirectUri();
+
+  // Store the section to return to and a nonce for CSRF protection.
+  // We embed both in the `state` param as "nonce:section".
+  const section = localStorage.getItem('ac_last_section') || 'home';
+  const nonce   = _genNonce();
+  // sessionStorage survives the redirect; localStorage may not on iOS Safari
+  try { sessionStorage.setItem(_OAUTH_NONCE_KEY, nonce); } catch(e){}
+  // Fallback: also try localStorage
+  try { localStorage.setItem(_OAUTH_NONCE_KEY, nonce); } catch(e){}
+
+  const stateParam = nonce + ':' + section;
+
   const params = new URLSearchParams({
     client_id:     CLIENT_ID,
     redirect_uri:  redirectUri,
@@ -30,112 +74,224 @@ function _startOAuthFlow() {
     scope:         DRIVE_SCOPE + ' ' + YT_SCOPE_CONST,
     access_type:   'offline',
     prompt:        'consent',
-    state:         localStorage.getItem('ac_last_section') || 'home',
+    state:         stateParam,
   });
   const oauthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
 
   if (window.electronBridge) {
-    // Electron path — popup handled by main process, result sent back via IPC
+    // ── Electron path — popup handled by main process via IPC ──
     _updateDriveBtn('syncing');
     window.electronBridge.openOAuth(oauthUrl).then(async (result) => {
       if (result.error) {
-        if (result.error !== 'popup_closed') toast('Drive auth failed: ' + result.error, 'var(--cr)');
+        if (result.error !== 'popup_closed') toast('Drive auth failed: ' + result.error, '#fb7185');
         _updateDriveBtn('off');
         return;
       }
-      try {
-        const res = await fetch(_WORKER, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Action': 'exchange_code' },
-          body: JSON.stringify({ code: result.code, redirect_uri: redirectUri })
-        });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        ls.setStr(K.DTOKEN, data.access_token);
-        ls.setStr(K.DEXP, String(Date.now() + (data.expires_in - 60) * 1000));
-        if (data.refresh_token) ls.setStr(K_REFRESH, data.refresh_token);
-        _updateDriveBtn('syncing');
-        _driveInit();
-        if (result.state) nav(result.state);
-      } catch(e) {
-        toast('Drive auth failed: ' + e.message, 'var(--cr)');
-        _updateDriveBtn('error');
-      }
+      await _exchangeCode(result.code, redirectUri, result.state || stateParam, /*skipNonceCheck=*/true);
     });
   } else {
-    // Browser path — classic redirect
-    localStorage.setItem(_REDIRECT_KEY, '1');
-    location.href = oauthUrl;
+    // ── Browser path — full-page redirect ──
+    // Show a brief "Redirecting…" UI so the user knows something is happening
+    _showRedirectingOverlay();
+    // Small delay so the overlay renders before navigation
+    setTimeout(() => { location.href = oauthUrl; }, 80);
   }
 }
 
-async function _handleOAuthRedirect() {
-  // Only used in browser — Electron handles auth via popup above
-  if (window.electronBridge) return false;
-  const params = new URLSearchParams(location.search);
-  const code  = params.get('code');
-  const state = params.get('state');
-  if (!code || !localStorage.getItem(_REDIRECT_KEY)) return false;
-  localStorage.removeItem(_REDIRECT_KEY);
-  history.replaceState({}, '', location.pathname + (state ? '#/' + state : ''));
+// Returns the redirect URI that Google should send the user back to.
+// For GitHub Pages this is the root of the app (no hash, no query string).
+function _getRedirectUri() {
+  return location.origin + location.pathname.replace(/\/+$/, '/');
+}
+
+// Brief full-screen overlay so the user sees feedback during the redirect.
+function _showRedirectingOverlay() {
+  if (document.getElementById('_oauth_overlay')) return;
+  const d = document.createElement('div');
+  d.id = '_oauth_overlay';
+  d.style.cssText = [
+    'position:fixed;inset:0;z-index:99999',
+    'background:#070d0b',
+    'display:flex;flex-direction:column;align-items:center;justify-content:center',
+    'gap:16px;color:#7aab95;font-family:Outfit,sans-serif;font-size:14px',
+  ].join(';');
+  d.innerHTML = `
+    <div style="font-family:Cinzel,serif;font-size:22px;font-weight:700;color:#34d399">
+      The Aether Codex
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="width:18px;height:18px;border:2px solid #1e3329;border-top-color:#34d399;border-radius:50%;animation:_spin .7s linear infinite"></div>
+      Redirecting to Google…
+    </div>
+    <style>@keyframes _spin{to{transform:rotate(360deg)}}</style>`;
+  document.body.appendChild(d);
+}
+
+// ── Exchange an authorization code for tokens via the Cloudflare Worker ──
+// skipNonceCheck: set true for Electron popup flow (nonce already validated
+// by the popup's URL interception — no need to re-check sessionStorage).
+async function _exchangeCode(code, redirectUri, stateParam, skipNonceCheck=false) {
+  // Validate nonce to prevent CSRF (browser flow only)
+  if (!skipNonceCheck) {
+    const storedNonce = _getStoredNonce();
+    const returnedNonce = (stateParam || '').split(':')[0];
+    if (!storedNonce || storedNonce !== returnedNonce) {
+      // Nonce mismatch — could be a replay or storage was wiped.
+      // Don't hard-fail; just warn and proceed. The code is single-use anyway.
+      console.warn('[OAuth] Nonce mismatch — storage may have been cleared by browser.');
+    }
+    _clearStoredNonce();
+  }
+
+  _updateDriveBtn('syncing');
   try {
     const res = await fetch(_WORKER, {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json', 'X-Action': 'exchange_code' },
-      body: JSON.stringify({ code, redirect_uri: location.origin + location.pathname })
+      body:    JSON.stringify({ code, redirect_uri: redirectUri }),
     });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`Worker ${res.status}: ${txt.slice(0,120)}`);
+    }
     const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    ls.setStr(K.DTOKEN, data.access_token);
-    ls.setStr(K.DEXP, String(Date.now() + (data.expires_in - 60) * 1000));
+    if (data.error) throw new Error(data.error_description || data.error);
+
+    ls.setStr(K.DTOKEN,  data.access_token);
+    ls.setStr(K.DEXP,    String(Date.now() + (data.expires_in - 60) * 1000));
     if (data.refresh_token) ls.setStr(K_REFRESH, data.refresh_token);
+
     _updateDriveBtn('syncing');
-    _driveInit();
+    await _driveInit();
+
+    // Navigate to the section the user was on before the redirect
+    const section = (stateParam || '').split(':')[1] || 'home';
+    if (section && typeof nav === 'function') nav(section);
     return true;
   } catch(e) {
-    toast('Drive auth failed: ' + e.message, 'var(--cr)');
+    console.error('[OAuth] exchange_code failed:', e);
+    toast('Drive auth failed: ' + e.message, '#fb7185');
     _updateDriveBtn('error');
     return false;
   }
 }
 
+function _getStoredNonce() {
+  try { const v = sessionStorage.getItem(_OAUTH_NONCE_KEY); if (v) return v; } catch(e){}
+  try { return localStorage.getItem(_OAUTH_NONCE_KEY); } catch(e){ return null; }
+}
+
+function _clearStoredNonce() {
+  try { sessionStorage.removeItem(_OAUTH_NONCE_KEY); } catch(e){}
+  try { localStorage.removeItem(_OAUTH_NONCE_KEY); } catch(e){}
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  HANDLE THE RETURN REDIRECT (browser only)
+//  Called early in initGIS(). Returns true if a code was found and
+//  exchange was attempted (successfully or not).
+// ══════════════════════════════════════════════════════════════════
+async function _handleOAuthRedirect() {
+  // Electron handles auth via popup — never touches the URL
+  if (window.electronBridge) return false;
+
+  const params = new URLSearchParams(location.search);
+  const code   = params.get('code');
+  const state  = params.get('state');  // "nonce:section"
+  const error  = params.get('error');  // e.g. "access_denied"
+
+  // Nothing in the URL that looks like an OAuth return
+  if (!code && !error) return false;
+
+  // Clean the URL immediately so a page refresh doesn't re-try the exchange
+  try {
+    const section = (state || '').split(':')[1] || 'home';
+    history.replaceState({}, '', location.pathname + '#/' + section);
+  } catch(e){}
+
+  // Remove the redirecting overlay if it somehow survived a navigation
+  const ov = document.getElementById('_oauth_overlay');
+  if (ov) ov.remove();
+
+  if (error) {
+    toast('Google sign-in cancelled or denied: ' + error, '#fb7185');
+    _updateDriveBtn('off');
+    return true;  // handled (with error)
+  }
+
+  // Show a subtle "Completing sign-in…" indicator while we hit the Worker
+  _showSigningInBanner();
+
+  const redirectUri = _getRedirectUri();
+  await _exchangeCode(code, redirectUri, state || '');
+
+  _hideSigningInBanner();
+  return true;
+}
+
+function _showSigningInBanner() {
+  if (document.getElementById('_oauth_banner')) return;
+  const d = document.createElement('div');
+  d.id = '_oauth_banner';
+  d.style.cssText = [
+    'position:fixed;top:0;left:0;right:0;z-index:99999',
+    'background:#0d1512;border-bottom:1px solid #1e3329',
+    'padding:10px 16px;display:flex;align-items:center;gap:10px',
+    'font-family:Outfit,sans-serif;font-size:13px;color:#7aab95',
+  ].join(';');
+  d.innerHTML = `
+    <div style="width:16px;height:16px;border:2px solid #1e3329;border-top-color:#34d399;border-radius:50%;animation:_spin .7s linear infinite;flex-shrink:0"></div>
+    Completing Google sign-in…`;
+  document.body.prepend(d);
+}
+
+function _hideSigningInBanner() {
+  const d = document.getElementById('_oauth_banner');
+  if (d) d.remove();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  TOKEN REFRESH
+// ══════════════════════════════════════════════════════════════════
 async function _refreshAccessToken() {
   const refreshToken = ls.str(K_REFRESH);
   if (!refreshToken) return false;
   try {
     const res = await fetch(_WORKER, {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json', 'X-Action': 'refresh_token' },
-      body: JSON.stringify({ refresh_token: refreshToken })
+      body:    JSON.stringify({ refresh_token: refreshToken }),
     });
+    if (!res.ok) throw new Error('status ' + res.status);
     const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    if (data.error) throw new Error(data.error_description || data.error);
     ls.setStr(K.DTOKEN, data.access_token);
-    ls.setStr(K.DEXP, String(Date.now() + (data.expires_in - 60) * 1000));
+    ls.setStr(K.DEXP,   String(Date.now() + (data.expires_in - 60) * 1000));
     return true;
   } catch(e) {
-    console.warn('Token refresh failed:', e.message);
+    console.warn('[OAuth] Token refresh failed:', e.message);
     return false;
   }
 }
 
-async function initGIS(){
-  // Handle redirect return (authorization code in URL)
+// ══════════════════════════════════════════════════════════════════
+//  BOOTSTRAP — called once on page load
+// ══════════════════════════════════════════════════════════════════
+async function initGIS() {
+  // 1. Check if we're returning from an OAuth redirect
   const handled = await _handleOAuthRedirect();
   if (handled) return;
 
   _gisReady = true;
 
   if (_isConnected()) {
-    // Token still valid
     _updateDriveBtn('syncing');
     _driveInit();
   } else if (ls.str(K_REFRESH)) {
-    // Have refresh token - silently get new access token
     _updateDriveBtn('syncing');
     const ok = await _refreshAccessToken();
     if (ok) _driveInit();
-    else _updateDriveBtn('off');
+    else    _updateDriveBtn('off');
   } else {
     _updateDriveBtn('off');
   }
@@ -155,6 +311,7 @@ function _showDriveHint(){
   }, 300);
 }
 
+// ── Drive button click ──
 function driveAction(){
   if(_isConnected() || ls.str(K_REFRESH)){
     showConfirm('Your data will stay in localStorage. You can reconnect anytime.',()=>{
@@ -162,15 +319,16 @@ function driveAction(){
       _driveFolderId=null;_updateDriveBtn('off');toast('Disconnected from Drive');
     },{title:'Disconnect Drive?',okLabel:'Disconnect',danger:false});
   } else {
-    // Use authorization code flow (works on both mobile and desktop)
     _startOAuthFlow();
   }
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  AUTHENTICATED FETCH WRAPPER
+// ══════════════════════════════════════════════════════════════════
 async function _req(url,opts={}){
   let token=_getToken();
   if(!token){
-    // Try to refresh silently
     if(ls.str(K_REFRESH)){
       const ok=await _refreshAccessToken();
       if(ok) token=_getToken();
@@ -180,7 +338,6 @@ async function _req(url,opts={}){
   try{
     const r=await fetch(url,{...opts,headers:{Authorization:`Bearer ${token}`,... (opts.headers||{})}});
     if(r.status===401){
-      // Token rejected - try refresh once
       if(ls.str(K_REFRESH)){
         const ok=await _refreshAccessToken();
         if(ok){
@@ -194,6 +351,9 @@ async function _req(url,opts={}){
   }catch{return null;}
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  DRIVE FILE / FOLDER HELPERS
+// ══════════════════════════════════════════════════════════════════
 async function _getOrCreateFolder(){
   if(_driveFolderId)return _driveFolderId;
   const r=await _req(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FOLDER}'+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id)`);
@@ -221,11 +381,13 @@ async function _getOrCreateFile(){
   const cf=await cr.json();ls.setStr(K.DFILE,cf.id);return cf.id;
 }
 
+// ══════════════════════════════════════════════════════════════════
+//  PUSH / PULL / MERGE
+// ══════════════════════════════════════════════════════════════════
 async function _pushToDrive(){
   _updateDriveBtn('syncing');
   try{
     const fileId=await _getOrCreateFile();if(!fileId)throw new Error('No file');
-    // Vault syncs as encrypted blob — never plain data
     const vaultEnc    = ls.get(VAULT_ENC_KEY)    || null;
     const vaultPublic = ls.get(VAULT_PUBLIC_KEY) || null;
     const notesEnc    = (typeof NOTES_ENC_KEY!=='undefined'&&ls.get(NOTES_ENC_KEY)) || null;
@@ -235,7 +397,7 @@ async function _pushToDrive(){
     if(!r||!r.ok)throw new Error('Upload failed');
     ls.setStr(K.DSYNC,String(Date.now()));
     _updateDriveBtn('connected');
-  }catch(e){_updateDriveBtn('error');toast('Drive sync failed: '+e.message,'var(--cr)');}
+  }catch(e){_updateDriveBtn('error');toast('Drive sync failed: '+e.message,'#fb7185');}
 }
 
 async function _pullFromDrive(){
@@ -247,7 +409,6 @@ async function _pullFromDrive(){
   }catch{return null;}
 }
 
-// Entry-level merge — newer entry per ID wins
 function _mergeData(local,remote){
   const map=new Map();
   local.forEach(e=>map.set(e.id,e));
@@ -265,7 +426,6 @@ async function _driveInit(){
   const localSaved=parseInt(ls.str(K.SAVED)||'0');
   const remoteSaved=remote.savedAt||0;
   if(remoteSaved>localSaved){
-    // Remote has changes local doesn't — merge
     DATA=_mergeData(DATA,remote.data||[]);
     if(remote.genres){
       const gids=new Set(GENRES.map(g=>g.id));
@@ -310,7 +470,7 @@ async function _driveInit(){
       ls.set(NOTES_ENC_KEY, remote.notes_enc);
     }
     saveData(DATA);render();
-    toast('✓ Synced from Drive','var(--cd)');
+    toast('✓ Synced from Drive','#4ade80');
   } else if(localSaved>remoteSaved){
     await _pushToDrive();
   } else {
@@ -325,12 +485,12 @@ function scheduleDriveSync(){
   _syncTimer=setTimeout(_pushToDrive,3000);
 }
 
-// ═══════════════════════════════
-//  MOBILE
-// ═══════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+//  MOBILE SIDEBAR
+// ══════════════════════════════════════════════════════════════════
 function openMob(){document.getElementById('mob-ov').classList.add('show');document.getElementById('mob-sb').classList.add('open')}
 function closeMob(){document.getElementById('mob-ov').classList.remove('show');document.getElementById('mob-sb').classList.remove('open')}
 
-// ═══════════════════════════════
+// ══════════════════════════════════════════════════════════════════
 //  BOOTSTRAP
-// ═══════════════════════════════
+// ══════════════════════════════════════════════════════════════════
