@@ -103,10 +103,12 @@ function _startOAuthFlow() {
   }
 }
 
-// Returns the redirect URI that Google should send the user back to.
-// For GitHub Pages this is the root of the app (no hash, no query string).
+// Returns the redirect URI that Google or MAL should send the user back to.
+// Normalize the path so it matches a registered URI exactly.
 function _getRedirectUri() {
-  return location.origin + location.pathname.replace(/\/+$/, '/');
+  let path = location.pathname.replace(/\/+$|\/index\.html$/g, '');
+  if (!path) path = '/';
+  return location.origin + path;
 }
 
 // Brief full-screen overlay so the user sees feedback during the redirect.
@@ -339,6 +341,9 @@ async function _startMALAuth() {
 
 async function _exchangeMALCode(code, redirectUri, stateParam, skipNonceCheck = false) {
   const codeVerifier = _getMALStoredValue(_MAL_CODE_VERIFIER_KEY);
+  if (!codeVerifier) {
+    throw new Error('MAL PKCE verifier is missing. Please retry the connection flow.');
+  }
   if (!skipNonceCheck) {
     const storedState = _getMALStoredValue(_MAL_OAUTH_NONCE_KEY);
     if (!storedState || storedState !== stateParam) {
@@ -409,7 +414,8 @@ async function _handleMALRedirect() {
   if (!state || !state.startsWith(_MAL_STATE_PREFIX)) return false;
   const redirectUri = _getRedirectUri();
   try {
-    const section = (state || '').split(':')[2] || 'settings';
+    const parts = (state || '').split(':');
+    const section = parts.slice(2).join(':') || 'settings';
     history.replaceState({}, '', location.pathname + '#/' + section);
   } catch (e) {}
   const ov = document.getElementById('_oauth_overlay');
