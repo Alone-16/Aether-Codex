@@ -332,6 +332,7 @@ async function _startMALAuth() {
   const data = await res.json();
   const oauthUrl = data.url;
 
+  console.log('[MAL OAuth] authorize URL', oauthUrl);
   if (window.electronBridge) {
     _showRedirectingOverlay('MyAnimeList');
     window.electronBridge.openOAuth(oauthUrl).then(async (result) => {
