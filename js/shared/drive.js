@@ -106,8 +106,9 @@ function _startOAuthFlow() {
 // Returns the redirect URI that Google or MAL should send the user back to.
 // Normalize the path so it matches a registered URI exactly.
 function _getRedirectUri() {
-  let path = location.pathname.replace(/\/+$|\/index\.html$/g, '');
+  let path = location.pathname.replace(/\/index\.html$/g, '');
   if (!path) path = '/';
+  if (!path.endsWith('/')) path += '/';
   return location.origin + path;
 }
 
