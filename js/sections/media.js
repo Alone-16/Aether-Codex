@@ -774,12 +774,17 @@ function renderLinkedEntries(entry) {
     </div>`;
   if (!linked.length) return header;
 
-  const panelHtml = linked.map(le => {
+  const panelHtml = linked.map((le, idx) => {
     const st = entryStats(le);
     const statusColor = _mediaStatusBar(le.status);
     /* For legacy timeline items, clicking opens the parent; for flat entries, open the linked entry */
     const openId = le.isLegacyTimeline ? le.parentId : le.id;
-    return `<div class="linked-item" onclick="openDetail('${openId}')">
+    return `<div class="linked-item" draggable="true" 
+      ondragstart="linkedDragStart(event,'${entry.id}','${le.id}',${idx})" 
+      ondragover="linkedDragOver(event,${idx})" 
+      ondrop="linkedDrop(event,'${entry.id}',${idx})" 
+      ondragleave="this.classList.remove('drag-over')"
+      onclick="openDetail('${openId}')">
       <div class="linked-main">
         <div class="linked-title">${esc(le.title)}</div>
         <div class="linked-meta">
@@ -799,7 +804,7 @@ function renderLinkedEntries(entry) {
 
   return `<div class="sec-div"><span class="sec-div-lbl">Linked Anime</span><div class="sec-div-line"></div><span class="sec-div-hint">All linked titles for this franchise</span></div>
     ${header}
-    <div class="linked-wrap">${panelHtml}</div>`;
+    <div class="linked-wrap" id="linked-wrap-${entry.id}">${panelHtml}</div>`;
 }
 
 function linkedDragStart(ev, parentId, linkedId, idx) {
