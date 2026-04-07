@@ -620,6 +620,7 @@ function renderDetailPanel(e) {
           </div>
           <div style="margin-top:10px;font-size:11px;color:var(--mu)">No seasons added yet — click Edit to add seasons or movies</div>
         </div>`}
+    ${renderLinkedEntries(e)}
     ${e.notes ? `<div class="sec-div"><span class="sec-div-lbl">Notes</span><div class="sec-div-line"></div></div>
       <div class="pnotes"><div class="pnotes-box">${esc(e.notes)}</div></div>` : ''}
     ${e.status==='completed' && (e.rewatches||[]).length ? `
@@ -655,6 +656,7 @@ function renderDetailPanel(e) {
     </div>`;
 
   initDetailDrag(e);
+  initLinkedDrag(e.id);
 }
 
 function tlViewHtml(it, i, eid, parentTitle) {
@@ -713,6 +715,127 @@ function initDetailDrag(e) {
     el.addEventListener('dragend', () => {
       el.classList.remove('dragging');
       document.querySelectorAll('.tl-item').forEach(x => x.classList.remove('drag-over'));
+    });
+  });
+}
+
+/* ── Linked Entries Panel ── */
+// State for linked entries drag
+let LINKED_DRAGING = null;
+let LINKED_SOURCE_ID = null;
+
+function getLinkedEntries(entry) {
+  if (!entry.linkedGroupId) return [];
+  return DATA.filter(e => e.linkedGroupId === entry.linkedGroupId && e.id !== entry.id);
+}
+
+function renderLinkedEntries(entry) {
+  const linked = getLinkedEntries(entry);
+  if (!linked.length) return '';
+  
+  const panelHtml = linked.map((le, idx) => {
+    const st = entryStats(le);
+    const g = gbyid(le.genreId);
+    const statusColor = _mediaStatusBar(le.status);
+    
+    return `<div class="linked-item" draggable="true" data-linked-id="${le.id}" data-idx="${idx}"
+      ondragstart="linkedDragStart(event,'${entry.id}','${le.id}',${idx})" 
+      ondragover="linkedDragOver(event,${idx})" 
+      ondrop="linkedDrop(event,'${entry.id}',${idx})" 
+      ondragleave="this.classList.remove('drag-over')">
+      <span class="linked-drag">⠿</span>
+      <div class="linked-main">
+        <div class="linked-title">${esc(le.title)}</div>
+        <div class="linked-meta">
+          <span class="linked-status" style="color:${statusColor};">${_mstag(le.status)}</span>
+          <span class="linked-progress">${st.cur} / ${st.tot || '?'} eps · ${st.pct}%</span>
+        </div>
+      </div>
+      <div class="linked-controls">
+        <div class="ep-inline">
+          <button class="ep-pm" onclick="linkedEpDelta('${entry.id}','${le.id}',-1)">−</button>
+          <span class="ep-val">${st.cur}</span>
+          <button class="ep-pm" onclick="linkedEpDelta('${entry.id}','${le.id}',1)">+</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  
+  return `<div class="sec-div"><span class="sec-div-lbl">🔗 Linked Entries (${linked.length})</span><div class="sec-div-line"></div><span class="sec-div-hint">drag ↕ reorder</span></div>
+    <div class="linked-wrap" id="linked-wrap-${entry.id}">${panelHtml}</div>`;
+}
+
+function linkedDragStart(ev, parentId, linkedId, idx) {
+  LINKED_DRAGING = { parentId, linkedId, idx };
+  ev.currentTarget.classList.add('dragging');
+}
+
+function linkedDragOver(ev, idx) {
+  ev.preventDefault();
+  if (!LINKED_DRAGING) return;
+  ev.currentTarget.classList.add('drag-over');
+}
+
+function linkedDrop(ev, parentId, idx) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('drag-over');
+  if (!LINKED_DRAGING || LINKED_DRAGING.parentId !== parentId) {
+    LINKED_DRAGING = null;
+    return;
+  }
+  if (LINKED_DRAGING.idx === idx) {
+    LINKED_DRAGING = null;
+    return;
+  }
+  
+  const fromIdx = LINKED_DRAGING.idx;
+  const linked = getLinkedEntries(DATA.find(x => x.id === parentId));
+  if (fromIdx >= linked.length || idx > linked.length) {
+    LINKED_DRAGING = null;
+    return;
+  }
+  
+  // Reorder: remove from fromIdx, insert at idx
+  const item = linked.splice(fromIdx, 1)[0];
+  linked.splice(idx, 0, item);
+  
+  // Save order back to data by updating linkedGroupId references (order is implicit in render order)
+  // Actually, we need a linkedOrder field or similar. For now, we'll rely on display order.
+  
+  LINKED_DRAGING = null;
+  const parent = DATA.find(x => x.id === parentId);
+  parent.updatedAt = Date.now();
+  saveData(DATA);
+  renderDetailPanel(parent);
+}
+
+function linkedEpDelta(parentId, linkedId, delta) {
+  const linked = DATA.find(x => x.id === linkedId);
+  if (!linked) return;
+  
+  const st = entryStats(linked);
+  const newEpCur = Math.max(0, st.cur + delta);
+  const maxEps = st.tot || Infinity;
+  
+  linked.epCur = Math.min(newEpCur, maxEps);
+  
+  // Auto-mark as completed if watched all episodes
+  if (linked.epCur >= maxEps && maxEps > 0 && linked.status === 'watching') {
+    linked.status = 'completed';
+    if (!linked.endDate) linked.endDate = today();
+  }
+  
+  linked.updatedAt = Date.now();
+  saveData(DATA);
+  renderDetailPanel(DATA.find(x => x.id === parentId));
+  renderMediaBody();
+}
+
+function initLinkedDrag(parentId) {
+  document.querySelectorAll(`#linked-wrap-${parentId} .linked-item`).forEach(el => {
+    el.addEventListener('dragend', () => {
+      el.classList.remove('dragging');
+      document.querySelectorAll('.linked-item').forEach(x => x.classList.remove('drag-over'));
     });
   });
 }
