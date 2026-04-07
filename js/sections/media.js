@@ -1207,7 +1207,7 @@ function _malRenderDropdown(results) {
 }
 
 function _malSelect(rJson) {
-  const r = JSON.parse(JSON.parse(rJson));
+  const r = JSON.parse(rJson);
   const dd = document.getElementById('mal-dropdown');
   if (dd) dd.style.display = 'none';
 
