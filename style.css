@@ -190,7 +190,7 @@ input,select,textarea{font-family:inherit;color:var(--tx)}
 .pnotes-box{background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:9px 11px;font-size:12px;color:var(--tx2);line-height:1.6;font-style:italic}
 
 /* ═══ LINKED ENTRIES ═══ */
-.linked-wrap{padding:0 16px 8px}
+.linked-wrap{padding:0 16px 8px;display:flex;flex-direction:column;gap:0}
 .linked-actions{display:flex;align-items:center;gap:10px;padding:0 16px 12px}
 .linked-hint{font-size:12px;color:var(--mu)}
 .linked-item{display:flex;align-items:center;gap:9px;background:var(--surf2);border:1px solid var(--brd);border-radius:var(--cr);padding:9px 11px;margin-bottom:5px;transition:border-color .15s;cursor:pointer;position:relative}
