@@ -358,11 +358,18 @@ function tlRowHtml(e, it, idx) {
   const pill     = isS
     ? `<span class="m-tl-pill m-tl-s">S${it.num||idx+1}</span>`
     : `<span class="m-tl-pill m-tl-m">🎬</span>`;
+  const pinBadge = e.pinned ? '<span class="m-pin-badge">📌</span>' : '';
 
-  return `<div class="m-card${isA ? ' m-card-active' : ''}" onclick="openDetail('${e.id}')">
+  return `<div class="m-card${isA ? ' m-card-active' : ''}${e.pinned ? ' m-card-pinned' : ''}" onclick="if(_HOLD_FIRED){_HOLD_FIRED=false;return;}openDetail('${e.id}')"
+    onmousedown="startHold('${e.id}',event)"
+    onmouseup="cancelHold()"
+    onmouseleave="cancelHold()"
+    ontouchstart="startHold('${e.id}',event)"
+    ontouchend="cancelHold()"
+    ontouchmove="cancelHold()">
     <div class="m-card-bar" style="background:${col}"></div>
     <div class="m-card-info">
-      <div class="m-card-title" style="display:flex;align-items:center;gap:6px">${pill}${esc(fullName)}</div>
+      <div class="m-card-title" style="display:flex;align-items:center;gap:6px">${pinBadge}${pill}${esc(fullName)}</div>
       <div class="m-card-meta">${_mstag(st)}</div>
     </div>
     <div class="m-card-r">
