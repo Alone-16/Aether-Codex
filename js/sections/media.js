@@ -733,7 +733,11 @@ let PENDING_LINKED_GROUP_ORDER = null;
 let PENDING_LINKED_GROUP_LABEL = null;
 
 function getLinkedEntries(entry) {
-  return getLinkedGroup(entry).filter(x => x.id !== entry.id);
+  if (!entry || !entry.linkedGroupId) return [];
+  return DATA
+    .filter(x => x.linkedGroupId === entry.linkedGroupId)
+    .sort((a, b) => (a.linkedGroupOrder ?? 0) - (b.linkedGroupOrder ?? 0))
+    .filter(x => x.id !== entry.id);
 }
 
 function renderLinkedEntries(entry) {
