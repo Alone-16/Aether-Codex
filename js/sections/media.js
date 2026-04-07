@@ -865,15 +865,19 @@ function linkedEpDelta(parentId, linkedId, delta) {
   const parent = DATA.find(x => x.id === parentId);
   if (!parent) return;
 
-  /* ── Check if this is a legacy timeline item ── */
-  if (linkedId.includes('-tl-')) {
+  const timeline = parent.timeline || [];
+  let it = timeline.find(item => item.id === linkedId);
+
+  if (!it && linkedId.includes('-tl-')) {
     /* Parse: `${parentId}-tl-${idx}` */
     const match = linkedId.match(/-tl-(\d+)$/);
-    if (!match) return;
-    const tlIdx = parseInt(match[1], 10);
-    const it = parent.timeline?.[tlIdx];
-    if (!it) return;
+    if (match) {
+      const tlIdx = parseInt(match[1], 10);
+      it = parent.timeline?.[tlIdx];
+    }
+  }
 
+  if (it) {
     const w = parseInt(it.epWatched || 0);
     const t = parseInt(it.eps || 0);
     const newW = Math.max(0, w + delta);
