@@ -27,6 +27,20 @@ let SEARCH='', PANEL=null, PEDIT=null;
 let FORM_TL=[], COLLAPSED={};
 let DDRG=null, FDRG=null;
 
+// ── Post-load schema normalisation ───────────────────────────────────────
+// Ensure every in-memory entry carries the three v1 fields, even on devices
+// that already ran the migration but loaded a Drive file from an older device.
+(function _ensureV1Fields() {
+  let dirty = false;
+  for (let i = 0; i < DATA.length; i++) {
+    const e = DATA[i];
+    if (e.malId            === undefined) { e.malId            = null; dirty = true; }
+    if (e.linkedGroupId    === undefined) { e.linkedGroupId    = null; dirty = true; }
+    if (e.linkedGroupOrder === undefined) { e.linkedGroupOrder = null; dirty = true; }
+  }
+  if (dirty) ls.set(K.DATA, DATA); // silent local write, no Drive push
+})();
+
 // ═══════════════════════════════
 //  UTILS
 // ═══════════════════════════════

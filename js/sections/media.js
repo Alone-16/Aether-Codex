@@ -223,21 +223,38 @@ function toggleColl(s) {
   renderMediaBody();
 }
 
-/* ── entry stats (unchanged logic) ── */
+/**
+ * entryStats(e)
+ * Works with BOTH the legacy timeline shape and the new flat-entry shape.
+ * After migration completes, timeline is always absent.
+ */
 function entryStats(e) {
-  const tl  = e.timeline || [];
   const dur = parseInt(e.epDuration) || 24;
-  if (!tl.length) {
-    const cur = parseInt(e.epCur || 0), tot = parseInt(e.epTot || 0);
-    const pct = tot ? Math.round(cur/tot*100) : (cur > 0 ? 100 : 0);
-    return { cur, tot, pct, time: estTime(tot || cur, dur) };
+
+  /* ── Legacy path: entry still has a timeline (pre-migration or mid-boot) ── */
+  const tl = e.timeline || [];
+  if (tl.length) {
+    let cur = 0, tot = 0;
+    tl.forEach(it => {
+      if (it.type === 'season') {
+        cur += parseInt(it.epWatched || 0);
+        tot += parseInt(it.eps || 0);
+      } else if (it.type === 'movie' && it.watched) {
+        cur++; tot++;
+      }
+    });
+    return {
+      cur, tot,
+      pct:  tot ? Math.round(cur / tot * 100) : 0,
+      time: estTime(tot, dur),
+    };
   }
-  let cur = 0, tot = 0;
-  tl.forEach(it => {
-    if (it.type === 'season') { cur += parseInt(it.epWatched || 0); tot += parseInt(it.eps || 0); }
-    else if (it.type === 'movie' && it.watched) { cur++; tot++; }
-  });
-  return { cur, tot, pct: tot ? Math.round(cur/tot*100) : 0, time: estTime(tot, dur) };
+
+  /* ── New flat path ── */
+  const cur = parseInt(e.epCur || 0);
+  const tot = parseInt(e.epTot || 0);
+  const pct = tot ? Math.round(cur / tot * 100) : (cur > 0 ? 100 : 0);
+  return { cur, tot, pct, time: estTime(tot || cur, dur) };
 }
 
 function activeSeason(e) {

@@ -520,6 +520,22 @@ function closeMob(){document.getElementById('mob-ov').classList.remove('show');d
 //  The _gisInitDone guard means calling initGIS() from js/main.js as
 //  well is safe — the second call is a no-op.
 // ══════════════════════════════════════════════════════════════════
-window.addEventListener('load', function _driveBootstrap() {
-  initGIS().catch(function(e){ console.error('[Drive] initGIS error:', e); });
+window.addEventListener('load', async function _driveBootstrap() {
+  // ── NEW: run schema migration first, before any render ──
+  try {
+    const result = await runMigrationV1();
+    if (result.ran) {
+      toast(
+        `✓ Schema updated: ${result.entriesAfter} flat entries ` +
+        `(${result.groups} group${result.groups !== 1 ? 's' : ''} expanded)`,
+        '#34d399'
+      );
+      render(); // re-render with the new flat DATA
+    }
+  } catch (e) {
+    console.error('[Migration V1] Fatal error:', e);
+  }
+
+  // ── existing Drive boot ──
+  initGIS().catch(function(e) { console.error('[Drive] initGIS error:', e); });
 });
