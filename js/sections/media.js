@@ -1262,7 +1262,11 @@ async function _syncMALListEntry(entry) {
   }
   if (data.refresh_token) SETTINGS.malRefreshToken = data.refresh_token;
   saveSettings(SETTINGS);
-  if (data.updated) toast('✓ MAL list updated', 'var(--cd)');
+  if (data.updated) {
+    ls.setStr('ac_mal_last_sync', String(Date.now()));
+    ls.setStr('ac_mal_last_sync_title', entry.title || '');
+    toast('✓ MAL synced: ' + (entry.title || 'entry updated'), '#00e5ff');
+  }
 }
 
 function askDel(id) {

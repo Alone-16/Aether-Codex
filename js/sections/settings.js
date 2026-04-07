@@ -480,6 +480,7 @@ function renderSettingsSecurity(el) {
       <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
         <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">MyAnimeList Connection</div>
         <div style="font-size:12px;color:var(--mu)">${malStatus}</div>
+        ${ls.str('ac_mal_last_sync') ? `<div style="font-size:11px;color:#00e5ff;margin-top:2px">✓ Last synced: ${new Date(parseInt(ls.str('ac_mal_last_sync'))).toLocaleString()}${ls.str('ac_mal_last_sync_title') ? ' · ' + ls.str('ac_mal_last_sync_title') : ''}</div>` : ''}
       </div>
       <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
         <div style="flex:1;min-width:0">
