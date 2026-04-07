@@ -569,7 +569,7 @@ function openAdd()      { openPanel('add',    null); }
 function openAddLinkedEntry(parentId) {
   const parent = DATA.find(x => x.id === parentId); if (!parent) return;
   const groupId = parent.linkedGroupId || parent.id;
-  const group = getLinkedGroup(parent);
+  const group = DATA.filter(x => x.linkedGroupId === groupId || x.id === groupId);
   PENDING_LINKED_GROUP_ID = groupId;
   PENDING_LINKED_GROUP_ORDER = group.length;
   PENDING_LINKED_GROUP_LABEL = parent.title;
