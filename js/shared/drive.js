@@ -310,12 +310,12 @@ function _generatePKCEVerifier() {
 
 async function _startMALAuth() {
   const redirectUri = _getRedirectUri();
-  toast(`MAL redirect URI: ${redirectUri}`, '#60a5fa');
   const section = localStorage.getItem('ac_last_section') || 'settings';
   const nonce = _genNonce();
   const state = _MAL_STATE_PREFIX + nonce + ':' + section;
   const codeVerifier = _generatePKCEVerifier();
-  const codeChallenge = await _sha256(codeVerifier);
+  // Use plain method: challenge === verifier — avoids SHA-256 mismatch issues with MAL
+  const codeChallenge = codeVerifier;
   _setMALStoredValue(_MAL_OAUTH_NONCE_KEY, state);
   _setMALStoredValue(_MAL_CODE_VERIFIER_KEY, codeVerifier);
   _setMALStoredValue(_MAL_REDIRECT_URI_KEY, redirectUri);
@@ -364,8 +364,6 @@ async function _exchangeMALCode(code, redirectUri, stateParam, skipNonceCheck = 
   _showSigningInBanner();
   try {
     const payload = { code, code_verifier: codeVerifier, redirect_uri: redirectUri };
-    console.log('[MAL OAuth] exchange payload', payload);
-    toast(`MAL worker payload: ${JSON.stringify(payload)}`, '#60a5fa');
     const res = await fetch(_WORKER, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Action': 'mal_exchange_code' },
