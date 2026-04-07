@@ -737,6 +737,24 @@ function renderFormPanel(e) {
       <button class="ph-close" onclick="closePanel()">✕</button>
     </div>
     <div class="form-wrap">
+      <!-- ── MAL Search ── -->
+      <div id="mal-search-wrap" style="position:relative;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--brd)">
+        <label class="flbl" style="display:flex;align-items:center;gap:5px;margin-bottom:5px">
+          <span style="font-size:9px;background:rgba(0,229,255,.12);color:#00e5ff;border:1px solid rgba(0,229,255,.25);border-radius:3px;padding:1px 5px;font-weight:800;letter-spacing:.5px">MAL</span>
+          Search MyAnimeList to autofill
+        </label>
+        <input class="fin" id="mal-search-inp" placeholder="Search anime title…"
+          autocomplete="off" oninput="malSearchInput(this.value)">
+        <div id="mal-dropdown" style="display:none;position:absolute;left:0;right:0;top:calc(100% - 2px);background:var(--surf);border:1px solid var(--brd2);border-radius:0 0 7px 7px;z-index:900;max-height:260px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
+        <!-- Cover preview + hidden fields -->
+        <div id="mal-cover-wrap" style="display:none;margin-top:10px;display:flex;align-items:center;gap:10px">
+          <img id="mal-cover-img" style="width:48px;height:68px;object-fit:cover;border-radius:4px;border:1px solid var(--brd)" onerror="this.style.display='none'">
+          <div style="font-size:11px;color:var(--mu)">Cover from MAL — all fields below are editable</div>
+        </div>
+        <input type="hidden" id="f-malid"  value="${esc(e?.malId || '')}">
+        <input type="hidden" id="f-malimg" value="${esc(e?.coverImage || '')}">
+      </div>
+      <!-- ── End MAL Search ── -->
       <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--mu);margin-bottom:9px;padding-bottom:5px;border-bottom:1px solid var(--brd)">Franchise / Series</div>
       <div class="fg">
         <label class="flbl">Title *</label>
@@ -795,6 +813,10 @@ function renderFormPanel(e) {
       <button class="btn-cancel" onclick="closePanel()">Cancel</button>
       <button class="btn-save" onclick="saveEntry('${e?e.id:''}')">Save</button>
     </div>`;
+
+  requestAnimationFrame(() => {
+    _malUpdateCoverPreview(e?.coverImage || '');
+  });
 }
 
 function tlFormHtml(it, i) {
@@ -919,6 +941,8 @@ function saveEntry(eid) {
     upcomingDate:existing?.upcomingDate||null, upcomingTime:existing?.upcomingTime||null,
     notes:g('f-notes'),
     watchUrl:document.getElementById('f-url')?.value?.trim()||null,
+    malId:document.getElementById('f-malid')?.value || existing?.malId || null,
+    coverImage:document.getElementById('f-malimg')?.value || existing?.coverImage || null,
     timeline:tl,
     addedAt:existing?existing.addedAt:Date.now(), updatedAt:Date.now(),
   };
@@ -1104,4 +1128,134 @@ function renderSectionStub(id, c) {
       <div style="font-size:36px;opacity:.3;margin-bottom:12px">${m.icon}</div>
       <p style="font-size:14px">Full section coming in Phase ${m.phase}</p>
     </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+//  MAL SEARCH — add/edit form helpers
+// ═══════════════════════════════════════════════════════
+
+let _malSearchTimer = null;
+
+function malSearchInput(q) {
+  clearTimeout(_malSearchTimer);
+  const dd = document.getElementById('mal-dropdown');
+  if (!q || q.length < 2) { if (dd) dd.style.display = 'none'; return; }
+  if (dd) {
+    dd.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--mu)">Searching…</div>';
+    dd.style.display = 'block';
+  }
+  _malSearchTimer = setTimeout(() => _malDoSearch(q), 400);
+}
+
+async function _malDoSearch(q) {
+  const dd = document.getElementById('mal-dropdown');
+  if (!dd) return;
+  try {
+    const res  = await fetch(
+      `https://aether-codex-ai.nadeempubgmobile2-0.workers.dev/mal/search?q=${encodeURIComponent(q)}`
+    );
+    const data = await res.json();
+    if (data.error) throw new Error(data.error_description || data.error);
+    _malRenderDropdown(data.results || []);
+  } catch(e) {
+    dd.innerHTML = `<div style="padding:10px 12px;font-size:12px;color:#fb7185">⚠ ${esc(e.message)}</div>`;
+  }
+}
+
+function _malRenderDropdown(results) {
+  const dd = document.getElementById('mal-dropdown');
+  if (!dd) return;
+  if (!results.length) {
+    dd.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--mu)">No results found</div>';
+    dd.style.display = 'block';
+    return;
+  }
+  dd.innerHTML = results.map(r => {
+    const eps    = r.episodes   ? `${r.episodes} ep`                  : '';
+    const score  = r.score      ? `★ ${r.score}`                      : '';
+    const type   = r.media_type ? r.media_type.replace(/_/g, ' ')     : '';
+    const meta   = [type, eps, score].filter(Boolean).join(' · ');
+    const thumb  = r.image
+      ? `<img src="${esc(r.image)}" style="width:32px;height:44px;object-fit:cover;border-radius:3px;flex-shrink:0" onerror="this.style.display='none'">`
+      : `<div style="width:32px;height:44px;background:var(--surf3);border-radius:3px;flex-shrink:0"></div>`;
+    // Double-stringify so the string survives the onclick attribute
+    const payload = esc(JSON.stringify(JSON.stringify(r)));
+    return `<div style="display:flex;align-items:center;gap:9px;padding:8px 11px;cursor:pointer;border-bottom:1px solid var(--brd);transition:background .1s"
+      onmouseenter="this.style.background='var(--surf3)'"
+      onmouseleave="this.style.background='transparent'"
+      onclick="_malSelect('${payload}')">
+      ${thumb}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.title)}</div>
+        ${meta ? `<div style="font-size:10px;color:var(--mu);margin-top:2px">${esc(meta)}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  dd.style.display = 'block';
+
+  // Close dropdown on outside click
+  setTimeout(() => {
+    const close = ev => {
+      if (!ev.target.closest('#mal-search-wrap')) {
+        const d = document.getElementById('mal-dropdown');
+        if (d) d.style.display = 'none';
+        document.removeEventListener('click', close);
+      }
+    };
+    document.addEventListener('click', close);
+  }, 10);
+}
+
+function _malSelect(rJson) {
+  const r = JSON.parse(JSON.parse(rJson));
+  const dd = document.getElementById('mal-dropdown');
+  if (dd) dd.style.display = 'none';
+
+  // Search field label
+  const searchInp = document.getElementById('mal-search-inp');
+  if (searchInp) searchInp.value = r.title;
+
+  // Title
+  const titleEl = document.getElementById('f-title');
+  if (titleEl) titleEl.value = r.title;
+
+  // MAL ID
+  const malIdEl = document.getElementById('f-malid');
+  if (malIdEl) malIdEl.value = String(r.id || '');
+
+  // Cover image
+  const imgEl = document.getElementById('f-malimg');
+  if (imgEl) imgEl.value = r.image || '';
+  _malUpdateCoverPreview(r.image || '');
+
+  // Synopsis → notes (only if notes currently empty)
+  const notesEl = document.getElementById('f-notes');
+  if (notesEl && !notesEl.value && r.synopsis) notesEl.value = r.synopsis;
+
+  // Episode count → first season's eps field (if empty)
+  if (r.episodes) {
+    const firstEps = document.querySelector('#ftl-list .ftl-item [data-fi="eps"]');
+    if (firstEps && !firstEps.value) firstEps.value = String(r.episodes);
+  }
+
+  // Airing status
+  const statusEl = document.getElementById('f-status');
+  if (statusEl && r.status) {
+    const map = {
+      currently_airing: 'watching',
+      finished_airing:  'completed',
+      not_yet_aired:    'upcoming',
+    };
+    if (map[r.status]) statusEl.value = map[r.status];
+  }
+
+  toast(`✓ Autofilled: ${r.title}`);
+}
+
+function _malUpdateCoverPreview(url) {
+  const wrap = document.getElementById('mal-cover-wrap');
+  const img  = document.getElementById('mal-cover-img');
+  if (!wrap || !img) return;
+  if (url) { img.src = url; wrap.style.display = 'block'; }
+  else       wrap.style.display = 'none';
 }
