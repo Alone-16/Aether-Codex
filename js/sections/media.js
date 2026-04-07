@@ -566,6 +566,15 @@ function closePanel() {
 function openDetail(id) { openPanel('detail', id); }
 function openEdit(id)   { openPanel('edit',   id); }
 function openAdd()      { openPanel('add',    null); }
+function openAddLinkedEntry(parentId) {
+  const parent = DATA.find(x => x.id === parentId); if (!parent) return;
+  const groupId = parent.linkedGroupId || parent.id;
+  const group = getLinkedGroup(parent);
+  PENDING_LINKED_GROUP_ID = groupId;
+  PENDING_LINKED_GROUP_ORDER = group.length;
+  PENDING_LINKED_GROUP_LABEL = parent.title;
+  openPanel('add', null);
+}
 
 /* ── Detail Panel ── */
 function renderDetailPanel(e) {
@@ -595,31 +604,27 @@ function renderDetailPanel(e) {
       ${e.startDate ? `<span>Started: <b>${fmtDate(e.startDate)}</b></span>` : ''}
       ${e.endDate   ? `<span>Finished: <b>${fmtDate(e.endDate)}</b></span>` : ''}
     </div>` : ''}
-    ${tl.length
-      ? `<div class="sec-div"><span class="sec-div-lbl">Timeline</span><div class="sec-div-line"></div><span class="sec-div-hint">drag ↕ reorder</span></div>
-         <div class="tl-wrap" id="dtl-wrap">${tl.map((it,i) => tlViewHtml(it,i,e.id,e.title)).join('')}</div>`
-      : `<div style="padding:12px 16px;border-bottom:1px solid var(--brd)">
-          <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu);margin-bottom:10px">Details</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
-            <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:9px 11px">
-              <div style="color:var(--mu);font-size:10px;margin-bottom:3px">EPISODES</div>
-              <div style="font-weight:600;color:var(--tx)">${e.epCur||0}${e.epTot?' / '+e.epTot:' watched'}</div>
-            </div>
-            <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:9px 11px">
-              <div style="color:var(--mu);font-size:10px;margin-bottom:3px">DURATION</div>
-              <div style="font-weight:600;color:var(--tx)">${e.epDuration||24} min / ep</div>
-            </div>
-            ${e.rating ? `<div style="background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:9px 11px">
-              <div style="color:var(--mu);font-size:10px;margin-bottom:3px">RATING</div>
-              <div style="font-weight:600;color:#fbbf24">★ ${e.rating} / 10</div>
-            </div>` : ''}
-            ${e.airingDay!=null ? `<div style="background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:9px 11px;grid-column:span 2">
-              <div style="color:var(--mu);font-size:10px;margin-bottom:3px">AIRING</div>
-              <div style="font-weight:600;color:var(--ac)">📺 ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][e.airingDay]}${e.airingTime?' at '+e.airingTime:''}</div>
-            </div>` : ''}
-          </div>
-          <div style="margin-top:10px;font-size:11px;color:var(--mu)">No seasons added yet — click Edit to add seasons or movies</div>
-        </div>`}
+    <div style="padding:12px 16px;border-bottom:1px solid var(--brd)">
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu);margin-bottom:10px">Details</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:9px 11px">
+          <div style="color:var(--mu);font-size:10px;margin-bottom:3px">EPISODES</div>
+          <div style="font-weight:600;color:var(--tx)">${e.epCur||0}${e.epTot?' / '+e.epTot:' watched'}</div>
+        </div>
+        <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:9px 11px">
+          <div style="color:var(--mu);font-size:10px;margin-bottom:3px">DURATION</div>
+          <div style="font-weight:600;color:var(--tx)">${e.epDuration||24} min / ep</div>
+        </div>
+        ${e.rating ? `<div style="background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:9px 11px">
+          <div style="color:var(--mu);font-size:10px;margin-bottom:3px">RATING</div>
+          <div style="font-weight:600;color:#fbbf24">★ ${e.rating} / 10</div>
+        </div>` : ''}
+        ${e.airingDay!=null ? `<div style="background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:9px 11px;grid-column:span 2">
+          <div style="color:var(--mu);font-size:10px;margin-bottom:3px">AIRING</div>
+          <div style="font-weight:600;color:var(--ac)">📺 ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][e.airingDay]}${e.airingTime?' at '+e.airingTime:''}</div>
+        </div>` : ''}
+      </div>
+    </div>
     ${renderLinkedEntries(e)}
     ${e.notes ? `<div class="sec-div"><span class="sec-div-lbl">Notes</span><div class="sec-div-line"></div></div>
       <div class="pnotes"><div class="pnotes-box">${esc(e.notes)}</div></div>` : ''}
@@ -723,27 +728,27 @@ function initDetailDrag(e) {
 // State for linked entries drag
 let LINKED_DRAGING = null;
 let LINKED_SOURCE_ID = null;
+let PENDING_LINKED_GROUP_ID = null;
+let PENDING_LINKED_GROUP_ORDER = null;
+let PENDING_LINKED_GROUP_LABEL = null;
 
 function getLinkedEntries(entry) {
-  if (!entry.linkedGroupId) return [];
-  return DATA.filter(e => e.linkedGroupId === entry.linkedGroupId && e.id !== entry.id);
+  return getLinkedGroup(entry).filter(x => x.id !== entry.id);
 }
 
 function renderLinkedEntries(entry) {
+  if (!entry) return '';
   const linked = getLinkedEntries(entry);
-  if (!linked.length) return '';
-  
-  const panelHtml = linked.map((le, idx) => {
+  const header = `<div class="linked-actions">
+      <button class="btn-add-linked" onclick="openAddLinkedEntry('${entry.id}')">+ Add Linked Anime</button>
+      ${linked.length ? `<span class="linked-hint">${linked.length} linked ${linked.length === 1 ? 'title' : 'titles'}</span>` : ''}
+    </div>`;
+  if (!linked.length) return header;
+
+  const panelHtml = linked.map(le => {
     const st = entryStats(le);
-    const g = gbyid(le.genreId);
     const statusColor = _mediaStatusBar(le.status);
-    
-    return `<div class="linked-item" draggable="true" data-linked-id="${le.id}" data-idx="${idx}"
-      ondragstart="linkedDragStart(event,'${entry.id}','${le.id}',${idx})" 
-      ondragover="linkedDragOver(event,${idx})" 
-      ondrop="linkedDrop(event,'${entry.id}',${idx})" 
-      ondragleave="this.classList.remove('drag-over')">
-      <span class="linked-drag">⠿</span>
+    return `<div class="linked-item" onclick="openDetail('${le.id}')">
       <div class="linked-main">
         <div class="linked-title">${esc(le.title)}</div>
         <div class="linked-meta">
@@ -753,16 +758,17 @@ function renderLinkedEntries(entry) {
       </div>
       <div class="linked-controls">
         <div class="ep-inline">
-          <button class="ep-pm" onclick="linkedEpDelta('${entry.id}','${le.id}',-1)">−</button>
+          <button class="ep-pm" onclick="event.stopPropagation(); linkedEpDelta('${entry.id}','${le.id}',-1)">−</button>
           <span class="ep-val">${st.cur}</span>
-          <button class="ep-pm" onclick="linkedEpDelta('${entry.id}','${le.id}',1)">+</button>
+          <button class="ep-pm" onclick="event.stopPropagation(); linkedEpDelta('${entry.id}','${le.id}',1)">+</button>
         </div>
       </div>
     </div>`;
   }).join('');
-  
-  return `<div class="sec-div"><span class="sec-div-lbl">🔗 Linked Entries (${linked.length})</span><div class="sec-div-line"></div><span class="sec-div-hint">drag ↕ reorder</span></div>
-    <div class="linked-wrap" id="linked-wrap-${entry.id}">${panelHtml}</div>`;
+
+  return `<div class="sec-div"><span class="sec-div-lbl">Linked Anime</span><div class="sec-div-line"></div><span class="sec-div-hint">All linked titles for this franchise</span></div>
+    ${header}
+    <div class="linked-wrap">${panelHtml}</div>`;
 }
 
 function linkedDragStart(ev, parentId, linkedId, idx) {
@@ -843,16 +849,19 @@ function initLinkedDrag(parentId) {
 /* ── Form Panel ── */
 function renderFormPanel(e) {
   const isEdit = !!e;
-  if (e) {
-    FORM_TL = JSON.parse(JSON.stringify(e.timeline || []));
-  } else {
-    FORM_TL = [{ id:uid(), type:'season', num:1, name:'Season 1', status:'not_started',
-                 eps:null, epWatched:null, startDate:null, endDate:null, rating:null,
-                 epDuration:null, upcomingDate:null, upcomingTime:null }];
-  }
+  const pendingGroupId = !e ? PENDING_LINKED_GROUP_ID : null;
+  const pendingGroupOrder = !e ? PENDING_LINKED_GROUP_ORDER : null;
+  const pendingGroupLabel = !e ? PENDING_LINKED_GROUP_LABEL : null;
   const gOpts = GENRES.map(g => `<option value="${g.id}" ${(e?e.genreId:GACTIVE)===g.id?'selected':''}>${esc(g.name)}</option>`).join('');
   const status = e ? e.status : 'not_started';
   const airingDays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const linkedGroupId = e?.linkedGroupId || pendingGroupId || '';
+  const linkedGroupOrder = e?.linkedGroupOrder ?? pendingGroupOrder ?? '';
+  if (!e) {
+    PENDING_LINKED_GROUP_ID = null;
+    PENDING_LINKED_GROUP_ORDER = null;
+    PENDING_LINKED_GROUP_LABEL = null;
+  }
 
   document.getElementById('panel-inner').innerHTML = `
     <div class="ph">
@@ -924,12 +933,9 @@ function renderFormPanel(e) {
       <div class="fg"><label class="flbl">Watch URL</label>
         <input class="fin" id="f-url" type="url" placeholder="https://..." value="${esc(e?e.watchUrl||'':'')}">
       </div>
-      <div class="f-sec">Seasons &amp; Movies</div>
-      <div id="ftl-list">${FORM_TL.map((it,i) => tlFormHtml(it,i)).join('')}</div>
-      <div class="ftl-add-row">
-        <button class="ftl-add" onclick="addTlSeason()">+ Add Season</button>
-        <button class="ftl-add" onclick="addTlMovie()">+ Add Movie</button>
-      </div>
+      <input type="hidden" id="f-linked-group" value="${esc(linkedGroupId)}">
+      <input type="hidden" id="f-linked-order" value="${linkedGroupOrder}">
+      ${pendingGroupLabel ? `<div style="padding:10px 12px;margin:10px 16px 0;background:rgba(var(--ac-rgb),.08);border:1px solid rgba(var(--ac-rgb),.18);border-radius:6px;font-size:12px;color:var(--tx2)">Linking to <strong>${esc(pendingGroupLabel)}</strong></div>` : ''}
     </div>
     <div class="panel-actions">
       ${isEdit ? `<button class="btn-del" onclick="askDel('${e.id}')">Delete</button>` : ''}
@@ -1045,10 +1051,14 @@ function saveEntry(eid) {
   const title = document.getElementById('f-title').value.trim();
   if (!title) { showAlert('Please enter a title',{title:'Missing Title'}); return; }
   const existing = eid ? DATA.find(x=>x.id===eid) : null;
-  const tl = collectFormTl();
   const g  = f => { const el=document.getElementById(f); return el?el.value||null:null; };
   const airingDayEl = document.getElementById('f-airingday');
   const airingDay   = airingDayEl?.value !== '' ? parseInt(airingDayEl.value) : null;
+  const linkedGroupId = document.getElementById('f-linked-group')?.value || existing?.linkedGroupId || null;
+  const linkedGroupOrderRaw = document.getElementById('f-linked-order')?.value;
+  const linkedGroupOrder = linkedGroupOrderRaw !== null && linkedGroupOrderRaw !== ''
+    ? parseInt(linkedGroupOrderRaw)
+    : existing?.linkedGroupOrder ?? null;
   const entry = {
     id:eid||uid(), title,
     genreId:g('f-genre'), status:g('f-status'),
@@ -1066,10 +1076,12 @@ function saveEntry(eid) {
     watchUrl:document.getElementById('f-url')?.value?.trim()||null,
     malId:document.getElementById('f-malid')?.value || existing?.malId || null,
     coverImage:document.getElementById('f-malimg')?.value || existing?.coverImage || null,
-    timeline:tl,
+    linkedGroupId,
+    linkedGroupOrder,
+    timeline: existing?.timeline || [],
     addedAt:existing?existing.addedAt:Date.now(), updatedAt:Date.now(),
   };
-  if (entry.status==='completed'&&!entry.endDate&&!tl.length) entry.endDate=today();
+  if (entry.status==='completed'&&!entry.endDate) entry.endDate=today();
   if (eid) { const i=DATA.findIndex(x=>x.id===eid); DATA[i]=entry; } else DATA.unshift(entry);
   saveData(DATA); closePanel(); render(); toast('✓ Saved');
 }
