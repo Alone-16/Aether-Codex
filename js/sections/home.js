@@ -242,8 +242,8 @@ function renderUpcomingWidget(){
   const now=new Date(); now.setHours(0,0,0,0);
   const items=[];
   DATA.forEach(e=>{
-    if(e.upcomingDate)items.push({title:e.title,date:e.upcomingDate,label:'New Release'});
-    (e.timeline||[]).forEach(it=>{if(it.upcomingDate)items.push({title:e.title,date:it.upcomingDate,label:it.name||'New Season'})});
+    if(e.upcomingDate && e.status === 'upcoming')items.push({title:e.title,date:e.upcomingDate,label:'New Release'});
+    (e.timeline||[]).forEach(it=>{if(it.upcomingDate && it.status === 'upcoming')items.push({title:e.title,date:it.upcomingDate,label:it.name||'New Season'})});
   });
   items.sort((a,b)=>new Date(a.date)-new Date(b.date));
   const rows=items.slice(0,5).map(it=>{

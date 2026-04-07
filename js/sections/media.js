@@ -483,9 +483,9 @@ function renderUpcoming(c) {
   const now = new Date(); now.setHours(0,0,0,0);
   const items = [];
   DATA.filter(e => e.genreId === GACTIVE).forEach(e => {
-    if (e.upcomingDate) items.push({ id:e.id, title:e.title, date:e.upcomingDate, time:e.upcomingTime||null, label:'New Release' });
+    if (e.upcomingDate && e.status === 'upcoming') items.push({ id:e.id, title:e.title, date:e.upcomingDate, time:e.upcomingTime||null, label:'New Release' });
     (e.timeline||[]).forEach(it => {
-      if (it.upcomingDate) items.push({ id:e.id, title:e.title, date:it.upcomingDate, time:it.upcomingTime||null, label:it.name||'New Season' });
+      if (it.upcomingDate && it.status === 'upcoming') items.push({ id:e.id, title:e.title, date:it.upcomingDate, time:it.upcomingTime||null, label:it.name||'New Season' });
     });
   });
   items.sort((a,b) => new Date(a.date)-new Date(b.date));
