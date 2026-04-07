@@ -41,6 +41,7 @@ const _WORKER = 'https://aether-codex-ai.nadeempubgmobile2-0.workers.dev';
 const K_REFRESH   = 'ac_v4_refresh';
 const _MAL_OAUTH_NONCE_KEY = 'ac_mal_oauth_nonce';
 const _MAL_CODE_VERIFIER_KEY = 'ac_mal_code_verifier';
+const _MAL_REDIRECT_URI_KEY = 'ac_mal_redirect_uri';
 const _MAL_STATE_PREFIX = 'mal:';
 // Use sessionStorage for the CSRF nonce — it survives the redirect on all
 // browsers (unlike localStorage which iOS Safari may wipe during cross-origin
@@ -285,6 +286,8 @@ function _clearMALStoredValues() {
   try { localStorage.removeItem(_MAL_OAUTH_NONCE_KEY); } catch (e) {}
   try { sessionStorage.removeItem(_MAL_CODE_VERIFIER_KEY); } catch (e) {}
   try { localStorage.removeItem(_MAL_CODE_VERIFIER_KEY); } catch (e) {}
+  try { sessionStorage.removeItem(_MAL_REDIRECT_URI_KEY); } catch (e) {}
+  try { localStorage.removeItem(_MAL_REDIRECT_URI_KEY); } catch (e) {}
 }
 
 function _base64UrlEncode(bytes) {
@@ -315,6 +318,7 @@ async function _startMALAuth() {
   const codeChallenge = await _sha256(codeVerifier);
   _setMALStoredValue(_MAL_OAUTH_NONCE_KEY, state);
   _setMALStoredValue(_MAL_CODE_VERIFIER_KEY, codeVerifier);
+  _setMALStoredValue(_MAL_REDIRECT_URI_KEY, redirectUri);
 
   const res = await fetch(_WORKER, {
     method: 'POST',
@@ -359,6 +363,7 @@ async function _exchangeMALCode(code, redirectUri, stateParam, skipNonceCheck = 
   _showSigningInBanner();
   try {
     const payload = { code, code_verifier: codeVerifier, redirect_uri: redirectUri };
+    console.log('[MAL OAuth] exchange payload', payload);
     toast(`MAL worker payload: ${JSON.stringify(payload)}`, '#60a5fa');
     const res = await fetch(_WORKER, {
       method: 'POST',
@@ -419,7 +424,7 @@ async function _handleMALRedirect() {
   const error = params.get('error');
   if (!code && !error) return false;
   if (!state || !state.startsWith(_MAL_STATE_PREFIX)) return false;
-  const redirectUri = _getRedirectUri();
+  const redirectUri = _getMALStoredValue(_MAL_REDIRECT_URI_KEY) || _getRedirectUri();
   try {
     const parts = (state || '').split(':');
     const section = parts.slice(2).join(':') || 'settings';
