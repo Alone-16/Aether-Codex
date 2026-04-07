@@ -733,11 +733,36 @@ let PENDING_LINKED_GROUP_ORDER = null;
 let PENDING_LINKED_GROUP_LABEL = null;
 
 function getLinkedEntries(entry) {
-  if (!entry || !entry.linkedGroupId) return [];
-  return DATA
-    .filter(x => x.linkedGroupId === entry.linkedGroupId)
-    .sort((a, b) => (a.linkedGroupOrder ?? 0) - (b.linkedGroupOrder ?? 0))
-    .filter(x => x.id !== entry.id);
+  if (!entry) return [];
+
+  /* ── New flat path: entry has linkedGroupId ── */
+  if (entry.linkedGroupId) {
+    return DATA
+      .filter(x => x.linkedGroupId === entry.linkedGroupId)
+      .sort((a, b) => (a.linkedGroupOrder ?? 0) - (b.linkedGroupOrder ?? 0))
+      .filter(x => x.id !== entry.id);
+  }
+
+  /* ── Legacy path: entry has timeline with seasons/movies ── */
+  const tl = Array.isArray(entry.timeline) ? entry.timeline.filter(it => it.type === 'season' || it.type === 'movie') : [];
+  if (!tl.length) return [];
+
+  /* Convert timeline items to linked-like objects for consistent rendering */
+  return tl.map((it, idx) => ({
+    id: it.id || `${entry.id}-tl-${idx}`,
+    parentId: entry.id,
+    title: it.name || it.movieTitle || `Part ${idx + 1}`,
+    status: it.status || (it.type === 'movie' && it.watched ? 'completed' : 'not_started'),
+    epCur: it.type === 'movie'
+      ? (it.watched ? '1' : '0')
+      : String(parseInt(it.epWatched || 0)),
+    epTot: it.type === 'movie'
+      ? '1'
+      : (it.eps ? String(it.eps) : null),
+    epDuration: it.epDuration || entry.epDuration || null,
+    isLegacyTimeline: true,
+    tlIndex: idx
+  }));
 }
 
 function renderLinkedEntries(entry) {
@@ -752,7 +777,9 @@ function renderLinkedEntries(entry) {
   const panelHtml = linked.map(le => {
     const st = entryStats(le);
     const statusColor = _mediaStatusBar(le.status);
-    return `<div class="linked-item" onclick="openDetail('${le.id}')">
+    /* For legacy timeline items, clicking opens the parent; for flat entries, open the linked entry */
+    const openId = le.isLegacyTimeline ? le.parentId : le.id;
+    return `<div class="linked-item" onclick="openDetail('${openId}')">
       <div class="linked-main">
         <div class="linked-title">${esc(le.title)}</div>
         <div class="linked-meta">
@@ -820,24 +847,57 @@ function linkedDrop(ev, parentId, idx) {
 }
 
 function linkedEpDelta(parentId, linkedId, delta) {
+  const parent = DATA.find(x => x.id === parentId);
+  if (!parent) return;
+
+  /* ── Check if this is a legacy timeline item ── */
+  if (linkedId.includes('-tl-')) {
+    /* Parse: `${parentId}-tl-${idx}` */
+    const match = linkedId.match(/-tl-(\d+)$/);
+    if (!match) return;
+    const tlIdx = parseInt(match[1], 10);
+    const it = parent.timeline?.[tlIdx];
+    if (!it) return;
+
+    const w = parseInt(it.epWatched || 0);
+    const t = parseInt(it.eps || 0);
+    const newW = Math.max(0, w + delta);
+    const maxW = t || Infinity;
+
+    it.epWatched = Math.min(newW, maxW);
+
+    /* Auto-mark as completed if watched all episodes */
+    if (it.epWatched >= maxW && maxW > 0 && it.status === 'watching') {
+      it.status = 'completed';
+      if (!it.endDate) it.endDate = today();
+    }
+
+    parent.updatedAt = Date.now();
+    saveData(DATA);
+    renderDetailPanel(parent);
+    renderMediaBody();
+    return;
+  }
+
+  /* ── New flat path ── */
   const linked = DATA.find(x => x.id === linkedId);
   if (!linked) return;
-  
+
   const st = entryStats(linked);
   const newEpCur = Math.max(0, st.cur + delta);
   const maxEps = st.tot || Infinity;
-  
+
   linked.epCur = Math.min(newEpCur, maxEps);
-  
-  // Auto-mark as completed if watched all episodes
+
+  /* Auto-mark as completed if watched all episodes */
   if (linked.epCur >= maxEps && maxEps > 0 && linked.status === 'watching') {
     linked.status = 'completed';
     if (!linked.endDate) linked.endDate = today();
   }
-  
+
   linked.updatedAt = Date.now();
   saveData(DATA);
-  renderDetailPanel(DATA.find(x => x.id === parentId));
+  renderDetailPanel(parent);
   renderMediaBody();
 }
 
