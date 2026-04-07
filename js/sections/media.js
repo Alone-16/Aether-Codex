@@ -153,10 +153,20 @@ function filteredData() {
 function expandRows(entries, fst) {
   const rows = [];
   entries.forEach(e => {
-    if (!fst || e.status === fst) rows.push({ kind:'entry', e, status:e.status });
+    const tl = Array.isArray(e.timeline) ? e.timeline.filter(it => it.type === 'season' || it.type === 'movie') : [];
+    if (tl.length) {
+      tl.forEach((it, idx) => {
+        const status = it.status || 'not_started';
+        if (!fst || status === fst) {
+          rows.push({ kind:'tl', e, it, idx, status, pinned: e.pinned });
+        }
+      });
+    } else if (!fst || e.status === fst) {
+      rows.push({ kind:'entry', e, status:e.status, pinned: e.pinned });
+    }
   });
   // pinned entries float to top within each status group
-  rows.sort((a, b) => (b.e.pinned ? 1 : 0) - (a.e.pinned ? 1 : 0));
+  rows.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
   return rows;
 }
 
