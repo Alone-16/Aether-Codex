@@ -355,10 +355,12 @@ async function _exchangeMALCode(code, redirectUri, stateParam, skipNonceCheck = 
 
   _showSigningInBanner();
   try {
+    const payload = { code, code_verifier: codeVerifier, redirect_uri: redirectUri };
+    toast(`MAL worker payload: ${JSON.stringify(payload)}`, '#60a5fa');
     const res = await fetch(_WORKER, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Action': 'mal_exchange_code' },
-      body: JSON.stringify({ code, code_verifier: codeVerifier, redirect_uri: redirectUri }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const body = await res.text();
