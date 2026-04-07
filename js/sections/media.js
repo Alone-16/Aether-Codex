@@ -987,11 +987,36 @@ function renderFormPanel(e) {
           <input class="fin" type="time" id="f-airingtime" value="${e&&e.airingTime?e.airingTime:''}">
         </div>
       </div>
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--mu);margin:14px 0 9px;padding:5px 0 5px;border-top:1px solid var(--brd);border-bottom:1px solid var(--brd)">Progress</div>
       <div class="fg-row">
+        <div class="fg"><label class="flbl">Episodes Watched</label>
+          <input class="fin" type="number" id="f-epcur" min="0" placeholder="0" value="${e?e.epCur||'':''}">
+        </div>
+        <div class="fg"><label class="flbl">Total Episodes</label>
+          <input class="fin" type="number" id="f-eptot" min="0" placeholder="e.g. 12" value="${e?e.epTot||'':''}">
+        </div>
+      </div>
+      <div class="fg"><label class="flbl">Episode Duration (minutes)</label>
+        <input class="fin" type="number" id="f-epduration" min="1" max="300" placeholder="24" value="${e?e.epDuration||'':''}">
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label class="flbl">Rating (0–10)</label>
+          <input class="fin" type="number" id="f-rating" min="0" max="10" step="0.5" placeholder="—" value="${e?e.rating||'':''}">
+        </div>
         <div class="fg"><label class="flbl">Rewatch Count</label>
           <input class="fin" type="number" id="f-rewatch" min="0" placeholder="0" value="${e&&e.rewatchCount?e.rewatchCount:''}">
         </div>
-        <div class="fg" style="display:flex;align-items:center;gap:8px;padding-top:18px">
+      </div>
+      <div class="fg-row">
+        <div class="fg"><label class="flbl">Start Date</label>
+          <input class="fin" type="date" id="f-startdate" value="${e?e.startDate||'':''}">
+        </div>
+        <div class="fg"><label class="flbl">End Date</label>
+          <input class="fin" type="date" id="f-enddate" value="${e?e.endDate||'':''}">
+        </div>
+      </div>
+      <div class="fg-row">
+        <div class="fg" style="display:flex;align-items:center;gap:8px;padding-top:0">
           <input type="checkbox" id="f-fav" ${e&&e.favorite?'checked':''} style="width:14px;height:14px;cursor:pointer;accent-color:var(--ac)">
           <label for="f-fav" class="flbl" style="margin:0;cursor:pointer">★ Favorite</label>
         </div>
@@ -1128,6 +1153,15 @@ function saveEntry(eid) {
   const linkedGroupOrder = linkedGroupOrderRaw !== null && linkedGroupOrderRaw !== ''
     ? parseInt(linkedGroupOrderRaw)
     : existing?.linkedGroupOrder ?? null;
+  
+  /* Read episode data from form */
+  const epCurVal = document.getElementById('f-epcur')?.value?.trim();
+  const epTotVal = document.getElementById('f-eptot')?.value?.trim();
+  const epDurVal = document.getElementById('f-epduration')?.value?.trim();
+  const ratingVal = document.getElementById('f-rating')?.value?.trim();
+  const startDateVal = g('f-startdate');
+  const endDateVal = g('f-enddate');
+  
   const entry = {
     id:eid||uid(), title,
     genreId:g('f-genre'), status:g('f-status'),
@@ -1137,9 +1171,12 @@ function saveEntry(eid) {
     rewatches:existing?.rewatches||[],
     favorite:document.getElementById('f-fav')?.checked||false,
     pinned:existing?.pinned||false,
-    epCur:existing?.epCur||null, epTot:existing?.epTot||null,
-    startDate:existing?.startDate||null, endDate:existing?.endDate||null,
-    rating:existing?.rating||null, epDuration:existing?.epDuration||null,
+    epCur: epCurVal ? String(parseInt(epCurVal)) : null,
+    epTot: epTotVal ? String(parseInt(epTotVal)) : null,
+    startDate: startDateVal,
+    endDate: endDateVal,
+    rating: ratingVal ? parseFloat(ratingVal) : null,
+    epDuration: epDurVal ? parseInt(epDurVal) : null,
     upcomingDate:existing?.upcomingDate||null, upcomingTime:existing?.upcomingTime||null,
     notes:g('f-notes'),
     watchUrl:document.getElementById('f-url')?.value?.trim()||null,
