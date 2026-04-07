@@ -297,12 +297,17 @@ function saveBackupDays() {
   if (v > 0) { SETTINGS.autoBackupDays = v; saveSettings(SETTINGS); toast('✓ Saved'); }
 }
 
-function connectMALAccount() {
+async function connectMALAccount() {
   if (typeof _startMALAuth !== 'function') {
     toast('MAL auth is unavailable', '#fb7185');
     return;
   }
-  _startMALAuth();
+  try {
+    await _startMALAuth();
+  } catch (err) {
+    console.error('[MAL Auth]', err);
+    toast('MAL auth failed: ' + (err.message || 'Unknown error'), '#fb7185');
+  }
 }
 
 function disconnectMALAccount() {

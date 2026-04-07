@@ -110,7 +110,7 @@ function _getRedirectUri() {
 }
 
 // Brief full-screen overlay so the user sees feedback during the redirect.
-function _showRedirectingOverlay() {
+function _showRedirectingOverlay(service = 'Google') {
   if (document.getElementById('_oauth_overlay')) return;
   const d = document.createElement('div');
   d.id = '_oauth_overlay';
@@ -126,7 +126,7 @@ function _showRedirectingOverlay() {
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <div style="width:18px;height:18px;border:2px solid #1e3329;border-top-color:#34d399;border-radius:50%;animation:_spin .7s linear infinite"></div>
-      Redirecting to Google…
+      Redirecting to ${service}…
     </div>
     <style>@keyframes _spin{to{transform:rotate(360deg)}}</style>`;
   document.body.appendChild(d);
@@ -323,7 +323,7 @@ async function _startMALAuth() {
   const oauthUrl = data.url;
 
   if (window.electronBridge) {
-    _showRedirectingOverlay();
+    _showRedirectingOverlay('MyAnimeList');
     window.electronBridge.openOAuth(oauthUrl).then(async (result) => {
       if (result.error) {
         if (result.error !== 'popup_closed') toast('MAL auth failed: ' + result.error, '#fb7185');
@@ -332,7 +332,7 @@ async function _startMALAuth() {
       await _exchangeMALCode(result.code, redirectUri, result.state || state, true);
     });
   } else {
-    _showRedirectingOverlay();
+    _showRedirectingOverlay('MyAnimeList');
     setTimeout(() => { location.href = oauthUrl; }, 80);
   }
 }
