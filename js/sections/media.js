@@ -1178,8 +1178,8 @@ function _malRenderDropdown(results) {
     const thumb  = r.image
       ? `<img src="${esc(r.image)}" style="width:32px;height:44px;object-fit:cover;border-radius:3px;flex-shrink:0" onerror="this.style.display='none'">`
       : `<div style="width:32px;height:44px;background:var(--surf3);border-radius:3px;flex-shrink:0"></div>`;
-    // Double-stringify so the string survives the onclick attribute
-    const payload = esc(JSON.stringify(JSON.stringify(r)));
+    // Stringify and escape so the string survives the onclick attribute
+    const payload = esc(JSON.stringify(r));
     return `<div style="display:flex;align-items:center;gap:9px;padding:8px 11px;cursor:pointer;border-bottom:1px solid var(--brd);transition:background .1s"
       onmouseenter="this.style.background='var(--surf3)'"
       onmouseleave="this.style.background='transparent'"
