@@ -39,6 +39,9 @@ function _updateDriveBtn(state){
 
 const _WORKER = 'https://aether-codex-ai.nadeempubgmobile2-0.workers.dev';
 const K_REFRESH   = 'ac_v4_refresh';
+const _MAL_OAUTH_NONCE_KEY = 'ac_mal_oauth_nonce';
+const _MAL_CODE_VERIFIER_KEY = 'ac_mal_code_verifier';
+const _MAL_STATE_PREFIX = 'mal:';
 // Use sessionStorage for the CSRF nonce — it survives the redirect on all
 // browsers (unlike localStorage which iOS Safari may wipe during cross-origin
 // navigation).
@@ -262,6 +265,165 @@ function _hideSigningInBanner() {
   if (d) d.remove();
 }
 
+function _getMALStoredValue(key) {
+  try { const v = sessionStorage.getItem(key); if (v) return v; } catch (e) {}
+  try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+
+function _setMALStoredValue(key, value) {
+  try { sessionStorage.setItem(key, value); } catch (e) {}
+  try { localStorage.setItem(key, value); } catch (e) {}
+}
+
+function _clearMALStoredValues() {
+  try { sessionStorage.removeItem(_MAL_OAUTH_NONCE_KEY); } catch (e) {}
+  try { localStorage.removeItem(_MAL_OAUTH_NONCE_KEY); } catch (e) {}
+  try { sessionStorage.removeItem(_MAL_CODE_VERIFIER_KEY); } catch (e) {}
+  try { localStorage.removeItem(_MAL_CODE_VERIFIER_KEY); } catch (e) {}
+}
+
+function _base64UrlEncode(bytes) {
+  let str = '';
+  bytes.forEach(byte => { str += String.fromCharCode(byte); });
+  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function _sha256(text) {
+  const data = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return _base64UrlEncode(new Uint8Array(hash));
+}
+
+function _generatePKCEVerifier() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map(b => ('0' + b.toString(16)).slice(-2)).join('');
+}
+
+async function _startMALAuth() {
+  const redirectUri = _getRedirectUri();
+  const section = localStorage.getItem('ac_last_section') || 'settings';
+  const nonce = _genNonce();
+  const state = _MAL_STATE_PREFIX + nonce + ':' + section;
+  const codeVerifier = _generatePKCEVerifier();
+  const codeChallenge = await _sha256(codeVerifier);
+  _setMALStoredValue(_MAL_OAUTH_NONCE_KEY, state);
+  _setMALStoredValue(_MAL_CODE_VERIFIER_KEY, codeVerifier);
+
+  const res = await fetch(_WORKER, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Action': 'mal_authorize_url' },
+    body: JSON.stringify({ redirect_uri: redirectUri, code_challenge: codeChallenge, state }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`MAL auth failed: ${body}`);
+  }
+  const data = await res.json();
+  const oauthUrl = data.url;
+
+  if (window.electronBridge) {
+    _showRedirectingOverlay();
+    window.electronBridge.openOAuth(oauthUrl).then(async (result) => {
+      if (result.error) {
+        if (result.error !== 'popup_closed') toast('MAL auth failed: ' + result.error, '#fb7185');
+        return;
+      }
+      await _exchangeMALCode(result.code, redirectUri, result.state || state, true);
+    });
+  } else {
+    _showRedirectingOverlay();
+    setTimeout(() => { location.href = oauthUrl; }, 80);
+  }
+}
+
+async function _exchangeMALCode(code, redirectUri, stateParam, skipNonceCheck = false) {
+  const codeVerifier = _getMALStoredValue(_MAL_CODE_VERIFIER_KEY);
+  if (!skipNonceCheck) {
+    const storedState = _getMALStoredValue(_MAL_OAUTH_NONCE_KEY);
+    if (!storedState || storedState !== stateParam) {
+      console.warn('[MAL OAuth] State mismatch or missing stored state.');
+    }
+    _clearMALStoredValues();
+  }
+
+  _showSigningInBanner();
+  try {
+    const res = await fetch(_WORKER, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Action': 'mal_exchange_code' },
+      body: JSON.stringify({ code, code_verifier: codeVerifier, redirect_uri: redirectUri }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`MAL token exchange failed: ${body}`);
+    }
+    const data = await res.json();
+    if (data.error) throw new Error(data.error_description || data.error || 'MAL token exchange failed');
+    SETTINGS.malAccessToken = data.access_token || null;
+    SETTINGS.malRefreshToken = data.refresh_token || SETTINGS.malRefreshToken || null;
+    SETTINGS.malTokenExpiry = data.expires_in ? String(Date.now() + (data.expires_in - 60) * 1000) : SETTINGS.malTokenExpiry || null;
+    saveSettings(SETTINGS);
+    toast('✓ MAL account connected', 'var(--cd)');
+    if (typeof renderSettingsBody === 'function' && CURRENT === 'settings') renderSettingsBody();
+    return true;
+  } catch (e) {
+    toast('MAL auth failed: ' + e.message, '#fb7185');
+    console.error('[MAL OAuth] exchange failed:', e);
+    return false;
+  } finally {
+    _hideSigningInBanner();
+  }
+}
+
+async function _refreshMALAccessToken() {
+  const refreshToken = SETTINGS?.malRefreshToken;
+  if (!refreshToken) return false;
+  try {
+    const res = await fetch(_WORKER, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Action': 'mal_refresh_token' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) throw new Error('status ' + res.status);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error_description || data.error);
+    SETTINGS.malAccessToken = data.access_token;
+    SETTINGS.malTokenExpiry = data.expires_in ? String(Date.now() + (data.expires_in - 60) * 1000) : SETTINGS.malTokenExpiry;
+    if (data.refresh_token) SETTINGS.malRefreshToken = data.refresh_token;
+    saveSettings(SETTINGS);
+    return true;
+  } catch (e) {
+    console.warn('[MAL OAuth] Token refresh failed:', e.message);
+    return false;
+  }
+}
+
+async function _handleMALRedirect() {
+  if (window.electronBridge) return false;
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  const state = params.get('state');
+  const error = params.get('error');
+  if (!code && !error) return false;
+  if (!state || !state.startsWith(_MAL_STATE_PREFIX)) return false;
+  const redirectUri = _getRedirectUri();
+  try {
+    const section = (state || '').split(':')[2] || 'settings';
+    history.replaceState({}, '', location.pathname + '#/' + section);
+  } catch (e) {}
+  const ov = document.getElementById('_oauth_overlay');
+  if (ov) ov.remove();
+  if (error) {
+    setTimeout(() => toast('MAL sign-in cancelled or denied: ' + error, '#fb7185'), 100);
+    return true;
+  }
+  _showSigningInBanner();
+  await _exchangeMALCode(code, redirectUri, state || '', false);
+  _hideSigningInBanner();
+  return true;
+}
+
 // ══════════════════════════════════════════════════════════════════
 //  TOKEN REFRESH
 // ══════════════════════════════════════════════════════════════════
@@ -297,6 +459,8 @@ async function initGIS() {
   _gisInitDone = true;
 
   // 1. Check if we're returning from an OAuth redirect
+  const handledMAL = await _handleMALRedirect();
+  if (handledMAL) return;
   const handled = await _handleOAuthRedirect();
   if (handled) return;
 

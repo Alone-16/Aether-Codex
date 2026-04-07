@@ -1211,6 +1211,58 @@ function saveEntry(eid) {
   if (entry.status==='completed'&&!entry.endDate) entry.endDate=today();
   if (eid) { const i=DATA.findIndex(x=>x.id===eid); DATA[i]=entry; } else DATA.unshift(entry);
   saveData(DATA); closePanel(); render(); toast('✓ Saved');
+  if (entry.malId) {
+    const shouldSync = !existing || entry.status !== existing.status || entry.epCur !== existing.epCur || entry.rating !== existing.rating;
+    if (shouldSync) {
+      _syncMALListEntry(entry).catch(err => {
+        console.warn('[MAL] sync failed', err);
+        toast('MAL sync failed', '#fb7185');
+      });
+    }
+  }
+}
+
+async function _syncMALListEntry(entry) {
+  if (!entry?.malId || !SETTINGS?.malRefreshToken) return;
+  const malId = String(entry.malId);
+  const statusMap = {
+    watching: 'watching',
+    completed: 'completed',
+    on_hold: 'on_hold',
+    dropped: 'dropped',
+    plan: 'plan_to_watch',
+    not_started: 'plan_to_watch',
+    upcoming: 'plan_to_watch',
+  };
+  const status = statusMap[entry.status] || 'plan_to_watch';
+  const epCur = parseInt(entry.epCur || '0') || 0;
+  const score = entry.rating != null && entry.rating !== '' ? Number(entry.rating) : undefined;
+
+  const payload = {
+    access_token: SETTINGS.malAccessToken || null,
+    refresh_token: SETTINGS.malRefreshToken || null,
+    status,
+    num_watched_episodes: epCur,
+  };
+  if (!Number.isNaN(score) && score !== undefined) payload.score = score;
+
+  const res = await fetch(`${_WORKER}/mal/list/${encodeURIComponent(malId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error_description || data?.error || 'MAL update failed');
+  }
+  const data = await res.json();
+  if (data.access_token) {
+    SETTINGS.malAccessToken = data.access_token;
+    if (data.expires_in) SETTINGS.malTokenExpiry = String(Date.now() + (data.expires_in - 60) * 1000);
+  }
+  if (data.refresh_token) SETTINGS.malRefreshToken = data.refresh_token;
+  saveSettings(SETTINGS);
+  if (data.updated) toast('✓ MAL list updated', 'var(--cd)');
 }
 
 function askDel(id) {

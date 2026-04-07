@@ -12,6 +12,9 @@ function loadSettings() {
     autoBackupDays: 10,
     idleTimeout: 5,
     theme: 'dark',
+    malAccessToken: null,
+    malRefreshToken: null,
+    malTokenExpiry: null,
   };
   const saved = ls.get(SETTINGS_KEY);
   if (!saved) return defaults;
@@ -21,6 +24,9 @@ function loadSettings() {
     if (!saved.sectionOrder.includes(s)) saved.sectionOrder.push(s);
     if (saved.sectionEnabled[s] === undefined) saved.sectionEnabled[s] = true;
   });
+  if (saved.malAccessToken === undefined) saved.malAccessToken = null;
+  if (saved.malRefreshToken === undefined) saved.malRefreshToken = null;
+  if (saved.malTokenExpiry === undefined) saved.malTokenExpiry = null;
   return { ...defaults, ...saved };
 }
 function saveSettings(s) { ls.set(SETTINGS_KEY, s); }
@@ -291,6 +297,25 @@ function saveBackupDays() {
   if (v > 0) { SETTINGS.autoBackupDays = v; saveSettings(SETTINGS); toast('✓ Saved'); }
 }
 
+function connectMALAccount() {
+  if (typeof _startMALAuth !== 'function') {
+    toast('MAL auth is unavailable', '#fb7185');
+    return;
+  }
+  _startMALAuth();
+}
+
+function disconnectMALAccount() {
+  showConfirm('Disconnect your MyAnimeList account from this device?', () => {
+    SETTINGS.malAccessToken = null;
+    SETTINGS.malRefreshToken = null;
+    SETTINGS.malTokenExpiry = null;
+    saveSettings(SETTINGS);
+    renderSettingsSecurity(document.getElementById('settings-body'));
+    toast('✓ MAL disconnected', 'var(--cd)');
+  }, { title:'Disconnect MAL?', okLabel:'Disconnect', danger:false });
+}
+
 // ── STORAGE TAB ──
 function renderSettingsStorage(el) {
   const keys = [
@@ -404,6 +429,16 @@ function setDensity(v) {
 // ── SECURITY TAB ──
 function renderSettingsSecurity(el) {
   const hasPin = !!getPin();
+  const malConnected = !!SETTINGS.malRefreshToken;
+  const malTokenValid = malConnected && SETTINGS.malAccessToken && Date.now() < (parseInt(SETTINGS.malTokenExpiry) || 0);
+  const malStatus = malTokenValid ? 'Connected' : malConnected ? 'Connected, may need refresh' : 'Not connected';
+  const malDesc = malTokenValid
+    ? 'Your MyAnimeList account is connected and ready for sync.'
+    : malConnected
+      ? 'A refresh token is saved. Connect again if the MAL session expires.'
+      : 'Connect your MAL account to sync anime status and episode progress to MyAnimeList.';
+  const malLabel = malConnected ? 'Disconnect MAL Account' : 'Connect MAL Account';
+  const malAction = malConnected ? 'disconnectMALAccount()' : 'connectMALAccount()';
   el.innerHTML = `
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
       <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
@@ -434,6 +469,22 @@ function renderSettingsSecurity(el) {
           style="width:70px;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--tx);outline:none">
         <span style="font-size:13px;color:var(--tx2)">minutes</span>
         <button onclick="saveIdleTimeout()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
+      </div>
+    </div>
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-top:12px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">MyAnimeList Connection</div>
+        <div style="font-size:12px;color:var(--mu)">${malStatus}</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;color:var(--tx)">${malLabel}</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:2px">${malDesc}</div>
+        </div>
+        <button onclick="${malAction}"
+          style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
+          ${malLabel}
+        </button>
       </div>
     </div>`;
 }
