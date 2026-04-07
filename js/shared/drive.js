@@ -106,9 +106,8 @@ function _startOAuthFlow() {
 // Returns the redirect URI that Google or MAL should send the user back to.
 // Normalize the path so it matches a registered URI exactly.
 function _getRedirectUri() {
-  let path = location.pathname.replace(/\/index\.html$/g, '');
+  let path = location.pathname.replace(/\/+$|\/index\.html$/g, '');
   if (!path) path = '/';
-  if (!path.endsWith('/')) path += '/';
   return location.origin + path;
 }
 
@@ -305,6 +304,7 @@ function _generatePKCEVerifier() {
 
 async function _startMALAuth() {
   const redirectUri = _getRedirectUri();
+  toast(`MAL redirect URI: ${redirectUri}`, '#60a5fa');
   const section = localStorage.getItem('ac_last_section') || 'settings';
   const nonce = _genNonce();
   const state = _MAL_STATE_PREFIX + nonce + ':' + section;
@@ -362,6 +362,7 @@ async function _exchangeMALCode(code, redirectUri, stateParam, skipNonceCheck = 
     });
     if (!res.ok) {
       const body = await res.text();
+      toast(`MAL token exchange failed: ${body}`, '#fb7185');
       throw new Error(`MAL token exchange failed: ${body}`);
     }
     const data = await res.json();
