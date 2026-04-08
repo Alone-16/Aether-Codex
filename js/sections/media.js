@@ -1537,9 +1537,11 @@ function _malRenderDropdown(results) {
     return;
   }
   dd.innerHTML = results.map(r => {
-    const eps    = r.episodes   ? `${r.episodes} ep`                  : '';
-    const score  = r.score      ? `★ ${r.score}`                      : '';
-    const type   = r.media_type ? r.media_type.replace(/_/g, ' ')     : '';
+    const displayTitle = r.title_en || r.title;
+    const hasAltTitle  = r.title_en && r.title_en !== r.title;
+    const eps    = r.episodes   ? `${r.episodes} ep`              : '';
+    const score  = r.score      ? `★ ${r.score}`                  : '';
+    const type   = r.media_type ? r.media_type.replace(/_/g, ' ') : '';
     const meta   = [type, eps, score].filter(Boolean).join(' · ');
     const thumb  = r.image
       ? `<img src="${esc(r.image)}" style="width:32px;height:44px;object-fit:cover;border-radius:3px;flex-shrink:0" onerror="this.style.display='none'">`
@@ -1552,7 +1554,8 @@ function _malRenderDropdown(results) {
       onclick="_malSelect('${payload}')">
       ${thumb}
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.title)}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(displayTitle)}</div>
+        ${hasAltTitle ? `<div style="font-size:10px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${esc(r.title)}</div>` : ''}
         ${meta ? `<div style="font-size:10px;color:var(--mu);margin-top:2px">${esc(meta)}</div>` : ''}
       </div>
     </div>`;
@@ -1577,13 +1580,16 @@ function _malSelect(rJson) {
   const dd = document.getElementById('mal-dropdown');
   if (dd) dd.style.display = 'none';
 
+  // Prefer English title for display/entry; keep Japanese as fallback
+  const displayTitle = r.title_en || r.title;
+
   // Search field label
   const searchInp = document.getElementById('mal-search-inp');
-  if (searchInp) searchInp.value = r.title;
+  if (searchInp) searchInp.value = displayTitle;
 
-  // Title
+  // Title — use English if available
   const titleEl = document.getElementById('f-title');
-  if (titleEl) titleEl.value = r.title;
+  if (titleEl) titleEl.value = displayTitle;
 
   // MAL ID
   const malIdEl = document.getElementById('f-malid');
@@ -1615,7 +1621,7 @@ function _malSelect(rJson) {
     if (map[r.status]) statusEl.value = map[r.status];
   }
 
-  toast(`✓ Autofilled: ${r.title}`);
+  toast(`✓ Autofilled: ${displayTitle}`);
 }
 
 function _malUpdateCoverPreview(url) {

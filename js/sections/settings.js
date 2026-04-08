@@ -701,8 +701,10 @@ async function startMALAutoLink() {
       const top  = (data.results || [])[0];
 
       if (top) {
-        const isExact = top.title.toLowerCase() === entry.title.toLowerCase();
-        _malLinkResults[entry.id] = { malId: top.id, title: top.title, image: top.image, confirmed: true };
+        const displayTitle = top.title_en || top.title;
+        const isExact = displayTitle.toLowerCase() === entry.title.toLowerCase()
+                     || top.title.toLowerCase() === entry.title.toLowerCase();
+        _malLinkResults[entry.id] = { malId: top.id, title: displayTitle, image: top.image, confirmed: true };
         matched++;
         const col   = isExact ? '#4ade80' : '#fbbf24';
         const label = isExact ? '✓ Exact'  : '~ Similar';
@@ -713,7 +715,8 @@ async function startMALAutoLink() {
               ${top.image ? `<img src="${esc(top.image)}" style="width:24px;height:34px;object-fit:cover;border-radius:2px;flex-shrink:0" onerror="this.style.display='none'">` : ''}
               <div style="text-align:right">
                 <div style="font-size:10px;font-weight:700;color:${col}">${label}</div>
-                <div style="font-size:11px;color:#aaa;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(top.title)}</div>
+                <div style="font-size:11px;color:#eee;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(displayTitle)}">${esc(displayTitle)}</div>
+                ${top.title_en && top.title_en !== top.title ? `<div style="font-size:10px;color:#666;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(top.title)}</div>` : ''}
               </div>
             </div>
             <label style="display:flex;align-items:center;gap:4px;justify-content:flex-end;cursor:pointer;font-size:11px;color:#8888aa">
