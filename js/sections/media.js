@@ -39,7 +39,7 @@ let _M_STATUS_CHIP = '';
 /* ---------- hold / context-menu state ---------- */
 let _HOLD_TIMER   = null;
 let _CTX_ENTRY_ID = null;
-let _HOLD_FIRED   = false;   // true when long-press already opened the menu
+let _HOLD_FIRED   = false;
 
 function _renderFilterChips() {
   const chips = [
@@ -67,10 +67,115 @@ function setMediaChip(val) {
   renderMediaBody();
 }
 
+// ═══════════════════════════════════════════════════════
+//  LINKED-GROUP MIGRATION V3
+//  Guard: localStorage key 'ac_linked_migrated_v3'
+//  Fixes two broken patterns:
+//    Pattern A — linkedGroupId === another entry's id (one-sided link)
+//    Pattern B — entries with non-empty timeline[] (not yet flattened)
+//    Pattern C — removes leftover timeline field from every entry
+// ═══════════════════════════════════════════════════════
+function runLinkedMigrationV3() {
+  if (ls.str('ac_linked_migrated_v3') === '1') return;
+
+  let dirty = false;
+  const entryIdSet = new Set(DATA.map(e => e.id));
+
+  // ── Step A: fix broken partial linking ──
+  // Collect clusters: anchorId -> [entries that point to it as linkedGroupId]
+  const clusters = {}; // anchorId -> [entry, ...]
+  DATA.forEach(e => {
+    if (e.linkedGroupId && entryIdSet.has(e.linkedGroupId)) {
+      const k = e.linkedGroupId;
+      if (!clusters[k]) clusters[k] = [];
+      clusters[k].push(e);
+    }
+  });
+
+  Object.entries(clusters).forEach(([anchorId, members]) => {
+    const anchor = DATA.find(e => e.id === anchorId);
+    const newGroupId = uid();
+
+    // Fix anchor (typically S1 — currently has linkedGroupId: null)
+    if (anchor) {
+      anchor.linkedGroupId = newGroupId;
+      if (anchor.linkedGroupOrder == null) anchor.linkedGroupOrder = 1;
+    }
+
+    // Fix members (S2, S3 …) — keep their existing linkedGroupOrder
+    members.forEach(e => { e.linkedGroupId = newGroupId; });
+    dirty = true;
+  });
+
+  // ── Step B: flatten any remaining timeline entries ──
+  const timelineEntries = DATA.filter(
+    e => Array.isArray(e.timeline) && e.timeline.length > 0
+  );
+
+  const newFlatEntries = [];
+  timelineEntries.forEach(e => {
+    // Skip if already part of a group from Step A
+    if (!e.linkedGroupId) {
+      e.linkedGroupId = uid();
+      e.linkedGroupOrder = 1;
+    }
+    const groupId = e.linkedGroupId;
+
+    e.timeline.forEach((item, idx) => {
+      const isMovie = item.type === 'movie';
+      const rawName = item.name || item.movieTitle || `Part ${idx + 2}`;
+      const newEntry = {
+        id:              uid(),
+        title:           `${e.title} ${rawName}`,
+        genreId:         e.genreId,
+        status:          item.status || (isMovie && item.watched ? 'completed' : 'not_started'),
+        epCur:           isMovie
+                           ? (item.watched ? '1' : '0')
+                           : (item.epWatched != null ? String(item.epWatched) : null),
+        epTot:           isMovie ? '1' : (item.eps != null ? String(item.eps) : null),
+        malId:           null,
+        linkedGroupId:   groupId,
+        linkedGroupOrder: (item.num != null ? item.num : idx + 1) + 1,
+        epDuration:      item.epDuration || e.epDuration || null,
+        startDate:       item.startDate    || null,
+        endDate:         item.endDate      || null,
+        upcomingDate:    item.upcomingDate || null,
+        upcomingTime:    item.upcomingTime || null,
+        rating:          item.rating       || null,
+        notes:           null,
+        watchUrl:        e.watchUrl        || null,
+        airingDay:       null,
+        airingTime:      null,
+        favorite:        false,
+        pinned:          false,
+        rewatches:       [],
+        rewatchCount:    null,
+        addedAt:         e.addedAt         || Date.now(),
+        updatedAt:       Date.now(),
+      };
+      newFlatEntries.push(newEntry);
+    });
+
+    delete e.timeline;
+    dirty = true;
+  });
+
+  if (newFlatEntries.length) DATA.push(...newFlatEntries);
+
+  // ── Step C: strip any remaining timeline field ──
+  DATA.forEach(e => {
+    if ('timeline' in e) { delete e.timeline; dirty = true; }
+  });
+
+  if (dirty) saveData(DATA);
+  ls.setStr('ac_linked_migrated_v3', '1');
+}
+
 /* ═══════════════════════════════
    MAIN RENDER
 ═══════════════════════════════ */
 function renderMedia(c) {
+  runLinkedMigrationV3();
   _injectPinStyles();
   const tabs = ['List', 'Dashboard', 'Upcoming', 'Incomplete'];
   const g    = gbyid(GACTIVE);
@@ -138,10 +243,7 @@ function filteredData() {
   const fs  = document.getElementById('fsort')?.value || 'title';
 
   if (SEARCH) {
-    d = d.filter(e =>
-      e.title.toLowerCase().includes(SEARCH) ||
-      (e.timeline || []).some(it => (it.name || it.movieTitle || '').toLowerCase().includes(SEARCH))
-    );
+    d = d.filter(e => e.title.toLowerCase().includes(SEARCH));
     d = fs === 'added' ? [...d].sort((a,b) => (b.addedAt||0)-(a.addedAt||0)) : [...d].sort((a,b) => a.title.localeCompare(b.title));
     return { data:d, fst:'' };
   }
@@ -153,19 +255,10 @@ function filteredData() {
 function expandRows(entries, fst) {
   const rows = [];
   entries.forEach(e => {
-    const tl = Array.isArray(e.timeline) ? e.timeline.filter(it => it.type === 'season' || it.type === 'movie') : [];
-    if (tl.length) {
-      tl.forEach((it, idx) => {
-        const status = it.status || 'not_started';
-        if (!fst || status === fst) {
-          rows.push({ kind:'tl', e, it, idx, status, pinned: e.pinned });
-        }
-      });
-    } else if (!fst || e.status === fst) {
+    if (!fst || e.status === fst) {
       rows.push({ kind:'entry', e, status:e.status, pinned: e.pinned });
     }
   });
-  // pinned entries float to top within each status group
   rows.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
   return rows;
 }
@@ -173,7 +266,7 @@ function expandRows(entries, fst) {
 function renderList(c) {
   const { data, fst } = filteredData();
   const flat    = expandRows(data, fst);
-  const pCount  = new Set(flat.map(r => r.e.id)).size;
+  const pCount  = flat.length;
   const sortVal = document.getElementById('fsort')?.value || 'title';
 
   let html = `
@@ -187,7 +280,7 @@ function renderList(c) {
         </select>
       </div>
     </div>
-    <div class="m-cnt-lbl">${pCount} title${pCount!==1?'s':''} · ${flat.length} part${flat.length!==1?'s':''}</div>`;
+    <div class="m-cnt-lbl">${pCount} title${pCount!==1?'s':''}</div>`;
 
   if (!flat.length) {
     html += `<div class="m-empty"><div class="m-empty-ico">◌</div><p>No titles here yet</p></div>`;
@@ -219,7 +312,7 @@ function renderList(c) {
           <span class="m-sec-arr${coll ? ' coll' : ''}">▾</span>
         </div>
         <div class="m-rows${coll ? ' coll' : ''}">
-          ${rows.map(r => r.kind === 'tl' ? tlRowHtml(r.e, r.it, r.idx) : rowHtml(r.e)).join('')}
+          ${rows.map(r => rowHtml(r.e)).join('')}
         </div>
       </div>`;
   });
@@ -234,77 +327,32 @@ function toggleColl(s) {
 }
 
 /**
- * entryStats(e)
- * Works with BOTH the legacy timeline shape and the new flat-entry shape.
- * After migration completes, timeline is always absent.
+ * entryStats(e) — works with flat entries only (after V3 migration).
  */
 function entryStats(e) {
   const dur = parseInt(e.epDuration) || 24;
-
-  /* ── Legacy path: entry still has a timeline (pre-migration or mid-boot) ── */
-  const tl = e.timeline || [];
-  if (tl.length) {
-    let cur = 0, tot = 0;
-    tl.forEach(it => {
-      if (it.type === 'season') {
-        cur += parseInt(it.epWatched || 0);
-        tot += parseInt(it.eps || 0);
-      } else if (it.type === 'movie' && it.watched) {
-        cur++; tot++;
-      }
-    });
-    return {
-      cur, tot,
-      pct:  tot ? Math.round(cur / tot * 100) : 0,
-      time: estTime(tot, dur),
-    };
-  }
-
-  /* ── New flat path ── */
   const cur = parseInt(e.epCur || 0);
   const tot = parseInt(e.epTot || 0);
   const pct = tot ? Math.round(cur / tot * 100) : (cur > 0 ? 100 : 0);
   return { cur, tot, pct, time: estTime(tot || cur, dur) };
 }
 
-function activeSeason(e) {
-  const tl = (e.timeline || []).filter(it => it.type === 'season');
-  return tl.find(it => it.status === 'watching') || tl.find(it => it.status === 'not_started') || tl[tl.length-1] || null;
-}
+// Keep for backward compat — returns null for flat entries
+function activeSeason(e) { return null; }
 
 /* ── Card rows ── */
 function rowHtml(e) {
   const isA    = PANEL && PEDIT === e.id;
-  const tl     = e.timeline || [];
   const col    = _mediaStatusBar(e.status);
-  let rCur=0, rTot=0, rPct=0, showCtrl=false;
-
-  if (tl.length) {
-    const as = activeSeason(e);
-    if (as && as.type === 'season') {
-      rCur     = parseInt(as.epWatched || 0);
-      rTot     = parseInt(as.eps || 0);
-      rPct     = rTot ? Math.round(rCur/rTot*100) : (rCur > 0 ? 100 : 0);
-      showCtrl = ['watching','on_hold'].includes(as.status);
-    }
-  } else {
-    rCur     = parseInt(e.epCur || 0);
-    rTot     = parseInt(e.epTot || 0);
-    rPct     = rTot ? Math.round(rCur/rTot*100) : (rCur > 0 ? 100 : 0);
-    showCtrl = ['watching','completed','on_hold','dropped'].includes(e.status);
-  }
-
-  const hasBar  = rTot > 0 || rCur > 0;
-  const isValidType = t => t.type === 'season' || t.type === 'movie';
-  const seaC    = tl.filter(t => t.type === 'season' || (!isValidType(t) && t.num != null)).length;
-  const movC    = tl.filter(t => t.type === 'movie'  || (!isValidType(t) && t.movieTitle != null && t.num == null)).length;
-  // Plain entries (no timeline) with episode data are implicitly 1 season
-  const impliedS  = !tl.length && (parseInt(e.epTot || 0) > 0 || parseInt(e.epCur || 0) > 0) ? 1 : 0;
-  const effSeaC   = seaC + impliedS;
-  const tlLabel   = effSeaC || movC
-    ? `${effSeaC ? effSeaC + 'S' : ''}${effSeaC && movC ? ' + ' : ''}${movC ? movC + 'M' : ''}` : '';
+  const rCur   = parseInt(e.epCur || 0);
+  const rTot   = parseInt(e.epTot || 0);
+  const rPct   = rTot ? Math.round(rCur/rTot*100) : (rCur > 0 ? 100 : 0);
+  const showCtrl = ['watching','completed','on_hold','dropped'].includes(e.status);
+  const hasBar   = rTot > 0 || rCur > 0;
   const rewBadge = e.rewatches?.length
     ? `<span class="m-rewatch-badge">↺${e.rewatches.length}</span>` : '';
+  const grpBadge = e.linkedGroupId
+    ? `<span style="font-size:9px;font-weight:700;background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2);border-radius:3px;padding:1px 4px">🔗</span>` : '';
 
   return `<div class="m-card${isA ? ' m-card-active' : ''}${e.pinned ? ' m-card-pinned' : ''}" id="row-${e.id}"
     onclick="if(_HOLD_FIRED){_HOLD_FIRED=false;return;}openDetail('${e.id}')"
@@ -319,8 +367,8 @@ function rowHtml(e) {
       <div class="m-card-title">${e.pinned ? '<span class="m-pin-badge">📌</span>' : ''}${esc(e.title)}</div>
       <div class="m-card-meta">
         ${_mstag(e.status)}
-        ${tlLabel ? `<span class="m-card-seasons" style="font-size:10px;color:rgba(255,255,255,.35);font-family:'Space Mono',monospace,sans-serif">${tlLabel}</span>` : ''}
         ${rewBadge}
+        ${grpBadge}
         ${e.malId ? `<span style="font-size:9px;font-weight:700;background:rgba(0,229,255,.08);color:rgba(0,229,255,.55);border:1px solid rgba(0,229,255,.15);border-radius:3px;padding:1px 4px">MAL</span>` : ''}
         ${_airBadge(e)}
       </div>
@@ -345,90 +393,20 @@ function rowHtml(e) {
   </div>`;
 }
 
-function tlRowHtml(e, it, idx) {
-  const isA    = PANEL && PEDIT === e.id;
-  const isS    = it.type === 'season';
-  const st     = it.status || 'not_started';
-  const col    = _mediaStatusBar(st);
-  const w      = parseInt(it.epWatched || 0), t = parseInt(it.eps || 0);
-  const pct    = t ? Math.round(w/t*100) : (w > 0 ? 100 : 0);
-  const hasBar = t > 0 || w > 0;
-  const showCtrl = isS && ['watching','on_hold'].includes(st);
-  const rawName  = isS ? (it.name || `Season ${it.num||idx+1}`) : (it.movieTitle || it.name || 'Movie');
-  const fullName = `${e.title} · ${rawName}`;
-  const pill     = isS
-    ? `<span class="m-tl-pill m-tl-s">S${it.num||idx+1}</span>`
-    : `<span class="m-tl-pill m-tl-m">🎬</span>`;
-  const pinBadge = e.pinned ? '<span class="m-pin-badge">📌</span>' : '';
-
-  return `<div class="m-card${isA ? ' m-card-active' : ''}${e.pinned ? ' m-card-pinned' : ''}" onclick="if(_HOLD_FIRED){_HOLD_FIRED=false;return;}openDetail('${e.id}')"
-    onmousedown="startHold('${e.id}',event)"
-    onmouseup="cancelHold()"
-    onmouseleave="cancelHold()"
-    ontouchstart="startHold('${e.id}',event)"
-    ontouchend="cancelHold()"
-    ontouchmove="cancelHold()">
-    <div class="m-card-bar" style="background:${col}"></div>
-    <div class="m-card-info">
-      <div class="m-card-title" style="display:flex;align-items:center;gap:6px">${pinBadge}${pill}${esc(fullName)}</div>
-      <div class="m-card-meta">${_mstag(st)}</div>
-    </div>
-    <div class="m-card-r">
-      ${hasBar ? `<div class="m-prog-wrap">
-        <div class="m-prog-bar"><div class="m-prog-fill" style="width:${pct}%;background:${col}"></div></div>
-        <span class="m-prog-txt">${w}${t ? '/'+t : ''}</span>
-      </div>` : ''}
-      <div class="m-card-actions" onclick="event.stopPropagation()">
-        ${showCtrl ? `<div class="m-ep-ctrl">
-          <button class="m-ep-btn" onclick="quickTlEp('${e.id}',${idx},-1)">−</button>
-          <span class="m-ep-num">${w}</span>
-          <button class="m-ep-btn" onclick="quickTlEp('${e.id}',${idx},1)">+</button>
-        </div>` : ''}
-        <button class="m-act-btn" onclick="openEdit('${e.id}')">✏</button>
-        <button class="m-act-btn m-act-del" onclick="askDel('${e.id}')">✕</button>
-        ${st === 'watching' && e.watchUrl
-          ? `<button class="m-act-btn m-act-play" onclick="event.stopPropagation();window.open('${esc(e.watchUrl)}','_blank')" title="Watch">▶</button>` : ''}
-      </div>
-    </div>
-  </div>`;
-}
-
 /* ── Quick ep controls ── */
 function quickEp(id, delta) {
   const e = DATA.find(x => x.id === id); if (!e) return;
-  const tl = e.timeline || [];
-  if (tl.length) {
-    const as = activeSeason(e);
-    if (as) {
-      const w = Math.max(0, parseInt(as.epWatched || 0) + delta);
-      as.epWatched = as.eps ? Math.min(w, parseInt(as.eps)) : w;
-      if (as.eps && as.epWatched >= parseInt(as.eps) && as.status === 'watching') as.status = 'completed';
-    }
-  } else {
-    e.epCur = Math.max(0, (parseInt(e.epCur) || 0) + delta);
-    if (e.epTot && e.epCur >= parseInt(e.epTot) && e.status === 'watching') {
-      e.status = 'completed'; e.endDate = today();
-    }
+  e.epCur = Math.max(0, (parseInt(e.epCur) || 0) + delta);
+  if (e.epTot && e.epCur >= parseInt(e.epTot) && e.status === 'watching') {
+    e.status = 'completed'; e.endDate = today();
   }
   e.updatedAt = Date.now(); saveData(DATA); renderMediaBody();
   if (PANEL === 'detail' && PEDIT === id) renderDetailPanel(DATA.find(x => x.id === id));
   _malSyncQuiet(e);
 }
 
-function quickTlEp(eid, idx, delta) {
-  const e = DATA.find(x => x.id === eid); if (!e) return;
-  const it = e.timeline && e.timeline[idx];
-  if (!it || it.type !== 'season') return;
-  const w = Math.max(0, parseInt(it.epWatched || 0) + delta);
-  it.epWatched = it.eps ? Math.min(w, parseInt(it.eps)) : w;
-  if (it.eps && it.epWatched >= parseInt(it.eps) && it.status === 'watching') {
-    it.status = 'completed';
-    if ((e.timeline || []).filter(t => t.type === 'season').every(s => s.status === 'completed')) e.status = 'completed';
-  }
-  e.updatedAt = Date.now(); saveData(DATA); renderMediaBody();
-  if (PANEL === 'detail' && PEDIT === eid) renderDetailPanel(e);
-  _malSyncQuiet(e);
-}
+// Keep for backward compat (called from old timeline row HTML that no longer renders)
+function quickTlEp(eid, idx, delta) { quickEp(eid, delta); }
 
 /* ═══════════════════════════════
    DASHBOARD
@@ -440,11 +418,8 @@ function renderDash(c) {
   d.forEach(e => {
     const st = entryStats(e); epTotal += st.cur;
     const dur = parseInt(e.epDuration || 24);
-    const tl = e.timeline || [];
-    if (tl.length) tl.forEach(it => { if (it.type==='season') totalMin += parseInt(it.epWatched||0)*parseInt(it.epDuration||dur); });
-    else totalMin += parseInt(e.epCur||0)*dur;
+    totalMin += parseInt(e.epCur||0)*dur;
     if (e.rating) { rSum += parseFloat(e.rating); rN++; }
-    (e.timeline||[]).forEach(it => { if (it.rating) { rSum+=parseFloat(it.rating); rN++; } });
   });
   const avg = rN ? (rSum/rN).toFixed(1) : '—';
   const g   = gbyid(GACTIVE);
@@ -504,9 +479,6 @@ function renderUpcoming(c) {
   const items = [];
   DATA.filter(e => e.genreId === GACTIVE).forEach(e => {
     if (e.upcomingDate && e.status === 'upcoming') items.push({ id:e.id, title:e.title, date:e.upcomingDate, time:e.upcomingTime||null, label:'New Release' });
-    (e.timeline||[]).forEach(it => {
-      if (it.upcomingDate && it.status === 'upcoming') items.push({ id:e.id, title:e.title, date:it.upcomingDate, time:it.upcomingTime||null, label:it.name||'New Season' });
-    });
   });
   items.sort((a,b) => new Date(a.date)-new Date(b.date));
 
@@ -537,30 +509,36 @@ function renderUpcoming(c) {
    INCOMPLETE
 ═══════════════════════════════ */
 function renderIncomplete(c) {
-  const items = DATA.filter(e => e.genreId === GACTIVE && (() => {
-    const s = (e.timeline||[]).filter(t => t.type==='season');
-    return s.some(x=>x.status==='completed') && s.some(x=>['not_started','plan','watching'].includes(x.status));
-  })());
+  // Show entries in a linked group where some are completed and some are not
+  const groups = {};
+  DATA.filter(e => e.genreId === GACTIVE && e.linkedGroupId).forEach(e => {
+    if (!groups[e.linkedGroupId]) groups[e.linkedGroupId] = [];
+    groups[e.linkedGroupId].push(e);
+  });
 
-  const rows = items.map(e => {
-    const seas = (e.timeline||[]).filter(t=>t.type==='season');
-    const done = seas.filter(s=>s.status==='completed').length;
-    return `<div class="m-card" onclick="openDetail('${e.id}')">
-      <div class="m-card-bar" style="background:${_mediaStatusBar(e.status)}"></div>
+  const incompleteGroups = Object.values(groups).filter(members =>
+    members.some(e => e.status === 'completed') && members.some(e => ['not_started','plan','watching'].includes(e.status))
+  );
+
+  const rows = incompleteGroups.map(members => {
+    const first = members.sort((a,b) => (a.linkedGroupOrder??0)-(b.linkedGroupOrder??0))[0];
+    const done  = members.filter(e => e.status === 'completed').length;
+    return `<div class="m-card" onclick="openDetail('${first.id}')">
+      <div class="m-card-bar" style="background:${_mediaStatusBar(first.status)}"></div>
       <div class="m-card-info">
-        <div class="m-card-title">${esc(e.title)}</div>
-        <div class="m-card-meta">${_mstag(e.status)}<span class="m-card-seasons">${done}/${seas.length} seasons done</span></div>
+        <div class="m-card-title">${esc(first.title.replace(/ S\d+$| Season \d+$/,''))}</div>
+        <div class="m-card-meta">${_mstag(first.status)}<span class="m-card-seasons">${done}/${members.length} parts done</span></div>
       </div>
       <div class="m-card-r">
         <div class="m-card-actions" onclick="event.stopPropagation()">
-          <button class="m-act-btn" onclick="openEdit('${e.id}')">✏</button>
+          <button class="m-act-btn" onclick="openEdit('${first.id}')">✏</button>
         </div>
       </div>
     </div>`;
   }).join('');
 
   c.innerHTML = `
-    <div class="m-dash-title">⚠ Incomplete Seasons <span>// ${esc(gbyid(GACTIVE).name)}</span></div>
+    <div class="m-dash-title">⚠ Incomplete Series <span>// ${esc(gbyid(GACTIVE).name)}</span></div>
     ${rows || `<div class="m-empty"><div class="m-empty-ico">🎉</div><p>All caught up!</p></div>`}`;
 }
 
@@ -590,8 +568,8 @@ function openAddLinkedEntry(parentId) {
   const parent = DATA.find(x => x.id === parentId); if (!parent) return;
   const groupId = parent.linkedGroupId || parent.id;
   const group = DATA.filter(x => x.linkedGroupId === groupId || x.id === groupId);
-  PENDING_LINKED_GROUP_ID = groupId;
-  PENDING_LINKED_GROUP_ORDER = group.length;
+  PENDING_LINKED_GROUP_ID = parent.linkedGroupId || null;
+  PENDING_LINKED_GROUP_ORDER = group.length + 1;
   PENDING_LINKED_GROUP_LABEL = parent.title;
   openPanel('add', null);
 }
@@ -600,7 +578,6 @@ function openAddLinkedEntry(parentId) {
 function renderDetailPanel(e) {
   const st = entryStats(e);
   const g  = gbyid(e.genreId);
-  const tl = e.timeline || [];
 
   document.getElementById('panel-inner').innerHTML = `
     <div class="ph">
@@ -689,280 +666,277 @@ function renderDetailPanel(e) {
       ${e.status==='completed' ? `<button class="btn-cancel" onclick="startRewatch('${e.id}')" style="background:rgba(var(--ac-rgb),.1);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3)">↺ Rewatch</button>` : ''}
       <button class="btn-cancel" onclick="openEdit('${e.id}')">Edit</button>
     </div>`;
-
-  initDetailDrag(e);
-  initLinkedDrag(e.id);
 }
 
-function tlViewHtml(it, i, eid, parentTitle) {
-  const isS  = it.type === 'season';
-  const isCur = isS && it.status === 'watching';
-  const w    = parseInt(it.epWatched||0), t = parseInt(it.eps||0);
-  const pct  = t ? Math.round(w/t*100) : 0;
-  const sc   = _mediaStatusBar(it.status||'not_started');
-  const rawName  = isS ? (it.name||`Season ${it.num||i+1}`) : (it.movieTitle||it.name||'Movie');
-  const fullName = `${parentTitle} · ${rawName}`;
-  return `<div class="tl-item${isCur?' tl-cur':''}${!isS?' tl-mov':''}" draggable="true" data-idx="${i}"
-    ondragstart="dDragStart(event,${i})" ondragover="dDragOver(event,${i})"
-    ondrop="dDrop(event,${i})" ondragleave="this.classList.remove('drag-over')">
-    <span class="tl-drag">⠿</span>
-    <span class="tl-type-pill ${isS?'tp-s':'tp-m'}">${isS?`S${it.num||i+1}`:'🎬'}</span>
-    <div class="tl-info">
-      <div class="tl-name">${esc(fullName)}</div>
-      <div class="tl-sub">
-        ${stag(it.status||'not_started')}
-        ${it.endDate  ? `<span style="font-size:10px;color:#4ade80">✓ ${fmtDate(it.endDate)}</span>` : ''}
-        ${it.rating   ? `<span style="font-size:10px;color:#fbbf24">★ ${it.rating}</span>` : ''}
-        ${it.upcomingDate ? `<span style="font-size:10px;color:#fb923c">📅 ${fmtDate(it.upcomingDate)}</span>` : ''}
-      </div>
-    </div>
-    <div class="tl-r">
-      ${isS&&(t||w) ? `<span class="tl-ep">${w}${t?'/'+t:''} ep</span><div class="mini-bar"><div class="mini-fill" style="width:${pct}%;background:${sc}"></div></div>` : ''}
-      ${isS&&it.status==='watching' ? `<div class="ep-ctrl">
-        <button class="ep-ctrl-pm" onclick="panelEp('${eid}',${i},-1)">−</button>
-        <span class="ep-num">${w}</span>
-        <button class="ep-ctrl-pm" onclick="panelEp('${eid}',${i},1)">+</button>
-      </div>` : ''}
-    </div>
-  </div>`;
-}
+/* ═══════════════════════════════
+   LINKED ENTRIES
+═══════════════════════════════ */
 
-function panelEp(eid, idx, delta) {
-  const e = DATA.find(x=>x.id===eid); if (!e) return;
-  const it = e.timeline[idx]; if (!it||it.type!=='season') return;
-  const w = Math.max(0, parseInt(it.epWatched||0)+delta);
-  it.epWatched = it.eps ? Math.min(w, parseInt(it.eps)) : w;
-  if (it.eps && it.epWatched>=parseInt(it.eps) && it.status==='watching') it.status='completed';
-  e.updatedAt = Date.now(); saveData(DATA); renderDetailPanel(e); renderMediaBody();
-  _malSyncQuiet(e);
-}
-
-function dDragStart(ev, i) { DDRG=i; ev.currentTarget.classList.add('dragging'); }
-function dDragOver(ev, i)  { ev.preventDefault(); if(DDRG===i)return; ev.currentTarget.classList.add('drag-over'); }
-function dDrop(ev, i) {
-  ev.preventDefault(); ev.currentTarget.classList.remove('drag-over');
-  if (DDRG===null||DDRG===i) return;
-  const e = DATA.find(x=>x.id===PEDIT); if (!e) return;
-  const item = e.timeline.splice(DDRG,1)[0]; e.timeline.splice(i,0,item);
-  DDRG=null; saveData(DATA); renderDetailPanel(e);
-}
-function initDetailDrag(e) {
-  document.querySelectorAll('#dtl-wrap .tl-item').forEach(el => {
-    el.addEventListener('dragend', () => {
-      el.classList.remove('dragging');
-      document.querySelectorAll('.tl-item').forEach(x => x.classList.remove('drag-over'));
-    });
-  });
-}
-
-/* ── Linked Entries Panel ── */
-// State for linked entries drag
-let LINKED_DRAGING = null;
-let LINKED_SOURCE_ID = null;
-let PENDING_LINKED_GROUP_ID = null;
-let PENDING_LINKED_GROUP_ORDER = null;
-let PENDING_LINKED_GROUP_LABEL = null;
-
+/**
+ * getLinkedEntries(entry)
+ * Returns all DATA entries sharing entry.linkedGroupId, sorted by linkedGroupOrder,
+ * excluding the entry itself. Returns [] for standalone entries.
+ */
 function getLinkedEntries(entry) {
-  if (!entry) return [];
-
-  /* ── New flat path: entry has linkedGroupId ── */
-  if (entry.linkedGroupId) {
-    return DATA
-      .filter(x => x.linkedGroupId === entry.linkedGroupId)
-      .sort((a, b) => (a.linkedGroupOrder ?? 0) - (b.linkedGroupOrder ?? 0))
-      .filter(x => x.id !== entry.id);
-  }
-
-  /* ── Legacy path: entry has timeline with seasons/movies ── */
-  const tl = Array.isArray(entry.timeline) ? entry.timeline.filter(it => it.type === 'season' || it.type === 'movie') : [];
-  if (!tl.length) return [];
-
-  /* Convert timeline items to linked-like objects for consistent rendering */
-  return tl.map((it, idx) => ({
-    id: it.id || `${entry.id}-tl-${idx}`,
-    parentId: entry.id,
-    title: it.name || it.movieTitle || `Part ${idx + 1}`,
-    status: it.status || (it.type === 'movie' && it.watched ? 'completed' : 'not_started'),
-    epCur: it.type === 'movie'
-      ? (it.watched ? '1' : '0')
-      : String(parseInt(it.epWatched || 0)),
-    epTot: it.type === 'movie'
-      ? '1'
-      : (it.eps ? String(it.eps) : null),
-    epDuration: it.epDuration || entry.epDuration || null,
-    isLegacyTimeline: true,
-    tlIndex: idx
-  }));
+  if (!entry?.linkedGroupId) return [];
+  return DATA
+    .filter(x => x.linkedGroupId === entry.linkedGroupId && x.id !== entry.id)
+    .sort((a, b) => (a.linkedGroupOrder ?? 0) - (b.linkedGroupOrder ?? 0));
 }
 
+/**
+ * renderLinkedEntries(entry)
+ * Renders the "Linked Entries" section for the detail panel.
+ * Includes a "Link Entry" button and an "Unlink" button on each card.
+ */
 function renderLinkedEntries(entry) {
   if (!entry) return '';
   const linked = getLinkedEntries(entry);
-  const header = `<div class="linked-actions">
-      <button class="btn-add-linked" onclick="openAddLinkedEntry('${entry.id}')">+ Add Linked Anime</button>
-      ${linked.length ? `<span class="linked-hint">${linked.length} linked ${linked.length === 1 ? 'title' : 'titles'}</span>` : ''}
-    </div>`;
-  if (!linked.length) return header;
 
-  const panelHtml = linked.map((le, idx) => {
-    const st = entryStats(le);
+  const headerRow = `
+    <div class="linked-actions">
+      <button class="btn-add-linked" onclick="openLinkPicker('${entry.id}')">🔗 Link Entry</button>
+      ${linked.length ? `<span class="linked-hint">${linked.length} linked title${linked.length !== 1 ? 's' : ''}</span>` : ''}
+    </div>`;
+
+  if (!linked.length) {
+    return `<div class="sec-div">
+        <span class="sec-div-lbl">Linked Series</span>
+        <div class="sec-div-line"></div>
+      </div>
+      ${headerRow}`;
+  }
+
+  const cards = linked.map(le => {
+    const st          = entryStats(le);
     const statusColor = _mediaStatusBar(le.status);
-    /* For legacy timeline items, clicking opens the parent; for flat entries, open the linked entry */
-    const openId = le.isLegacyTimeline ? le.parentId : le.id;
-    return `<div class="linked-item" draggable="true" 
-      ondragstart="linkedDragStart(event,'${entry.id}','${le.id}',${idx})" 
-      ondragover="linkedDragOver(event,${idx})" 
-      ondrop="linkedDrop(event,'${entry.id}',${idx})" 
-      ondragleave="this.classList.remove('drag-over')"
-      onclick="openDetail('${openId}')">
+    const grpOrd      = le.linkedGroupOrder != null ? `<span style="font-size:9px;color:var(--mu)">Part ${le.linkedGroupOrder}</span>` : '';
+    return `<div class="linked-item" onclick="openDetail('${le.id}')">
       <div class="linked-main">
         <div class="linked-title">${esc(le.title)}</div>
         <div class="linked-meta">
-          <span class="linked-status" style="color:${statusColor};">${_mstag(le.status)}</span>
-          <span class="linked-progress">${st.cur} / ${st.tot || '?'} eps · ${st.pct}%</span>
+          ${_mstag(le.status)}
+          ${grpOrd}
+          <span class="linked-progress">${st.cur}/${st.tot||'?'} eps</span>
+          ${le.malId ? `<span style="font-size:9px;background:rgba(0,229,255,.08);color:rgba(0,229,255,.55);border:1px solid rgba(0,229,255,.15);border-radius:3px;padding:1px 4px">MAL</span>` : ''}
         </div>
       </div>
-      <div class="linked-controls">
+      <div class="linked-controls" onclick="event.stopPropagation()">
         <div class="ep-inline">
-          <button class="ep-pm" onclick="event.stopPropagation(); linkedEpDelta('${entry.id}','${le.id}',-1)">−</button>
+          <button class="ep-pm" onclick="linkedEpDelta('${entry.id}','${le.id}',-1)">−</button>
           <span class="ep-val">${st.cur}</span>
-          <button class="ep-pm" onclick="event.stopPropagation(); linkedEpDelta('${entry.id}','${le.id}',1)">+</button>
+          <button class="ep-pm" onclick="linkedEpDelta('${entry.id}','${le.id}',1)">+</button>
         </div>
+        <button onclick="unlinkEntry('${le.id}')" title="Unlink this entry"
+          style="width:22px;height:22px;border-radius:4px;background:rgba(251,113,133,.08);border:1px solid rgba(251,113,133,.2);color:#fb7185;font-size:10px;cursor:pointer;flex-shrink:0;margin-left:2px">✕</button>
       </div>
     </div>`;
   }).join('');
 
-  return `<div class="sec-div"><span class="sec-div-lbl">Linked Anime</span><div class="sec-div-line"></div><span class="sec-div-hint">All linked titles for this franchise</span></div>
-    ${header}
-    <div class="linked-wrap" id="linked-wrap-${entry.id}">${panelHtml}</div>`;
+  return `<div class="sec-div">
+      <span class="sec-div-lbl">Linked Series</span>
+      <div class="sec-div-line"></div>
+    </div>
+    ${headerRow}
+    <div class="linked-wrap" id="linked-wrap-${entry.id}">${cards}</div>`;
 }
 
-function linkedDragStart(ev, parentId, linkedId, idx) {
-  LINKED_DRAGING = { parentId, linkedId, idx };
-  ev.currentTarget.classList.add('dragging');
-}
-
-function linkedDragOver(ev, idx) {
-  ev.preventDefault();
-  if (!LINKED_DRAGING) return;
-  ev.currentTarget.classList.add('drag-over');
-}
-
-function linkedDrop(ev, parentId, idx) {
-  ev.preventDefault();
-  ev.currentTarget.classList.remove('drag-over');
-  if (!LINKED_DRAGING || LINKED_DRAGING.parentId !== parentId) {
-    LINKED_DRAGING = null;
-    return;
-  }
-  if (LINKED_DRAGING.idx === idx) {
-    LINKED_DRAGING = null;
-    return;
-  }
-  
-  const fromIdx = LINKED_DRAGING.idx;
-  const linked = getLinkedEntries(DATA.find(x => x.id === parentId));
-  if (fromIdx >= linked.length || idx > linked.length) {
-    LINKED_DRAGING = null;
-    return;
-  }
-  
-  // Reorder: remove from fromIdx, insert at idx
-  const item = linked.splice(fromIdx, 1)[0];
-  linked.splice(idx, 0, item);
-  
-  // Save order back to data by updating linkedGroupId references (order is implicit in render order)
-  // Actually, we need a linkedOrder field or similar. For now, we'll rely on display order.
-  
-  LINKED_DRAGING = null;
-  const parent = DATA.find(x => x.id === parentId);
-  parent.updatedAt = Date.now();
-  saveData(DATA);
-  renderDetailPanel(parent);
-}
-
+/**
+ * linkedEpDelta — increments/decrements a flat linked entry's episode count,
+ * then re-renders the parent's detail panel.
+ */
 function linkedEpDelta(parentId, linkedId, delta) {
-  const parent = DATA.find(x => x.id === parentId);
-  if (!parent) return;
-
-  const timeline = parent.timeline || [];
-  let it = timeline.find(item => item.id === linkedId);
-
-  if (!it && linkedId.includes('-tl-')) {
-    /* Parse: `${parentId}-tl-${idx}` */
-    const match = linkedId.match(/-tl-(\d+)$/);
-    if (match) {
-      const tlIdx = parseInt(match[1], 10);
-      it = parent.timeline?.[tlIdx];
-    }
-  }
-
-  if (it) {
-    const w = parseInt(it.epWatched || 0);
-    const t = parseInt(it.eps || 0);
-    const newW = Math.max(0, w + delta);
-    const maxW = t || Infinity;
-
-    it.epWatched = Math.min(newW, maxW);
-
-    /* Auto-mark as completed if watched all episodes */
-    if (it.epWatched >= maxW && maxW > 0 && it.status === 'watching') {
-      it.status = 'completed';
-      if (!it.endDate) it.endDate = today();
-    }
-
-    parent.updatedAt = Date.now();
-    saveData(DATA);
-    renderDetailPanel(parent);
-    renderMediaBody();
-    return;
-  }
-
-  /* ── New flat path ── */
   const linked = DATA.find(x => x.id === linkedId);
   if (!linked) return;
 
-  const st = entryStats(linked);
-  const newEpCur = Math.max(0, st.cur + delta);
-  const maxEps = st.tot || Infinity;
+  const cur    = parseInt(linked.epCur || 0);
+  const tot    = parseInt(linked.epTot || 0);
+  const newCur = Math.max(0, cur + delta);
+  linked.epCur = tot ? String(Math.min(newCur, tot)) : String(newCur);
 
-  linked.epCur = Math.min(newEpCur, maxEps);
-
-  /* Auto-mark as completed if watched all episodes */
-  if (linked.epCur >= maxEps && maxEps > 0 && linked.status === 'watching') {
+  if (tot && parseInt(linked.epCur) >= tot && linked.status === 'watching') {
     linked.status = 'completed';
     if (!linked.endDate) linked.endDate = today();
   }
 
   linked.updatedAt = Date.now();
   saveData(DATA);
-  renderDetailPanel(parent);
+
+  const parent = DATA.find(x => x.id === parentId);
+  if (parent) renderDetailPanel(parent);
   renderMediaBody();
 }
 
-function initLinkedDrag(parentId) {
-  document.querySelectorAll(`#linked-wrap-${parentId} .linked-item`).forEach(el => {
-    el.addEventListener('dragend', () => {
-      el.classList.remove('dragging');
-      document.querySelectorAll('.linked-item').forEach(x => x.classList.remove('drag-over'));
-    });
-  });
+/* ── Link Picker ── */
+
+/**
+ * openLinkPicker(sourceId)
+ * Opens a modal for searching and selecting an existing entry to link.
+ */
+function openLinkPicker(sourceId) {
+  const source = DATA.find(x => x.id === sourceId); if (!source) return;
+
+  const modal = document.createElement('div');
+  modal.id = 'link-picker-modal';
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:460px;max-height:82vh;display:flex;flex-direction:column;gap:0;padding:0;overflow:hidden">
+      <div style="padding:18px 20px 12px;border-bottom:1px solid var(--brd)">
+        <div class="modal-title" style="margin-bottom:6px">🔗 Link Entry</div>
+        <div class="modal-msg" style="margin-bottom:10px">
+          Link <b>${esc(source.title)}</b> with another entry in the same franchise or series.
+        </div>
+        <input class="fin" id="lp-search" placeholder="Search titles…"
+          oninput="renderLinkPickerList('${sourceId}',this.value)"
+          style="width:100%;box-sizing:border-box">
+      </div>
+      <div id="lp-list" style="flex:1;overflow-y:auto;padding:10px 16px;display:flex;flex-direction:column;gap:5px;min-height:120px;max-height:340px"></div>
+      <div class="modal-btns" style="padding:10px 20px;border-top:1px solid var(--brd)">
+        <button class="modal-btn cancel" onclick="document.getElementById('link-picker-modal').remove()">Cancel</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  renderLinkPickerList(sourceId, '');
+  setTimeout(() => document.getElementById('lp-search')?.focus(), 60);
+}
+
+/**
+ * renderLinkPickerList(sourceId, q)
+ * Populates the list inside the link picker modal.
+ */
+function renderLinkPickerList(sourceId, q) {
+  const el = document.getElementById('lp-list'); if (!el) return;
+  const source = DATA.find(x => x.id === sourceId);
+  if (!source) return;
+
+  const qLow = (q || '').toLowerCase();
+  // Show entries of same genreId, exclude source and entries already in source's group
+  const candidates = DATA.filter(e =>
+    e.id !== sourceId &&
+    e.genreId === source.genreId &&
+    (source.linkedGroupId ? e.linkedGroupId !== source.linkedGroupId : true) &&
+    (!qLow || e.title.toLowerCase().includes(qLow))
+  ).slice(0, 25);
+
+  if (!candidates.length) {
+    el.innerHTML = `<div style="color:var(--mu);font-size:13px;text-align:center;padding:18px">No matching entries found</div>`;
+    return;
+  }
+
+  el.innerHTML = candidates.map(e => {
+    const st  = entryStats(e);
+    const col = _mediaStatusBar(e.status);
+    const grp = e.linkedGroupId
+      ? `<span style="font-size:10px;color:#fbbf24;margin-left:4px">🔗 In group</span>` : '';
+    return `<div onclick="confirmLinkEntries('${sourceId}','${e.id}')"
+      style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surf2);border:1px solid var(--brd);border-radius:6px;cursor:pointer;transition:border-color .12s"
+      onmouseover="this.style.borderColor='var(--ac)'" onmouseout="this.style.borderColor='var(--brd)'">
+      <div style="width:3px;height:34px;background:${col};border-radius:2px;flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</div>
+        <div style="font-size:11px;color:var(--mu);margin-top:2px;display:flex;gap:6px;align-items:center">
+          ${_mstag(e.status)}
+          <span>${st.cur}/${st.tot||'?'} eps</span>
+          ${grp}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/**
+ * confirmLinkEntries(sourceId, targetId)
+ * Links two entries into the same group. Creates a new group UUID if neither has one.
+ */
+function confirmLinkEntries(sourceId, targetId) {
+  document.getElementById('link-picker-modal')?.remove();
+
+  const source = DATA.find(x => x.id === sourceId);
+  const target = DATA.find(x => x.id === targetId);
+  if (!source || !target) return;
+
+  // Prefer source's group > target's group > new UUID
+  const groupId = source.linkedGroupId || target.linkedGroupId || uid();
+
+  // Assign source into group if not already
+  if (!source.linkedGroupId) {
+    const members = DATA.filter(e => e.linkedGroupId === groupId);
+    const maxOrd  = members.reduce((m, e) => Math.max(m, e.linkedGroupOrder ?? 0), 0);
+    source.linkedGroupId    = groupId;
+    source.linkedGroupOrder = maxOrd === 0 ? 1 : maxOrd + 1;
+  }
+
+  // Assign target into group if not already in this group
+  if (target.linkedGroupId !== groupId) {
+    const members = DATA.filter(e => e.linkedGroupId === groupId);
+    const maxOrd  = members.reduce((m, e) => Math.max(m, e.linkedGroupOrder ?? 0), 0);
+    target.linkedGroupId    = groupId;
+    target.linkedGroupOrder = maxOrd + 1;
+  }
+
+  source.updatedAt = Date.now();
+  target.updatedAt = Date.now();
+  saveData(DATA);
+
+  renderDetailPanel(source);
+  renderMediaBody();
+  toast(`✓ Linked: "${source.title}" ↔ "${target.title}"`);
+}
+
+/**
+ * unlinkEntry(id)
+ * Removes linkedGroupId and linkedGroupOrder from one entry only.
+ * If only 1 member remains in the group afterward, clears them too.
+ */
+function unlinkEntry(id) {
+  const entry = DATA.find(x => x.id === id);
+  if (!entry?.linkedGroupId) return;
+
+  const groupId      = entry.linkedGroupId;
+  const groupMembers = DATA.filter(e => e.linkedGroupId === groupId);
+
+  entry.linkedGroupId    = null;
+  entry.linkedGroupOrder = null;
+  entry.updatedAt        = Date.now();
+
+  // If only 1 entry remains in the group, clear it too
+  const remaining = groupMembers.filter(e => e.id !== id);
+  if (remaining.length === 1) {
+    remaining[0].linkedGroupId    = null;
+    remaining[0].linkedGroupOrder = null;
+    remaining[0].updatedAt        = Date.now();
+  }
+
+  saveData(DATA);
+
+  // Re-render the currently open panel (which may be one of the remaining entries)
+  const panelEntry = PEDIT ? DATA.find(x => x.id === PEDIT) : null;
+  if (panelEntry) renderDetailPanel(panelEntry);
+  renderMediaBody();
+  toast('Unlinked');
 }
 
 /* ── Form Panel ── */
+
+// State for pending linked group (used when adding a new linked entry)
+let PENDING_LINKED_GROUP_ID    = null;
+let PENDING_LINKED_GROUP_ORDER = null;
+let PENDING_LINKED_GROUP_LABEL = null;
+
 function renderFormPanel(e) {
   const isEdit = !!e;
-  const pendingGroupId = !e ? PENDING_LINKED_GROUP_ID : null;
+  const pendingGroupId    = !e ? PENDING_LINKED_GROUP_ID    : null;
   const pendingGroupOrder = !e ? PENDING_LINKED_GROUP_ORDER : null;
   const pendingGroupLabel = !e ? PENDING_LINKED_GROUP_LABEL : null;
   const gOpts = GENRES.map(g => `<option value="${g.id}" ${(e?e.genreId:GACTIVE)===g.id?'selected':''}>${esc(g.name)}</option>`).join('');
   const status = e ? e.status : 'not_started';
   const airingDays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const linkedGroupId = e?.linkedGroupId || pendingGroupId || '';
+  const linkedGroupId    = e?.linkedGroupId    || pendingGroupId    || '';
   const linkedGroupOrder = e?.linkedGroupOrder ?? pendingGroupOrder ?? '';
   if (!e) {
-    PENDING_LINKED_GROUP_ID = null;
+    PENDING_LINKED_GROUP_ID    = null;
     PENDING_LINKED_GROUP_ORDER = null;
     PENDING_LINKED_GROUP_LABEL = null;
   }
@@ -982,7 +956,6 @@ function renderFormPanel(e) {
         <input class="fin" id="mal-search-inp" placeholder="Search anime title…"
           autocomplete="off" oninput="malSearchInput(this.value)">
         <div id="mal-dropdown" style="display:none;position:absolute;left:0;right:0;top:calc(100% - 2px);background:var(--surf);border:1px solid var(--brd2);border-radius:0 0 7px 7px;z-index:900;max-height:260px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
-        <!-- Cover preview + hidden fields -->
         <div id="mal-cover-wrap" style="display:none;margin-top:10px;display:flex;align-items:center;gap:10px">
           <img id="mal-cover-img" style="width:48px;height:68px;object-fit:cover;border-radius:4px;border:1px solid var(--brd)" onerror="this.style.display='none'">
           <div style="font-size:11px;color:var(--mu)">Cover from MAL — all fields below are editable</div>
@@ -991,15 +964,14 @@ function renderFormPanel(e) {
         <input type="hidden" id="f-malimg" value="${esc(e?.coverImage || '')}">
       </div>
       <!-- ── End MAL Search ── -->
-      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--mu);margin-bottom:9px;padding-bottom:5px;border-bottom:1px solid var(--brd)">Franchise / Series</div>
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--mu);margin-bottom:9px;padding-bottom:5px;border-bottom:1px solid var(--brd)">Entry Details</div>
       <div class="fg">
         <label class="flbl">Title *</label>
-        <input class="fin" id="f-title" placeholder="e.g. Attack on Titan" value="${esc(e?e.title:'')}">
-        <span style="font-size:11px;color:var(--mu);margin-top:2px;display:block">Franchise name — seasons hold all details below</span>
+        <input class="fin" id="f-title" placeholder="e.g. Attack on Titan Season 1" value="${esc(e?e.title:'')}">
       </div>
       <div class="fg-row">
         <div class="fg"><label class="flbl">Genre</label><select class="fin" id="f-genre">${gOpts}</select></div>
-        <div class="fg"><label class="flbl">Overall Status</label>
+        <div class="fg"><label class="flbl">Status</label>
           <select class="fin" id="f-status">
             <option value="not_started" ${status==='not_started'?'selected':''}>○ Not Started</option>
             <option value="watching"    ${status==='watching'?'selected':''}>▶ Watching</option>
@@ -1064,7 +1036,7 @@ function renderFormPanel(e) {
       </div>
       <input type="hidden" id="f-linked-group" value="${esc(linkedGroupId)}">
       <input type="hidden" id="f-linked-order" value="${linkedGroupOrder}">
-      ${pendingGroupLabel ? `<div style="padding:10px 12px;margin:10px 16px 0;background:rgba(var(--ac-rgb),.08);border:1px solid rgba(var(--ac-rgb),.18);border-radius:6px;font-size:12px;color:var(--tx2)">Linking to <strong>${esc(pendingGroupLabel)}</strong></div>` : ''}
+      ${pendingGroupLabel ? `<div style="padding:10px 12px;margin:10px 0 0;background:rgba(var(--ac-rgb),.08);border:1px solid rgba(var(--ac-rgb),.18);border-radius:6px;font-size:12px;color:var(--tx2)">Linking to <strong>${esc(pendingGroupLabel)}</strong></div>` : ''}
     </div>
     <div class="panel-actions">
       ${isEdit ? `<button class="btn-del" onclick="askDel('${e.id}')">Delete</button>` : ''}
@@ -1076,105 +1048,6 @@ function renderFormPanel(e) {
     _malUpdateCoverPreview(e?.coverImage || '');
   });
 }
-
-function tlFormHtml(it, i) {
-  const isS  = it.type === 'season';
-  const ss   = it.status || 'not_started';
-  const showUp = ss === 'upcoming';
-  return `<div class="ftl-item" draggable="true" data-idx="${i}" data-type="${it.type || 'season'}" data-id="${it.id||''}"
-    ondragstart="fDragStart(event,${i})" ondragover="fDragOver(event,${i})" ondrop="fDrop(event,${i})">
-    <button class="ftl-rm" onclick="removeTlItem(${i})">✕</button>
-    <div class="ftl-head">
-      <span class="ftl-drag">⠿</span>
-      <span class="tl-type-pill ${isS?'tp-s':'tp-m'}">${isS?'Season':'Movie'}</span>
-      ${isS?`<span style="font-size:10px;color:var(--mu)">S${it.num||i+1}</span>`:''}
-    </div>
-    <div class="fg-row" style="margin-bottom:7px">
-      <div class="fg"><label class="flbl">${isS?'Season Name':'Movie Title'}</label>
-        <input class="fin" data-fi="name" value="${esc(it.name||it.movieTitle||'')}" placeholder="${isS?'e.g. Season 1':'Movie title'}">
-      </div>
-      <div class="fg"><label class="flbl">Status</label>
-        <select class="fin" data-fi="status" onchange="onTlSC(this,${i})">
-          <option value="not_started" ${ss==='not_started'?'selected':''}>○ Not Started</option>
-          <option value="plan"        ${ss==='plan'?'selected':''}>◻ Planned</option>
-          <option value="watching"    ${ss==='watching'?'selected':''}>▶ Watching</option>
-          <option value="completed"   ${ss==='completed'?'selected':''}>✓ Completed</option>
-          <option value="upcoming"    ${ss==='upcoming'?'selected':''}>◉ Upcoming</option>
-          <option value="dropped"     ${ss==='dropped'?'selected':''}>✗ Dropped</option>
-        </select>
-      </div>
-    </div>
-    ${isS ? `<div class="fg-row" style="margin-bottom:7px">
-      <div class="fg"><label class="flbl">Total Eps</label><input class="fin" type="number" data-fi="eps" value="${it.eps||''}" placeholder="e.g. 12"></div>
-      <div class="fg"><label class="flbl">Watched</label><input class="fin" type="number" data-fi="epWatched" value="${it.epWatched||''}" placeholder="0"></div>
-    </div>` : ''}
-    <div class="fg-row" style="margin-bottom:7px">
-      <div class="fg"><label class="flbl">Start Date</label><input class="fin" type="date" data-fi="startDate" value="${it.startDate||''}"></div>
-      <div class="fg"><label class="flbl">Finish Date</label><input class="fin" type="date" data-fi="endDate" id="ftl-end-${i}" value="${it.endDate||''}"></div>
-    </div>
-    <div class="fg-row" style="margin-bottom:7px">
-      <div class="fg"><label class="flbl">Rating (0–10)</label><input class="fin" type="number" data-fi="rating" value="${it.rating||''}" placeholder="—" min="0" max="10" step="0.5"></div>
-      <div class="fg"><label class="flbl">Ep Duration (min)</label><input class="fin" type="number" data-fi="epDuration" value="${it.epDuration||''}" placeholder="24" min="1" max="300"></div>
-    </div>
-    <div class="fg-row" style="display:${showUp?'grid':'none'}" id="ftl-upd-${i}">
-      <div class="fg"><label class="flbl">Release Date</label><input class="fin" type="date" data-fi="upcomingDate" value="${it.upcomingDate||''}"></div>
-      <div class="fg"><label class="flbl">Release Time</label><input class="fin" type="time" data-fi="upcomingTime" value="${it.upcomingTime||''}"></div>
-    </div>
-  </div>`;
-}
-
-function onTlSC(sel, i) {
-  const v = sel.value;
-  const row = document.getElementById(`ftl-upd-${i}`);
-  if (row) row.style.display = v==='upcoming' ? 'grid' : 'none';
-  if (v==='completed') {
-    const endEl = sel.closest('.ftl-item').querySelector('[data-fi="endDate"]');
-    if (endEl && !endEl.value) endEl.value = today();
-  }
-}
-
-function collectFormTl() {
-  const items = []; let sNum = 0;
-  document.querySelectorAll('#ftl-list .ftl-item').forEach(el => {
-    const raw  = el.dataset.type;
-    const type = (raw && raw !== 'undefined') ? raw : 'season';
-    const id   = el.dataset.id   || uid();
-    const isS  = type === 'season';
-    if (isS) sNum++;
-    const get = fi => { const x=el.querySelector(`[data-fi="${fi}"]`); return x?x.value:''; };
-    const name=get('name'), status=get('status')||'not_started';
-    let endDate=get('endDate')||null;
-    if (status==='completed'&&!endDate) endDate=today();
-    items.push({
-      id, type, num:isS?sNum:null, name:name||null,
-      movieTitle:!isS?(name||null):null, status,
-      eps:isS?(get('eps')||null):null,
-      epWatched:isS?(get('epWatched')||null):null,
-      watched:!isS&&status==='completed',
-      startDate:get('startDate')||null, endDate,
-      rating:get('rating')||null,
-      epDuration:get('epDuration')?parseInt(get('epDuration')):null,
-      upcomingDate:get('upcomingDate')||null, upcomingTime:get('upcomingTime')||null,
-    });
-  });
-  return items;
-}
-
-function addTlSeason() {
-  const cur = collectFormTl();
-  const num = cur.filter(x=>x.type==='season').length + 1;
-  cur.push({ id:uid(), type:'season', num, name:`Season ${num}`, status:'not_started',
-             eps:null, epWatched:null, startDate:null, endDate:null, rating:null,
-             epDuration:null, upcomingDate:null, upcomingTime:null });
-  FORM_TL=cur; refreshFtl();
-}
-function addTlMovie()    { const cur=collectFormTl(); cur.push({id:uid(),type:'movie',movieTitle:'',name:'',status:'not_started',watched:false,upcomingDate:null,upcomingTime:null}); FORM_TL=cur; refreshFtl(); }
-function removeTlItem(i) { const c=collectFormTl(); c.splice(i,1); FORM_TL=c; refreshFtl(); }
-function refreshFtl()    { document.getElementById('ftl-list').innerHTML=FORM_TL.map((it,i)=>tlFormHtml(it,i)).join(''); }
-
-function fDragStart(ev,i) { FDRG=i; ev.currentTarget.classList.add('dragging'); }
-function fDragOver(ev,i)  { ev.preventDefault(); if(FDRG===i)return; document.querySelectorAll('.ftl-item').forEach(x=>x.classList.remove('drag-over')); ev.currentTarget.classList.add('drag-over'); }
-function fDrop(ev,i)      { ev.preventDefault(); document.querySelectorAll('.ftl-item').forEach(x=>x.classList.remove('drag-over','dragging')); if(FDRG===null||FDRG===i)return; const c=collectFormTl(); const item=c.splice(FDRG,1)[0]; c.splice(i,0,item); FORM_TL=c; FDRG=null; refreshFtl(); }
 
 function saveEntry(eid) {
   const title = document.getElementById('f-title').value.trim();
@@ -1188,15 +1061,12 @@ function saveEntry(eid) {
   const linkedGroupOrder = linkedGroupOrderRaw !== null && linkedGroupOrderRaw !== ''
     ? parseInt(linkedGroupOrderRaw)
     : existing?.linkedGroupOrder ?? null;
-  
-  /* Read episode data from form */
-  const epCurVal = document.getElementById('f-epcur')?.value?.trim();
-  const epTotVal = document.getElementById('f-eptot')?.value?.trim();
-  const epDurVal = document.getElementById('f-epduration')?.value?.trim();
+
+  const epCurVal  = document.getElementById('f-epcur')?.value?.trim();
+  const epTotVal  = document.getElementById('f-eptot')?.value?.trim();
+  const epDurVal  = document.getElementById('f-epduration')?.value?.trim();
   const ratingVal = document.getElementById('f-rating')?.value?.trim();
-  const startDateVal = g('f-startdate');
-  const endDateVal = g('f-enddate');
-  
+
   const entry = {
     id:eid||uid(), title,
     genreId:g('f-genre'), status:g('f-status'),
@@ -1208,8 +1078,8 @@ function saveEntry(eid) {
     pinned:existing?.pinned||false,
     epCur: epCurVal ? String(parseInt(epCurVal)) : null,
     epTot: epTotVal ? String(parseInt(epTotVal)) : null,
-    startDate: startDateVal,
-    endDate: endDateVal,
+    startDate: g('f-startdate'),
+    endDate:   g('f-enddate'),
     rating: ratingVal ? parseFloat(ratingVal) : null,
     epDuration: epDurVal ? parseInt(epDurVal) : null,
     upcomingDate:existing?.upcomingDate||null, upcomingTime:existing?.upcomingTime||null,
@@ -1219,7 +1089,6 @@ function saveEntry(eid) {
     coverImage:document.getElementById('f-malimg')?.value || existing?.coverImage || null,
     linkedGroupId,
     linkedGroupOrder,
-    timeline: existing?.timeline || [],
     addedAt:existing?existing.addedAt:Date.now(), updatedAt:Date.now(),
   };
   if (entry.status==='completed'&&!entry.endDate) entry.endDate=today();
@@ -1257,11 +1126,11 @@ async function _syncMALListEntry(entry, silent = false) {
     upcoming: 'plan_to_watch',
   };
   const status = statusMap[entry.status] || 'plan_to_watch';
-  const epCur = parseInt(entry.epCur || '0') || 0;
-  const score = entry.rating != null && entry.rating !== '' ? Number(entry.rating) : undefined;
+  const epCur  = parseInt(entry.epCur || '0') || 0;
+  const score  = entry.rating != null && entry.rating !== '' ? Number(entry.rating) : undefined;
 
   const payload = {
-    access_token: SETTINGS.malAccessToken || null,
+    access_token:  SETTINGS.malAccessToken || null,
     refresh_token: SETTINGS.malRefreshToken || null,
     status,
     num_watched_episodes: epCur,
@@ -1292,13 +1161,11 @@ async function _syncMALListEntry(entry, silent = false) {
   return data.updated || false;
 }
 
-// ── Silent background sync (called by quickEp, panelEp, etc.) ──
 function _malSyncQuiet(e) {
   if (!e?.malId || !SETTINGS?.malRefreshToken) return;
   _syncMALListEntry(e, true).catch(err => console.warn('[MAL] background sync failed:', err));
 }
 
-// ── Bulk sync all MAL-linked entries ──
 async function malBulkSyncAll(onProgress) {
   const entries = DATA.filter(e => e.malId);
   if (!entries.length) return { total: 0, success: 0, failed: 0 };
@@ -1310,7 +1177,6 @@ async function malBulkSyncAll(onProgress) {
       ok !== false ? success++ : failed++;
     } catch(_) { failed++; }
     if (onProgress) onProgress(i + 1, entries.length);
-    // Rate-limit: MAL API has strict limits
     if (i < entries.length - 1) await new Promise(r => setTimeout(r, 500));
   }
   ls.setStr('ac_mal_last_sync', String(Date.now()));
@@ -1336,7 +1202,6 @@ function _injectPinStyles() {
   const s = document.createElement('style');
   s.id = 'm-pin-styles';
   s.textContent = `
-    /* context menu */
     #m-ctx-menu {
       position: fixed;
       z-index: 99999;
@@ -1380,35 +1245,14 @@ function _injectPinStyles() {
     .m-ctx-item.danger { color: #f87171; }
     .m-ctx-item .ctx-ico { font-size: 15px; width: 18px; text-align: center; flex-shrink:0; }
     .m-ctx-sep { height: 1px; background: rgba(255,255,255,.07); margin: 3px 0; }
-
-    /* pin badge on card */
-    .m-pin-badge {
-      font-size: 11px;
-      margin-right: 4px;
-      vertical-align: middle;
-      opacity: .85;
-    }
-
-    /* subtle left-border accent for pinned cards */
-    .m-card-pinned .m-card-bar {
-      width: 4px !important;
-      box-shadow: 0 0 8px 1px rgba(251,191,36,.35);
-    }
-    .m-card-pinned {
-      border-color: rgba(251,191,36,.18) !important;
-    }
-
-    /* overlay to close ctx menu on outside click */
-    #m-ctx-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 99998;
-    }
+    .m-pin-badge { font-size: 11px; margin-right: 4px; vertical-align: middle; opacity: .85; }
+    .m-card-pinned .m-card-bar { width: 4px !important; box-shadow: 0 0 8px 1px rgba(251,191,36,.35); }
+    .m-card-pinned { border-color: rgba(251,191,36,.18) !important; }
+    #m-ctx-overlay { position: fixed; inset: 0; z-index: 99998; }
   `;
   document.head.appendChild(s);
 }
 
-/* ── Long-press detection ── */
 function startHold(id, ev) {
   cancelHold();
   _HOLD_FIRED = false;
@@ -1425,13 +1269,11 @@ function cancelHold() {
   if (_HOLD_TIMER) { clearTimeout(_HOLD_TIMER); _HOLD_TIMER = null; }
 }
 
-/* ── Context menu ── */
 function showCtxMenu(id, x, y) {
   hideCtxMenu();
   _CTX_ENTRY_ID = id;
   const e = DATA.find(d => d.id === id); if (!e) return;
 
-  // overlay to close on outside click
   const ov = document.createElement('div');
   ov.id = 'm-ctx-overlay';
   ov.onclick = hideCtxMenu;
@@ -1453,6 +1295,9 @@ function showCtxMenu(id, x, y) {
     <div class="m-ctx-item" onclick="hideCtxMenu();openEdit('${id}')">
       <span class="ctx-ico">✏️</span>Edit
     </div>
+    <div class="m-ctx-item" onclick="hideCtxMenu();openLinkPicker('${id}')">
+      <span class="ctx-ico">🔗</span>Link Entry
+    </div>
     <div class="m-ctx-sep"></div>
     <div class="m-ctx-item danger" onclick="hideCtxMenu();askDel('${id}')">
       <span class="ctx-ico">✕</span>Delete
@@ -1460,8 +1305,7 @@ function showCtxMenu(id, x, y) {
 
   document.body.appendChild(menu);
 
-  // position so menu stays on screen
-  const mw = 200, mh = 180;
+  const mw = 200, mh = 200;
   const vw = window.innerWidth, vh = window.innerHeight;
   menu.style.left = (x + mw > vw ? vw - mw - 8 : x) + 'px';
   menu.style.top  = (y + mh > vh ? y - mh       : y) + 'px';
@@ -1485,7 +1329,6 @@ function ctxPin(id) {
   toast(e.pinned ? '📌 Pinned to top' : 'Unpinned');
 }
 
-/* ── Section stubs (kept for completeness) ── */
 function renderSectionStub(id, c) {
   const meta = { games:{icon:'◈',color:'#f59e0b',phase:5}, books:{icon:'◎',color:'#a78bfa',phase:6}, music:{icon:'♪',color:'#fb923c',phase:7}, settings:{icon:'⚙',color:'#8888aa',phase:8} };
   const m = meta[id]||{icon:'?',color:'var(--ac)',phase:'?'};
@@ -1546,7 +1389,6 @@ function _malRenderDropdown(results) {
     const thumb  = r.image
       ? `<img src="${esc(r.image)}" style="width:32px;height:44px;object-fit:cover;border-radius:3px;flex-shrink:0" onerror="this.style.display='none'">`
       : `<div style="width:32px;height:44px;background:var(--surf3);border-radius:3px;flex-shrink:0"></div>`;
-    // Stringify and escape so the string survives the onclick attribute
     const payload = esc(JSON.stringify(r));
     return `<div style="display:flex;align-items:center;gap:9px;padding:8px 11px;cursor:pointer;border-bottom:1px solid var(--brd);transition:background .1s"
       onmouseenter="this.style.background='var(--surf3)'"
@@ -1562,7 +1404,6 @@ function _malRenderDropdown(results) {
   }).join('');
   dd.style.display = 'block';
 
-  // Close dropdown on outside click
   setTimeout(() => {
     const close = ev => {
       if (!ev.target.closest('#mal-search-wrap')) {
@@ -1580,37 +1421,28 @@ function _malSelect(rJson) {
   const dd = document.getElementById('mal-dropdown');
   if (dd) dd.style.display = 'none';
 
-  // Prefer English title for display/entry; keep Japanese as fallback
   const displayTitle = r.title_en || r.title;
-
-  // Search field label
   const searchInp = document.getElementById('mal-search-inp');
   if (searchInp) searchInp.value = displayTitle;
 
-  // Title — use English if available
   const titleEl = document.getElementById('f-title');
   if (titleEl) titleEl.value = displayTitle;
 
-  // MAL ID
   const malIdEl = document.getElementById('f-malid');
   if (malIdEl) malIdEl.value = String(r.id || '');
 
-  // Cover image
   const imgEl = document.getElementById('f-malimg');
   if (imgEl) imgEl.value = r.image || '';
   _malUpdateCoverPreview(r.image || '');
 
-  // Synopsis → notes (only if notes currently empty)
   const notesEl = document.getElementById('f-notes');
   if (notesEl && !notesEl.value && r.synopsis) notesEl.value = r.synopsis;
 
-  // Episode count → first season's eps field (if empty)
   if (r.episodes) {
-    const firstEps = document.querySelector('#ftl-list .ftl-item [data-fi="eps"]');
-    if (firstEps && !firstEps.value) firstEps.value = String(r.episodes);
+    const epTot = document.getElementById('f-eptot');
+    if (epTot && !epTot.value) epTot.value = String(r.episodes);
   }
 
-  // Airing status
   const statusEl = document.getElementById('f-status');
   if (statusEl && r.status) {
     const map = {
