@@ -434,15 +434,18 @@ function setDensity(v) {
 // ── SECURITY TAB ──
 function renderSettingsSecurity(el) {
   const hasPin = !!getPin();
-  const malConnected = !!SETTINGS.malRefreshToken;
-  const malTokenValid = malConnected && SETTINGS.malAccessToken && Date.now() < (parseInt(SETTINGS.malTokenExpiry) || 0);
-  const malStatus = malTokenValid ? 'Connected' : malConnected ? 'Connected, may need refresh' : 'Not connected';
+  const malConnected    = !!SETTINGS.malRefreshToken;
+  const malTokenValid   = malConnected && SETTINGS.malAccessToken && Date.now() < (parseInt(SETTINGS.malTokenExpiry) || 0);
+  const malLinkedCount  = (typeof DATA !== 'undefined') ? DATA.filter(e => e.malId).length : 0;
+  const lastSyncRaw     = ls.str('ac_mal_last_sync');
+  const lastSyncTime    = lastSyncRaw ? new Date(parseInt(lastSyncRaw)).toLocaleString() : null;
+  const lastSyncTitle   = ls.str('ac_mal_last_sync_title') || '';
   const malDesc = malTokenValid
-    ? 'Your MyAnimeList account is connected and ready for sync.'
+    ? 'Connected and ready. Episode changes, status and ratings sync automatically. Use "Sync All" to push all existing entries.'
     : malConnected
-      ? 'A refresh token is saved. Connect again if the MAL session expires.'
-      : 'Connect your MAL account to sync anime status and episode progress to MyAnimeList.';
-  const malLabel = malConnected ? 'Disconnect MAL Account' : 'Connect MAL Account';
+      ? 'Refresh token is saved but access token may be expired. Try syncing — it will auto-refresh. If it fails, reconnect.'
+      : 'Connect your MAL account to auto-sync anime status, episode progress and ratings to MyAnimeList.';
+  const malLabel  = malConnected ? 'Disconnect MAL Account' : 'Connect MAL Account';
   const malAction = malConnected ? 'disconnectMALAccount()' : 'connectMALAccount()';
   el.innerHTML = `
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
@@ -478,19 +481,37 @@ function renderSettingsSecurity(el) {
     </div>
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-top:12px">
       <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
-        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">MyAnimeList Connection</div>
-        <div style="font-size:12px;color:var(--mu)">${malStatus}</div>
-        ${ls.str('ac_mal_last_sync') ? `<div style="font-size:11px;color:#00e5ff;margin-top:2px">✓ Last synced: ${new Date(parseInt(ls.str('ac_mal_last_sync'))).toLocaleString()}${ls.str('ac_mal_last_sync_title') ? ' · ' + ls.str('ac_mal_last_sync_title') : ''}</div>` : ''}
-      </div>
-      <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;color:var(--tx)">${malLabel}</div>
-          <div style="font-size:11px;color:var(--mu);margin-top:2px">${malDesc}</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap">
+          <div style="font-size:13px;font-weight:700;color:var(--tx)">MyAnimeList Sync</div>
+          <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;${
+            malConnected && malTokenValid
+              ? 'background:rgba(74,222,128,.1);color:#4ade80'
+              : malConnected
+                ? 'background:rgba(251,191,36,.1);color:#fbbf24'
+                : 'background:rgba(251,113,133,.1);color:#fb7185'
+          }">
+            ${malConnected && malTokenValid ? '● Connected' : malConnected ? '● Needs Refresh' : '○ Not Connected'}
+          </span>
         </div>
-        <button onclick="${malAction}"
-          style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
-          ${malLabel}
-        </button>
+        <div style="font-size:12px;color:var(--mu)">${malLinkedCount} entries linked to MAL across all genres</div>
+        ${lastSyncTime ? `<div style="font-size:11px;color:#00e5ff;margin-top:3px">✓ Last sync: ${lastSyncTime}${lastSyncTitle ? ' · ' + lastSyncTitle : ''}</div>` : ''}
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:12px;color:var(--tx2);line-height:1.6">${malDesc}</div>
+        <div id="mal-bulk-progress" style="display:none;background:var(--surf2);border:1px solid var(--brd);border-radius:6px;padding:10px 12px"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button onclick="${malAction}"
+            style="background:${malConnected?'rgba(251,113,133,.1)':'rgba(var(--ac-rgb),.12)'};color:${malConnected?'#fb7185':'var(--ac)'};border:1px solid ${malConnected?'rgba(251,113,133,.25)':'rgba(var(--ac-rgb),.3)'};border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
+            ${malLabel}
+          </button>
+          ${malConnected && malLinkedCount > 0 ? `
+            <button onclick="startMALBulkSync()"
+              style="background:rgba(0,229,255,.08);color:#00e5ff;border:1px solid rgba(0,229,255,.25);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
+              ↻ Sync All ${malLinkedCount} Entries to MAL
+            </button>` : ''}
+          ${malConnected && malLinkedCount === 0 ? `
+            <span style="font-size:12px;color:var(--mu)">Link entries to MAL via the Add/Edit form to enable sync</span>` : ''}
+        </div>
       </div>
     </div>`;
 }
@@ -574,6 +595,58 @@ async function saveDesktopShortcut(type) {
   } else {
     toast(`✗ ${result.error}`, '#fb7185');
   }
+}
+
+// ── MAL Bulk Sync ──
+async function startMALBulkSync() {
+  if (!SETTINGS?.malRefreshToken) { toast('MAL not connected', '#fb7185'); return; }
+  const entries = (typeof DATA !== 'undefined') ? DATA.filter(e => e.malId) : [];
+  if (!entries.length) { toast('No entries linked to MAL', '#fb7185'); return; }
+
+  const progressEl = document.getElementById('mal-bulk-progress');
+  if (progressEl) {
+    progressEl.style.display = 'block';
+    progressEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+        <div style="width:14px;height:14px;border:2px solid var(--brd);border-top-color:#00e5ff;border-radius:50%;animation:_spin .6s linear infinite;flex-shrink:0"></div>
+        <span style="font-size:12px;color:var(--tx2)">Starting sync of ${entries.length} entries…</span>
+      </div>
+      <div style="height:4px;background:var(--surf3);border-radius:2px;overflow:hidden">
+        <div id="mal-bulk-bar" style="height:100%;width:0%;background:#00e5ff;border-radius:2px;transition:width .4s"></div>
+      </div>`;
+  }
+
+  // Disable the button while running
+  document.querySelectorAll('button[onclick="startMALBulkSync()"]').forEach(b => { b.disabled = true; b.style.opacity = '.5'; });
+
+  const result = await malBulkSyncAll((done, total) => {
+    const pct = Math.round(done / total * 100);
+    const bar = document.getElementById('mal-bulk-bar');
+    if (bar) bar.style.width = pct + '%';
+    if (progressEl) {
+      const span = progressEl.querySelector('span');
+      if (span) span.textContent = `Syncing ${done} of ${total} entries…`;
+    }
+  });
+
+  document.querySelectorAll('button[onclick="startMALBulkSync()"]').forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+
+  if (progressEl) progressEl.style.display = 'none';
+
+  if (result.error === 'not_connected') {
+    toast('MAL not connected', '#fb7185');
+    return;
+  }
+
+  const { total, success, failed } = result;
+  if (failed > 0) {
+    toast(`MAL sync done: ${success}/${total} updated, ${failed} failed`, '#fbbf24');
+  } else {
+    toast(`✓ MAL bulk sync complete: ${success} entries updated`, '#4ade80');
+  }
+
+  // Re-render to update the "Last sync" line
+  renderSettingsSecurity(document.getElementById('settings-body'));
 }
 
 function clearPin() {

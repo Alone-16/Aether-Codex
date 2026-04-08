@@ -321,6 +321,7 @@ function rowHtml(e) {
         ${_mstag(e.status)}
         ${tlLabel ? `<span class="m-card-seasons" style="font-size:10px;color:rgba(255,255,255,.35);font-family:'Space Mono',monospace,sans-serif">${tlLabel}</span>` : ''}
         ${rewBadge}
+        ${e.malId ? `<span style="font-size:9px;font-weight:700;background:rgba(0,229,255,.08);color:rgba(0,229,255,.55);border:1px solid rgba(0,229,255,.15);border-radius:3px;padding:1px 4px">MAL</span>` : ''}
         ${_airBadge(e)}
       </div>
     </div>
@@ -411,6 +412,7 @@ function quickEp(id, delta) {
   }
   e.updatedAt = Date.now(); saveData(DATA); renderMediaBody();
   if (PANEL === 'detail' && PEDIT === id) renderDetailPanel(DATA.find(x => x.id === id));
+  _malSyncQuiet(e);
 }
 
 function quickTlEp(eid, idx, delta) {
@@ -425,6 +427,7 @@ function quickTlEp(eid, idx, delta) {
   }
   e.updatedAt = Date.now(); saveData(DATA); renderMediaBody();
   if (PANEL === 'detail' && PEDIT === eid) renderDetailPanel(e);
+  _malSyncQuiet(e);
 }
 
 /* ═══════════════════════════════
@@ -621,6 +624,16 @@ function renderDetailPanel(e) {
       ${e.startDate ? `<span>Started: <b>${fmtDate(e.startDate)}</b></span>` : ''}
       ${e.endDate   ? `<span>Finished: <b>${fmtDate(e.endDate)}</b></span>` : ''}
     </div>` : ''}
+    ${e.malId ? `<div style="padding:8px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:8px;background:rgba(0,229,255,.03)">
+      <span style="font-size:9px;font-weight:800;letter-spacing:.5px;background:rgba(0,229,255,.12);color:#00e5ff;border:1px solid rgba(0,229,255,.25);border-radius:3px;padding:1px 6px;flex-shrink:0">MAL</span>
+      <span style="font-size:11px;color:var(--tx2)">ID #${esc(String(e.malId))}</span>
+      ${SETTINGS?.malRefreshToken
+        ? `<span style="font-size:10px;color:#4ade80;margin-left:2px">● Connected</span>
+           <button onclick="event.stopPropagation();_syncMALListEntry(DATA.find(x=>x.id==='${e.id}')).catch(()=>toast('MAL sync failed','#fb7185'))"
+             style="margin-left:auto;font-size:11px;color:#00e5ff;background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.2);border-radius:4px;padding:3px 9px;cursor:pointer;white-space:nowrap">↻ Sync Now</button>`
+        : `<span style="margin-left:auto;font-size:11px;color:#fb7185">● Not connected</span>`
+      }
+    </div>` : ''}
     <div style="padding:12px 16px;border-bottom:1px solid var(--brd)">
       <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu);margin-bottom:10px">Details</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
@@ -721,6 +734,7 @@ function panelEp(eid, idx, delta) {
   it.epWatched = it.eps ? Math.min(w, parseInt(it.eps)) : w;
   if (it.eps && it.epWatched>=parseInt(it.eps) && it.status==='watching') it.status='completed';
   e.updatedAt = Date.now(); saveData(DATA); renderDetailPanel(e); renderMediaBody();
+  _malSyncQuiet(e);
 }
 
 function dDragStart(ev, i) { DDRG=i; ev.currentTarget.classList.add('dragging'); }
@@ -1212,18 +1226,26 @@ function saveEntry(eid) {
   if (eid) { const i=DATA.findIndex(x=>x.id===eid); DATA[i]=entry; } else DATA.unshift(entry);
   saveData(DATA); closePanel(); render(); toast('✓ Saved');
   if (entry.malId) {
-    const shouldSync = !existing || entry.status !== existing.status || entry.epCur !== existing.epCur || entry.rating !== existing.rating;
-    if (shouldSync) {
-      _syncMALListEntry(entry).catch(err => {
-        console.warn('[MAL] sync failed', err);
-        toast('MAL sync failed', '#fb7185');
-      });
+    if (!SETTINGS?.malRefreshToken) {
+      toast('Entry saved — MAL not connected (Settings → Security)', '#fbbf24');
+    } else {
+      const shouldSync = !existing || entry.status !== existing.status || String(entry.epCur) !== String(existing.epCur) || String(entry.rating) !== String(existing.rating);
+      if (shouldSync) {
+        _syncMALListEntry(entry).catch(err => {
+          console.warn('[MAL] sync failed', err);
+          toast('MAL sync failed: ' + (err.message || 'Unknown error'), '#fb7185');
+        });
+      }
     }
   }
 }
 
-async function _syncMALListEntry(entry) {
-  if (!entry?.malId || !SETTINGS?.malRefreshToken) return;
+async function _syncMALListEntry(entry, silent = false) {
+  if (!entry?.malId) return false;
+  if (!SETTINGS?.malRefreshToken) {
+    if (!silent) toast('MAL not connected — go to Settings → Security to connect', '#fbbf24');
+    return false;
+  }
   const malId = String(entry.malId);
   const statusMap = {
     watching: 'watching',
@@ -1265,8 +1287,34 @@ async function _syncMALListEntry(entry) {
   if (data.updated) {
     ls.setStr('ac_mal_last_sync', String(Date.now()));
     ls.setStr('ac_mal_last_sync_title', entry.title || '');
-    toast('✓ MAL synced: ' + (entry.title || 'entry updated'), '#00e5ff');
+    if (!silent) toast('✓ MAL synced: ' + (entry.title || 'entry updated'), '#00e5ff');
   }
+  return data.updated || false;
+}
+
+// ── Silent background sync (called by quickEp, panelEp, etc.) ──
+function _malSyncQuiet(e) {
+  if (!e?.malId || !SETTINGS?.malRefreshToken) return;
+  _syncMALListEntry(e, true).catch(err => console.warn('[MAL] background sync failed:', err));
+}
+
+// ── Bulk sync all MAL-linked entries ──
+async function malBulkSyncAll(onProgress) {
+  const entries = DATA.filter(e => e.malId);
+  if (!entries.length) return { total: 0, success: 0, failed: 0 };
+  if (!SETTINGS?.malRefreshToken) return { error: 'not_connected' };
+  let success = 0, failed = 0;
+  for (let i = 0; i < entries.length; i++) {
+    try {
+      const ok = await _syncMALListEntry(entries[i], true);
+      ok !== false ? success++ : failed++;
+    } catch(_) { failed++; }
+    if (onProgress) onProgress(i + 1, entries.length);
+    // Rate-limit: MAL API has strict limits
+    if (i < entries.length - 1) await new Promise(r => setTimeout(r, 500));
+  }
+  ls.setStr('ac_mal_last_sync', String(Date.now()));
+  return { total: entries.length, success, failed };
 }
 
 function askDel(id) {
