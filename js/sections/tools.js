@@ -7,7 +7,7 @@ let TOOLS_PROFILE_ABORT   = false;
 let TOOLS_PROFILE_RESULTS = [];
 
 // ── Update WORKER_BASE to your deployed Cloudflare Worker URL ──
-const WORKER_BASE    = 'https://your-worker.your-subdomain.workers.dev'; // ← set this
+const WORKER_BASE    = 'https://aether-codex-ai.nadeempubgmobile2-0.workers.dev';
 const TOOLS_API_BASE = `${WORKER_BASE}/instagram`;
 
 // ── Inject spinner keyframe once ──
