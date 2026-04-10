@@ -2,14 +2,13 @@
 //  TOOLS SECTION — Instagram Toolkit (4 modules)
 // ═══════════════════════════════════════════════════════
 
-let TOOLS_API_KEY     = localStorage.getItem('ac_tools_rapidapi_key') || '';
-let TOOLS_ACTIVE_TAB  = 'posts';
+let TOOLS_ACTIVE_TAB      = 'posts';
 let TOOLS_PROFILE_ABORT   = false;
 let TOOLS_PROFILE_RESULTS = [];
 
-const TOOLS_API_HOST    = 'instagram120.p.rapidapi.com';
-const TOOLS_API_BASE    = 'https://instagram120.p.rapidapi.com';
-const TOOLS_DEFAULT_KEY = '9225bde298mshab57009efa4a5a2p124916jsnfcf9acceb394';
+// ── Update WORKER_BASE to your deployed Cloudflare Worker URL ──
+const WORKER_BASE    = 'https://your-worker.your-subdomain.workers.dev'; // ← set this
+const TOOLS_API_BASE = `${WORKER_BASE}/instagram`;
 
 // ── Inject spinner keyframe once ──
 (function _injectToolsStyles() {
@@ -29,13 +28,9 @@ const TOOLS_DEFAULT_KEY = '9225bde298mshab57009efa4a5a2p124916jsnfcf9acceb394';
 //  SHARED HELPERS
 // ──────────────────────────────────────────────────────
 
-/** Standard POST headers — uses saved key with built-in key as fallback. */
+/** Standard POST headers for Worker-proxied Instagram calls. */
 function toolsApiHeaders() {
-  return {
-    'Content-Type':    'application/json',
-    'x-rapidapi-key':  TOOLS_API_KEY || TOOLS_DEFAULT_KEY,
-    'x-rapidapi-host': TOOLS_API_HOST,
-  };
+  return { 'Content-Type': 'application/json' };
 }
 
 // ── Image proxy: wsrv.nl re-serves any image with full CORS headers via Cloudflare CDN.
@@ -44,11 +39,10 @@ function toolsApiHeaders() {
 // Usage: set directly as <img src> — no fetch(), no blob(), no AbortController needed.
 const TOOLS_IMG_PROXY = u => `https://wsrv.nl/?url=${encodeURIComponent(u)}&n=-1`;
 
-// Fallback proxies used only for downloads (toolsDownload / toolsDownloadZIP).
+// Download proxies — all traffic stays within your own Worker.
 const TOOLS_PREVIEW_PROXIES = [
   u => `https://wsrv.nl/?url=${encodeURIComponent(u)}&n=-1`,
-  u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `${WORKER_BASE}/proxy?url=${encodeURIComponent(u)}`,
 ];
 
 /**
@@ -152,9 +146,9 @@ async function toolsDownloadReel(encodedUrl, shortcode, filename) {
     } catch { /* fall through */ }
   }
 
-  // ── Path 2: if URL is a plain CDN link, use normal proxy download ──
+  // ── Path 2: if URL is a plain CDN link (not a RapidAPI wrapper), use normal proxy ──
   const url = decodeURIComponent(encodedUrl);
-  if (!url.includes(TOOLS_API_HOST)) {
+  if (!url.includes('instagram120.p.rapidapi.com')) {
     await toolsDownload(encodedUrl, filename);
     return;
   }
@@ -243,25 +237,6 @@ function renderTools(c) {
         </div>
       </div>
 
-      <!-- ── API Key ── -->
-      <div class="tools-card" id="tools-apikey-card">
-        <div class="tools-card-head">
-          <span class="tools-card-label">⚙ RapidAPI Key</span>
-          <span class="tools-card-hint" id="tools-key-status">${TOOLS_API_KEY ? '✓ Custom key saved' : 'Using built-in key'}</span>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input class="fin tools-key-input" id="tools-apikey-input" type="password"
-            placeholder="Optional: paste your own x-rapidapi-key for higher limits…"
-            value="${TOOLS_API_KEY}" autocomplete="off">
-          <button class="tools-save-btn" onclick="toolsSaveKey()">Save</button>
-        </div>
-        <div style="font-size:11px;color:var(--mu);margin-top:6px">
-          A built-in key is pre-loaded. Get your own from
-          <span style="color:var(--ac);font-weight:600">rapidapi.com</span>
-          → search <em>Instagram120</em> → Subscribe → copy <code>x-rapidapi-key</code>.
-        </div>
-      </div>
-
       <!-- ── Module Tabs ── -->
       <div class="sub-tabs" id="tools-tabs" style="width:fit-content;flex-wrap:nowrap;overflow-x:auto">
         ${[
@@ -302,18 +277,6 @@ function renderToolsTabContent() {
   else if (TOOLS_ACTIVE_TAB === 'profile')    renderToolsProfile(el);
   else if (TOOLS_ACTIVE_TAB === 'story')      renderToolsStory(el);
   else if (TOOLS_ACTIVE_TAB === 'reels')      renderToolsReels(el);
-}
-
-function toolsSaveKey() {
-  const val = document.getElementById('tools-apikey-input')?.value?.trim();
-  TOOLS_API_KEY = val;
-  localStorage.setItem('ac_tools_rapidapi_key', val || '');
-  const st = document.getElementById('tools-key-status');
-  if (st) {
-    st.textContent = val ? '✓ Custom key saved' : 'Using built-in key';
-    st.style.color = val ? 'var(--ac)' : '';
-  }
-  toast(val ? '✓ API key saved' : 'Key cleared — using built-in key');
 }
 
 // ──────────────────────────────────────────────────────
@@ -1410,7 +1373,7 @@ async function toolsDownloadZIP(username, files, btnId, progressId) {
     const batch = files.slice(i, i + BATCH);
     await Promise.all(batch.map(async (f) => {
       const url      = decodeURIComponent(f.url);
-      const isApiUrl = url.includes(TOOLS_API_HOST);
+      const isApiUrl = url.includes('instagram120.p.rapidapi.com');
       let blob = null;
 
       if (isApiUrl && f.shortcode) {
