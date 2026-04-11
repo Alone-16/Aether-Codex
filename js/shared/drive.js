@@ -768,3 +768,4 @@ export async function driveBootstrap() {
 window._isConnected = _isConnected;
 window._pushToDrive = _pushToDrive;
 window._startMALAuth = _startMALAuth;
+window._WORKER = _WORKER;

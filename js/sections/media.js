@@ -1137,7 +1137,7 @@ async function _syncMALListEntry(entry, silent = false) {
   };
   if (!Number.isNaN(score) && score !== undefined) payload.score = score;
 
-  const res = await fetch(`${_WORKER}/mal/list/${encodeURIComponent(malId)}`, {
+  const res = await fetch(`${window._WORKER}/mal/list/${encodeURIComponent(malId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -1152,7 +1152,7 @@ async function _syncMALListEntry(entry, silent = false) {
     if (data.expires_in) window.window.SETTINGS.malTokenExpiry = String(Date.now() + (data.expires_in - 60) * 1000);
   }
   if (data.refresh_token) window.window.SETTINGS.malRefreshToken = data.refresh_token;
-  saveSettings(window.window.SETTINGS);
+  window.saveSettings(window.SETTINGS);
   if (data.updated) {
     ls.setStr('ac_mal_last_sync', String(Date.now()));
     ls.setStr('ac_mal_last_sync_title', entry.title || '');
