@@ -355,7 +355,7 @@ function rowHtml(e) {
     ? `<span style="font-size:9px;font-weight:700;background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2);border-radius:3px;padding:1px 4px">🔗</span>` : '';
 
   return `<div class="m-card${isA ? ' m-card-active' : ''}${e.pinned ? ' m-card-pinned' : ''}" id="row-${e.id}"
-    onclick="if(_HOLD_FIRED){_HOLD_FIRED=false;return;}openDetail('${e.id}')"
+    onclick="if(window._HOLD_FIRED){window._HOLD_FIRED=false;return;}openDetail('${e.id}')"
     onmousedown="startHold('${e.id}',event)"
     onmouseup="cancelHold()"
     onmouseleave="cancelHold()"
@@ -1255,12 +1255,12 @@ function _injectPinStyles() {
 
 function startHold(id, ev) {
   cancelHold();
-  _HOLD_FIRED = false;
+  _HOLD_FIRED = false; window._HOLD_FIRED = false;
   const touch = ev.touches ? ev.touches[0] : ev;
   const cx = touch.clientX, cy = touch.clientY;
   _HOLD_TIMER = setTimeout(() => {
     _HOLD_TIMER = null;
-    _HOLD_FIRED = true;
+    _HOLD_FIRED = true; window._HOLD_FIRED = true;
     showCtxMenu(id, cx, cy);
   }, 500);
 }
@@ -1493,7 +1493,7 @@ Object.assign(window, {
   askDel,
 
   // Context menu / hold
-  startHold, cancelHold, showCtxMenu, hideCtxMenu, ctxPin,
+  startHold, cancelHold, showCtxMenu, hideCtxMenu, ctxPin, _HOLD_FIRED,
 
   // MAL
   malBulkSyncAll, malSearchInput,
