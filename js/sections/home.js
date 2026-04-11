@@ -292,23 +292,19 @@ if (typeof window.entryStats !== 'function') {
   };
 }
 
-// ── Register all home functions as globals ────────────────────────
-Object.assign(window, {
-  renderHome,
-  renderAiringWidget,
-  selectAiringDay,
-  renderUpcomingWidget,
-
-// ── entryStats fallback (defined in media.js — stub until it loads) ───────
+// ── entryStats / activeSeason fallbacks (media.js defines the real ones) ──
 if (typeof window.entryStats !== 'function') {
   window.entryStats = function(e) {
     const epCur = parseInt(e.epCur) || 0;
     const epTot = parseInt(e.epTot) || 0;
     return {
-      pct: epTot ? Math.min(100, Math.round(epCur / epTot * 100)) : 0,
-      epCur, epTot,
-      label: epTot ? `${epCur}/${epTot}` : `${epCur}`,
-      isDone: e.status === 'completed',
+      pct      : epTot ? Math.min(100, Math.round(epCur / epTot * 100)) : 0,
+      epCur,
+      epTot,
+      label    : epTot ? `${epCur}/${epTot}` : `${epCur}`,
+      isDone   : e.status === 'completed',
+      isOnHold : e.status === 'on_hold',
+      isDropped: e.status === 'dropped',
     };
   };
 }

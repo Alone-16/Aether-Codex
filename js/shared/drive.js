@@ -17,6 +17,15 @@ import { nav, patchCloseMob } from './nav.js';
 patchScheduleDriveSync(_scheduleDriveSyncImpl);
 patchCloseMob(closeMob);   // nav.js needs closeMob; avoid circular import at parse time
 
+// ── Safe toast wrapper ────────────────────────────────────────────────────
+// _toast() is defined in settings.js which loads after drive.js.
+// Use this instead of calling _toast() directly.
+function _toast(msg, col) {
+  if (typeof window.toast === 'function') window.toast(msg, col);
+  else console.info('[Drive]', msg);
+}
+
+
 // ═══════════════════════════════════════════════════════════════════
 //  MODULE-PRIVATE STATE
 // ═══════════════════════════════════════════════════════════════════
@@ -171,7 +180,7 @@ function _startOAuthFlow() {
     _updateDriveBtn('syncing');
     window.electronBridge.openOAuth(oauthUrl).then(async result => {
       if (result.error) {
-        if (result.error !== 'popup_closed') toast('Drive auth failed: ' + result.error, '#fb7185');
+        if (result.error !== 'popup_closed') _toast('Drive auth failed: ' + result.error, '#fb7185');
         _updateDriveBtn('off');
         return;
       }
@@ -243,7 +252,7 @@ async function _exchangeCode(code, redirectUri, stateParam, skipNonceCheck = fal
     return true;
   } catch(e) {
     console.error('[OAuth] exchange_code failed:', e);
-    toast('Drive auth failed: ' + e.message, '#fb7185');
+    _toast('Drive auth failed: ' + e.message, '#fb7185');
     _updateDriveBtn('error');
     return false;
   }
@@ -277,7 +286,7 @@ async function _handleOAuthRedirect() {
   if (ov) ov.remove();
 
   if (error) {
-    setTimeout(() => toast('Google sign-in cancelled or denied: ' + error, '#fb7185'), 100);
+    setTimeout(() => _toast('Google sign-in cancelled or denied: ' + error, '#fb7185'), 100);
     _updateDriveBtn('off');
     return true;
   }
@@ -369,7 +378,7 @@ async function _startMALAuth() {
     _showRedirectingOverlay('MyAnimeList');
     window.electronBridge.openOAuth(oauthUrl).then(async result => {
       if (result.error) {
-        if (result.error !== 'popup_closed') toast('MAL auth failed: ' + result.error, '#fb7185');
+        if (result.error !== 'popup_closed') _toast('MAL auth failed: ' + result.error, '#fb7185');
         return;
       }
       await _exchangeMALCode(result.code, redirectUri, result.state || state, true);
@@ -399,18 +408,18 @@ async function _exchangeMALCode(code, redirectUri, stateParam, skipNonceCheck = 
       headers: { 'Content-Type':'application/json', 'X-Action':'mal_exchange_code' },
       body:    JSON.stringify(payload),
     });
-    if (!res.ok) { const body = await res.text(); toast(`MAL token exchange failed: ${body}`, '#fb7185'); throw new Error(`MAL token exchange failed: ${body}`); }
+    if (!res.ok) { const body = await res.text(); _toast(`MAL token exchange failed: ${body}`, '#fb7185'); throw new Error(`MAL token exchange failed: ${body}`); }
     const data = await res.json();
     if (data.error) throw new Error(data.error_description || data.error || 'MAL token exchange failed');
     SETTINGS.malAccessToken  = data.access_token  || null;
     SETTINGS.malRefreshToken = data.refresh_token || SETTINGS.malRefreshToken || null;
     SETTINGS.malTokenExpiry  = data.expires_in ? String(Date.now() + (data.expires_in - 60) * 1000) : SETTINGS.malTokenExpiry || null;
     saveSettings(SETTINGS);
-    toast('✓ MAL account connected', 'var(--cd)');
+    _toast('✓ MAL account connected', 'var(--cd)');
     if (typeof renderSettingsBody === 'function' && CURRENT === 'settings') renderSettingsBody();
     return true;
   } catch(e) {
-    toast('MAL auth failed: ' + e.message, '#fb7185');
+    _toast('MAL auth failed: ' + e.message, '#fb7185');
     console.error('[MAL OAuth] exchange failed:', e);
     return false;
   } finally {
@@ -461,7 +470,7 @@ async function _handleMALRedirect() {
   if (ov) ov.remove();
 
   if (error) {
-    setTimeout(() => toast('MAL sign-in cancelled or denied: ' + error, '#fb7185'), 100);
+    setTimeout(() => _toast('MAL sign-in cancelled or denied: ' + error, '#fb7185'), 100);
     return true;
   }
   _showSigningInBanner();
@@ -540,7 +549,7 @@ export function driveAction() {
       _clearAccessToken();
       _clearRefreshToken();
       ls.del(K.DFILE); ls.del(K.DSYNC);
-      _driveFolderId = null; _updateDriveBtn('off'); toast('Disconnected from Drive');
+      _driveFolderId = null; _updateDriveBtn('off'); _toast('Disconnected from Drive');
     }, { title:'Disconnect Drive?', okLabel:'Disconnect', danger:false });
   } else {
     _startOAuthFlow();
@@ -631,7 +640,7 @@ async function _pushToDrive() {
     if (!r || !r.ok) throw new Error('Upload failed');
     ls.setStr(K.DSYNC, String(Date.now()));
     _updateDriveBtn('connected');
-  } catch(e) { _updateDriveBtn('error'); toast('Drive sync failed: ' + e.message, '#fb7185'); }
+  } catch(e) { _updateDriveBtn('error'); _toast('Drive sync failed: ' + e.message, '#fb7185'); }
 }
 
 async function _pullFromDrive() {
@@ -684,7 +693,7 @@ async function _driveInit() {
     }
     if (remote.notes_enc && typeof NOTES_ENC_KEY !== 'undefined') ls.set(NOTES_ENC_KEY, remote.notes_enc);
     saveData(DATA); render();
-    toast('✓ Synced from Drive', '#4ade80');
+    _toast('✓ Synced from Drive', '#4ade80');
   } else if (localSaved > remoteSaved) {
     await _pushToDrive();
   } else {
@@ -721,7 +730,7 @@ export async function driveBootstrap() {
   try {
     const result = typeof window.runMigrationV1 === 'function' ? await window.runMigrationV1() : { ran: false };
     if (result.ran) {
-      toast(
+      _toast(
         `✓ Schema updated: ${result.entriesAfter} flat entries ` +
         `(${result.groups} group${result.groups !== 1 ? 's' : ''} expanded)`,
         '#34d399'
@@ -737,3 +746,4 @@ export async function driveBootstrap() {
 // Expose internals needed by settings.js and other sections
 window._isConnected = _isConnected;
 window._pushToDrive = _pushToDrive;
+window._startMALAuth = _startMALAuth;

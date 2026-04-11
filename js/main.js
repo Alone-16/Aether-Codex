@@ -8,6 +8,7 @@ import {
   uid, esc, today, fmtDate, h2r, gbyid,
   saveData, saveGenres,
   setDATA, setGENRES, setGACTIVE, setCURRENT, setSEARCH, setMEDIA_PAGE,
+  PANEL, PEDIT, FORM_TL, COLLAPSED, DDRG, FDRG,
   setPANEL, setPEDIT, setFORM_TL, setCOLLAPSED, setDDRG, setFDRG,
   stag, rewatchBadge, pcol, SL, SC, SO, SSL,
   applyGenre, buildGenreMenu, toggleGdrop,
@@ -29,6 +30,7 @@ Object.assign(window, {
   uid, esc, today, fmtDate, h2r, gbyid,
   saveData, saveGenres,
   setDATA, setGENRES, setGACTIVE, setCURRENT, setSEARCH, setMEDIA_PAGE,
+  PANEL, PEDIT, FORM_TL, COLLAPSED, DDRG, FDRG,
   setPANEL, setPEDIT, setFORM_TL, setCOLLAPSED, setDDRG, setFDRG,
   stag, rewatchBadge, pcol, SL, SC, SO, SSL,
   applyGenre, buildGenreMenu, toggleGdrop,
@@ -78,8 +80,8 @@ const migration = await import('./shared/migration.js').catch(() => null);
   if (migration?.runMigrationV1) {
     try {
       const result = await migration.runMigrationV1();
-      if (result?.ran && typeof toast === 'function') {
-        toast(
+      if (result?.ran && typeof window.toast === 'function') {
+        window.toast(
           `✓ Schema updated: ${result.entriesAfter} flat entries ` +
           `(${result.groups} group${result.groups !== 1 ? 's' : ''} expanded)`,
           '#34d399'
