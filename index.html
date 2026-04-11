@@ -180,7 +180,10 @@
 #ai-messages::-webkit-scrollbar{width:3px}
 </style>
 
-<!-- ─── Section files: still plain scripts until each is converted to a module ─── -->
+<script defer src="js/shared/utils.js"></script>
+<script defer src="js/shared/drive.js"></script>
+<script defer src="js/shared/nav.js"></script>
+<script defer src="js/shared/routing.js"></script>
 <script defer src="js/sections/home.js"></script>
 <script defer src="js/sections/media.js"></script>
 <script defer src="js/sections/settings.js"></script>
@@ -195,14 +198,8 @@
 <script defer src="js/sections/log.js"></script>
 <script defer src="js/sections/tools.js"></script>
 <script defer src="js/shared/extras.js"></script>
+<script defer src="js/main.js"></script>
 <script defer src="js/migration.js"></script>
-
-<!-- ─── ES module entry point ───────────────────────────────────────────────────
-     type="module" is deferred by default. Placing it last guarantees it runs
-     after all the <script defer> section files above, so their globals are
-     ready when main.js imports the shared modules and calls nav().         -->
-<script type="module" src="js/main.js"></script>
-
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

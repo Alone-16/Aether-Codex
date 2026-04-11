@@ -1,31 +1,19 @@
-// js/shared/routing.js
-import { getCURRENT, setSEARCH } from './utils.js';
-
-// Section render functions are accessed via window until those files are
-// also converted to ES modules. Swap each window.renderX for a direct
-// named import as you migrate each section file.
-export function renderPage(id) {
-  const c = document.getElementById('content');
-  switch (id) {
-    case 'media':    window.renderMedia?.(c);       break;
-    case 'home':     window.renderHome?.(c);        break;
-    case 'games':    window.renderGames?.(c);       break;
-    case 'music':    window.renderMusic?.(c);       break;
-    case 'books':    window.renderBooks?.(c);       break;
-    case 'vault':    window.renderVault?.(c);       break;
-    case 'notes':    window.renderNotes?.(c);       break;
-    case 'log':      window.renderLog?.(c);         break;
-    case 'tools':    window.renderTools?.(c);       break;
-    case 'settings': window.renderSettings?.(c);    break;
-    default:         window.renderSectionStub?.(id, c); break;
-  }
+function renderPage(id){
+  const c=document.getElementById('content');
+  if(id==='media')    renderMedia(c);
+  else if(id==='home')     renderHome(c);
+  else if(id==='games')    renderGames(c);
+  else if(id==='music')    renderMusic(c);
+  else if(id==='books')    renderBooks(c);
+  else if(id==='vault')    renderVault(c);
+  else if(id==='notes')    renderNotes(c);
+  else if(id==='log')      renderLog(c);
+  else if(id==='tools')    renderTools(c);
+  else if(id==='settings') renderSettings(c);
+  else renderSectionStub(id,c);
 }
+function render(){renderPage(CURRENT)}
 
-export function render() {
-  renderPage(getCURRENT());
-}
-
-export function onSearch(val) {
-  setSEARCH(val);
-  render();
-}
+// ═══════════════════════════════
+//  HOME DASHBOARD
+// ═══════════════════════════════
