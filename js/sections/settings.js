@@ -31,7 +31,7 @@ function loadSettings() {
 }
 function saveSettings(s) { ls.set(SETTINGS_KEY, s); }
 
-let SETTINGS = loadSettings();
+var SETTINGS = loadSettings();
 let SETTINGS_DRAG_IDX = null;
 let SETTINGS_TAB = 'sections';
 
