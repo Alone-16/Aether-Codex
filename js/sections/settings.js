@@ -29,9 +29,10 @@ function loadSettings() {
   if (saved.malTokenExpiry === undefined) saved.malTokenExpiry = null;
   return { ...defaults, ...saved };
 }
-function saveSettings(s) { ls.set(SETTINGS_KEY, s); }
+function saveSettings(s) { ls.set(SETTINGS_KEY, s); SETTINGS = s; window.SETTINGS = s; }
 
 var SETTINGS = loadSettings();
+window.SETTINGS = SETTINGS;
 let SETTINGS_DRAG_IDX = null;
 let SETTINGS_TAB = 'sections';
 
