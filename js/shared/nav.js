@@ -1,74 +1,113 @@
-function nav(id,push=true){
-  const prevId = CURRENT;
-  CURRENT=id;
+// js/shared/nav.js
+import {
+  getCURRENT, setCURRENT, setSEARCH,
+  SECTION_META, getGACTIVE, gbyid,
+} from './utils.js';
+import { renderPage, onSearch } from './routing.js';
+
+const SECTION_ORDER = ['home','media','games','books','music','vault','log','tools','settings'];
+
+// ── Mobile sidebar ──────────────────────────────────────────────────────
+export function openMob() {
+  document.getElementById('mob-ov').classList.add('show');
+  document.getElementById('mob-sb').classList.add('open');
+}
+
+export function closeMob() {
+  document.getElementById('mob-ov').classList.remove('show');
+  document.getElementById('mob-sb').classList.remove('open');
+}
+
+// ── Main navigation ─────────────────────────────────────────────────────
+export function nav(id, push = true) {
+  const prevId = getCURRENT();
+  setCURRENT(id);
   localStorage.setItem('ac_last_section', id);
-  if(push) try{history.pushState({},'',' #/'+(id==='home'?'':id));}catch(e){}
-  const c=document.getElementById('content');
-  // Directional slide based on section order
-  const ORDER = ['home','media','games','books','music','vault','log','tools','settings'];
-  const pi = ORDER.indexOf(prevId), ni = ORDER.indexOf(id);
-  const goingRight = ni > pi;
+  if (push) try { history.pushState({}, '', ' #/' + (id === 'home' ? '' : id)); } catch(e) {}
+
+  const c   = document.getElementById('content');
+  const pi  = SECTION_ORDER.indexOf(prevId);
+  const ni  = SECTION_ORDER.indexOf(id);
+  const dir = ni > pi ? 'translateX(12px)' : 'translateX(-12px)';
+
   c.style.transition = 'none';
-  c.style.opacity = '0';
-  c.style.transform = prevId === id ? 'none' : goingRight ? 'translateX(12px)' : 'translateX(-12px)';
-  setTimeout(()=>{
+  c.style.opacity    = '0';
+  c.style.transform  = prevId === id ? 'none' : dir;
+
+  setTimeout(() => {
     c.style.transition = '';
-    document.documentElement.setAttribute('data-section',id);
-    // Keep inline bg in sync to prevent FOUC override conflicts
+    document.documentElement.setAttribute('data-section', id);
+
     const sectionBg = {
       home:'#070d0b', media:'#07000f', games:'#080600',
       books:'#f5f0e8', music:'#080400', vault:'#f0eefa',
-      log:'#010c14', tools:'#080006', settings:'#0a0a12', notes:'#d0e8d0'
+      log:'#010c14', tools:'#080006', settings:'#0a0a12', notes:'#d0e8d0',
     };
-    document.documentElement.style.background = sectionBg[id] || sectionBg.home;
+    document.documentElement.style.background      = sectionBg[id] || sectionBg.home;
     document.documentElement.style.backgroundColor = sectionBg[id] || sectionBg.home;
-    document.querySelectorAll('.ni').forEach(el=>el.classList.toggle('active',el.dataset.r===id));
-    document.querySelectorAll('.mob-ni').forEach(el=>el.classList.toggle('active',el.dataset.r===id));
-    document.querySelectorAll('.bn-item').forEach(el=>el.classList.toggle('active',el.dataset.r===id));
-    const m=SECTION_META[id]||{title:id,label:id};
-    document.getElementById('nb-title').textContent=m.title;
-    document.getElementById('nb-sec').textContent=m.label;
-    const srch=document.getElementById('srch');
-    srch.placeholder=id==='home'?'Search everything...':`Search ${m.label}...`;
-    document.getElementById('filterbar').style.display=id==='media'?'flex':'none';
-  // Auto-lock games when leaving
-  if(CURRENT!=='games' && typeof GAMES_UNLOCKED!=='undefined'){
-    GAMES_UNLOCKED=false; clearTimeout(GAMES_IDLE_TIMER);
-  }
-  // Auto-lock vault when leaving
-  if(CURRENT!=='vault' && typeof VAULT_UNLOCKED!=='undefined') lockVaultOnNav();
-  // Update games search
-  if(id==='games') document.getElementById('srch').oninput=e=>{GSEARCH=e.target.value.toLowerCase();renderGamesBody();};
-  else if(id==='music') document.getElementById('srch').oninput=e=>{MSEARCH=e.target.value.toLowerCase();renderMusicBody();};
-  else if(id==='books') document.getElementById('srch').oninput=e=>{BSEARCH=e.target.value.toLowerCase();renderBooksBody();};
-  else if(id==='vault') document.getElementById('srch').oninput=e=>{VSEARCH=e.target.value.toLowerCase();renderVaultBody();};
-  else if(id==='log')   document.getElementById('srch').oninput=e=>{LSEARCH=e.target.value.toLowerCase();renderLogBody()};
-  else if(id==='notes') document.getElementById('srch').oninput=e=>{NSEARCH=e.target.value.toLowerCase();renderNotesBody();};
-  else document.getElementById('srch').oninput=e=>{onSearch(e.target.value)};
-    // Apply genre CSS vars for media section without triggering a re-render
-    if(id==='media'){
-      const g=gbyid(GACTIVE); const c2=g.color;
-      const _nbSec=document.getElementById('nb-sec'); if(_nbSec) _nbSec.textContent=g.name;
-      document.documentElement.style.setProperty('--ac',c2);
-      const[r,gg,b]=[parseInt(c2.slice(1,3),16),parseInt(c2.slice(3,5),16),parseInt(c2.slice(5,7),16)];
-      document.documentElement.style.setProperty('--ac-rgb',`${r},${gg},${b}`);
+
+    document.querySelectorAll('.ni').forEach(el     => el.classList.toggle('active', el.dataset.r === id));
+    document.querySelectorAll('.mob-ni').forEach(el => el.classList.toggle('active', el.dataset.r === id));
+    document.querySelectorAll('.bn-item').forEach(el => el.classList.toggle('active', el.dataset.r === id));
+
+    const meta = SECTION_META[id] || { title: id, label: id };
+    document.getElementById('nb-title').textContent = meta.title;
+    document.getElementById('nb-sec').textContent   = meta.label;
+
+    const srch = document.getElementById('srch');
+    srch.placeholder = id === 'home' ? 'Search everything...' : `Search ${meta.label}...`;
+    document.getElementById('filterbar').style.display = id === 'media' ? 'flex' : 'none';
+
+    // Auto-lock: games ──────────────────────────────────────────────────
+    // Replace with direct import once games.js is a module.
+    if (id !== 'games' && typeof window.GAMES_UNLOCKED !== 'undefined') {
+      window.GAMES_UNLOCKED = false;
+      clearTimeout(window.GAMES_IDLE_TIMER);
+    }
+    // Auto-lock: vault ──────────────────────────────────────────────────
+    if (id !== 'vault' && typeof window.lockVaultOnNav === 'function') {
+      window.lockVaultOnNav();
+    }
+
+    // Per-section search handlers ────────────────────────────────────────
+    // Replace each window.XSEARCH / window.renderXBody with a direct
+    // import once that section file is converted to a module.
+    const searchMap = {
+      games: e => { window.GSEARCH = e.target.value.toLowerCase(); window.renderGamesBody?.(); },
+      music: e => { window.MSEARCH = e.target.value.toLowerCase(); window.renderMusicBody?.(); },
+      books: e => { window.BSEARCH = e.target.value.toLowerCase(); window.renderBooksBody?.(); },
+      vault: e => { window.VSEARCH = e.target.value.toLowerCase(); window.renderVaultBody?.(); },
+      log:   e => { window.LSEARCH = e.target.value.toLowerCase(); window.renderLogBody?.();   },
+      notes: e => { window.NSEARCH = e.target.value.toLowerCase(); window.renderNotesBody?.(); },
+    };
+    srch.oninput = searchMap[id] ?? (e => onSearch(e.target.value));
+
+    // Genre CSS vars (media only) ────────────────────────────────────────
+    if (id === 'media') {
+      const g = gbyid(getGACTIVE()), clr = g.color;
+      const nbSec = document.getElementById('nb-sec');
+      if (nbSec) nbSec.textContent = g.name;
+      document.documentElement.style.setProperty('--ac', clr);
+      document.documentElement.style.setProperty('--ac-rgb',
+        `${parseInt(clr.slice(1,3),16)},${parseInt(clr.slice(3,5),16)},${parseInt(clr.slice(5,7),16)}`);
     } else {
-      // Remove inline overrides so section theme takes over
       document.documentElement.style.removeProperty('--ac');
       document.documentElement.style.removeProperty('--ac-rgb');
     }
+
     renderPage(id);
-    // Slide in
-    requestAnimationFrame(()=>{
-      c.style.opacity = '1';
+
+    requestAnimationFrame(() => {
+      c.style.opacity   = '1';
       c.style.transform = 'translateX(0)';
     });
-  },150);
+  }, 150);
+
   closeMob();
 }
 
-window.addEventListener('hashchange',()=>{const h=location.hash.replace('#/','').replace('#','');nav(h||'home',false)});
-
-// ═══════════════════════════════
-//  PAGE ROUTER
-// ═══════════════════════════════
+// Hash-based routing (module-level side effect — runs once on import)
+window.addEventListener('hashchange', () => {
+  const h = location.hash.replace('#/', '').replace('#', '');
+  nav(h || 'home', false);
+});
