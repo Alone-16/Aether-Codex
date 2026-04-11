@@ -29,7 +29,7 @@ function loadSettings() {
   if (saved.malTokenExpiry === undefined) saved.malTokenExpiry = null;
   return { ...defaults, ...saved };
 }
-function saveSettings(s) { ls.set(SETTINGS_KEY, s); }
+function saveSettings(s) { ls.set(SETTINGS_KEY, s); window.SETTINGS = s; }
 
 let SETTINGS = loadSettings();
 let SETTINGS_DRAG_IDX = null;
@@ -324,13 +324,13 @@ function disconnectMALAccount() {
 // ── STORAGE TAB ──
 function renderSettingsStorage(el) {
   const keys = [
-    { label:'Media',     key:K.DATA,                                         color:'#e879a0' },
-    { label:'Games',     key:(window.GAMES_KEY    || 'ac_v4_games'),         color:'#f59e0b' },
-    { label:'Books',     key:(window.BOOKS_KEY    || 'ac_v4_books'),         color:'#a78bfa' },
-    { label:'Music',     key:(window.MUSIC_KEY    || 'ac_v4_music'),         color:'#fb923c' },
-    { label:'Playlists', key:(window.MUSIC_PL_KEY || 'ac_v4_playlists'),     color:'#fb923c' },
-    { label:'Genres',    key:K.GENRES,                                        color:'#8888aa' },
-    { label:'Settings',  key:SETTINGS_KEY,                                    color:'#8888aa' },
+    { label:'Media',     key:K.DATA,      color:'#e879a0' },
+    { label:'Games',     key:GAMES_KEY,   color:'#f59e0b' },
+    { label:'Books',     key:BOOKS_KEY,   color:'#a78bfa' },
+    { label:'Music',     key:MUSIC_KEY,   color:'#fb923c' },
+    { label:'Playlists', key:MUSIC_PL_KEY,color:'#fb923c' },
+    { label:'Genres',    key:K.GENRES,    color:'#8888aa' },
+    { label:'Settings',  key:SETTINGS_KEY,color:'#8888aa' },
   ];
 
   let totalBytes = 0;
@@ -948,4 +948,6 @@ Object.assign(window, {
   clearPin, saveIdleTimeout,
   onSearch, exportData, importFile,
   showConfirm, showAlert, toast,
+  // Expose SETTINGS object and saveSettings so other ES-module sections can access them
+  SETTINGS, saveSettings, connectMALAccount,
 });
