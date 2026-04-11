@@ -2,7 +2,97 @@ let _gisReady=false, _tokenClient=null, _syncTimer=null, _driveFolderId=null;
 // Guard: prevent initGIS running twice (once from load event, once from main.js)
 let _gisInitDone = false;
 
-function _getToken(){return Date.now()<parseInt(ls.str(K.DEXP)||'0')?ls.str(K.DTOKEN):null;}
+// ══════════════════════════════════════════════════════════════════
+//  SECURE TOKEN STORAGE
+//
+//  access_token  → sessionStorage only (short-lived ~1 hr; cleared on tab close)
+//  refresh_token → AES-GCM encrypted in localStorage; the 256-bit key lives in
+//                  sessionStorage so the ciphertext at rest is never plaintext.
+//
+//  Security note: sessionStorage persists across same-tab page reloads (F5)
+//  but is isolated per-tab and cleared on tab close. Opening a new tab will
+//  require re-auth (key is gone → decryption impossible → treated as no token).
+//  XSS that runs in-page can still read sessionStorage, but this prevents
+//  passive localStorage inspection (DevTools, extensions, other-origin JS).
+// ══════════════════════════════════════════════════════════════════
+
+// ── Access-token helpers (sessionStorage) ──
+function _getToken() {
+  try {
+    const exp = sessionStorage.getItem(K.DEXP);
+    const tok = sessionStorage.getItem(K.DTOKEN);
+    return tok && Date.now() < parseInt(exp || '0') ? tok : null;
+  } catch(e) { return null; }
+}
+function _setAccessToken(token, expMs) {
+  try { sessionStorage.setItem(K.DTOKEN, token);       } catch(e) {}
+  try { sessionStorage.setItem(K.DEXP,   String(expMs)); } catch(e) {}
+}
+function _clearAccessToken() {
+  try { sessionStorage.removeItem(K.DTOKEN); } catch(e) {}
+  try { sessionStorage.removeItem(K.DEXP);   } catch(e) {}
+}
+
+// ── Refresh-token helpers (AES-GCM encrypted, key in sessionStorage) ──
+const _SK_KEY = 'ac_session_key'; // base64-encoded raw AES key in sessionStorage
+
+async function _getOrCreateSessionKey() {
+  try {
+    const raw = sessionStorage.getItem(_SK_KEY);
+    if (raw) {
+      const keyBytes = Uint8Array.from(atob(raw), c => c.charCodeAt(0));
+      return await crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt','decrypt']);
+    }
+  } catch(e) {}
+  const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt','decrypt']);
+  const exported = await crypto.subtle.exportKey('raw', key);
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(exported)));
+  try { sessionStorage.setItem(_SK_KEY, b64); } catch(e) {}
+  return key;
+}
+
+async function _encryptRefreshToken(token) {
+  const key = await _getOrCreateSessionKey();
+  const iv  = crypto.getRandomValues(new Uint8Array(12));
+  const ct  = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(token));
+  const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+  return b64(iv.buffer) + '.' + b64(ct);
+}
+
+async function _decryptRefreshToken(blob) {
+  if (!blob) return null;
+  try {
+    const [ivB64, ctB64] = blob.split('.');
+    if (!ivB64 || !ctB64) return null;
+    const from64 = b => Uint8Array.from(atob(b), c => c.charCodeAt(0));
+    const key    = await _getOrCreateSessionKey();
+    const plain  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: from64(ivB64) }, key, from64(ctB64));
+    return new TextDecoder().decode(plain);
+  } catch(e) {
+    console.warn('[OAuth] Could not decrypt refresh token (new session or corrupt):', e.message);
+    return null;
+  }
+}
+
+// Writes encrypted refresh token to localStorage
+async function _setRefreshToken(token) {
+  const blob = await _encryptRefreshToken(token);
+  try { localStorage.setItem(K_REFRESH, blob); } catch(e) {}
+}
+
+// Reads and decrypts refresh token from localStorage; returns null on failure
+async function _getRefreshToken() {
+  const blob = localStorage.getItem(K_REFRESH);
+  return blob ? _decryptRefreshToken(blob) : null;
+}
+
+// True if an encrypted blob exists — does NOT require the session key
+function _hasRefreshToken() { return !!localStorage.getItem(K_REFRESH); }
+
+function _clearRefreshToken() {
+  try { localStorage.removeItem(K_REFRESH); } catch(e) {}
+}
+
 function _isConnected(){return !!_getToken();}
 
 // CSS colour variables --cd/--ch/--cr are not defined in style.css so we use
@@ -171,9 +261,8 @@ async function _exchangeCode(code, redirectUri, stateParam, skipNonceCheck=false
     // Validate we actually got a token back
     if (!data.access_token) throw new Error('No access token received from worker');
 
-    ls.setStr(K.DTOKEN,  data.access_token);
-    ls.setStr(K.DEXP,    String(Date.now() + (data.expires_in - 60) * 1000));
-    if (data.refresh_token) ls.setStr(K_REFRESH, data.refresh_token);
+    _setAccessToken(data.access_token, Date.now() + (data.expires_in - 60) * 1000);
+    if (data.refresh_token) await _setRefreshToken(data.refresh_token);
 
     _updateDriveBtn('syncing');
     await _driveInit();
@@ -445,7 +534,7 @@ async function _handleMALRedirect() {
 //  TOKEN REFRESH
 // ══════════════════════════════════════════════════════════════════
 async function _refreshAccessToken() {
-  const refreshToken = ls.str(K_REFRESH);
+  const refreshToken = await _getRefreshToken();
   if (!refreshToken) return false;
   try {
     const res = await fetch(_WORKER, {
@@ -456,8 +545,7 @@ async function _refreshAccessToken() {
     if (!res.ok) throw new Error('status ' + res.status);
     const data = await res.json();
     if (data.error) throw new Error(data.error_description || data.error);
-    ls.setStr(K.DTOKEN, data.access_token);
-    ls.setStr(K.DEXP,   String(Date.now() + (data.expires_in - 60) * 1000));
+    _setAccessToken(data.access_token, Date.now() + (data.expires_in - 60) * 1000);
     return true;
   } catch(e) {
     console.warn('[OAuth] Token refresh failed:', e.message);
@@ -486,7 +574,7 @@ async function initGIS() {
   if (_isConnected()) {
     _updateDriveBtn('syncing');
     _driveInit();
-  } else if (ls.str(K_REFRESH)) {
+  } else if (_hasRefreshToken()) {
     _updateDriveBtn('syncing');
     const ok = await _refreshAccessToken();
     if (ok) _driveInit();
@@ -497,8 +585,7 @@ async function initGIS() {
 }
 
 function _saveToken(resp){
-  ls.setStr(K.DTOKEN,resp.access_token);
-  ls.setStr(K.DEXP,String(Date.now()+(resp.expires_in-60)*1000));
+  _setAccessToken(resp.access_token, Date.now() + (resp.expires_in - 60) * 1000);
   _updateDriveBtn('syncing');
   _driveInit();
 }
@@ -512,9 +599,11 @@ function _showDriveHint(){
 
 // ── Drive button click ──
 function driveAction(){
-  if(_isConnected() || ls.str(K_REFRESH)){
+  if(_isConnected() || _hasRefreshToken()){
     showConfirm('Your data will stay in localStorage. You can reconnect anytime.',()=>{
-      ls.del(K.DTOKEN);ls.del(K.DEXP);ls.del(K.DFILE);ls.del(K.DSYNC);ls.del(K_REFRESH);
+      _clearAccessToken();
+      _clearRefreshToken();
+      ls.del(K.DFILE);ls.del(K.DSYNC);
       _driveFolderId=null;_updateDriveBtn('off');toast('Disconnected from Drive');
     },{title:'Disconnect Drive?',okLabel:'Disconnect',danger:false});
   } else {
@@ -528,7 +617,7 @@ function driveAction(){
 async function _req(url,opts={}){
   let token=_getToken();
   if(!token){
-    if(ls.str(K_REFRESH)){
+    if(_hasRefreshToken()){
       const ok=await _refreshAccessToken();
       if(ok) token=_getToken();
     }
@@ -537,14 +626,14 @@ async function _req(url,opts={}){
   try{
     const r=await fetch(url,{...opts,headers:{Authorization:`Bearer ${token}`,... (opts.headers||{})}});
     if(r.status===401){
-      if(ls.str(K_REFRESH)){
+      if(_hasRefreshToken()){
         const ok=await _refreshAccessToken();
         if(ok){
           const t2=_getToken();
           if(t2) return fetch(url,{...opts,headers:{Authorization:`Bearer ${t2}`,... (opts.headers||{})}});
         }
       }
-      ls.del(K.DTOKEN);ls.del(K.DEXP);_updateDriveBtn('off');return null;
+      _clearAccessToken();_clearRefreshToken();_updateDriveBtn('off');return null;
     }
     return r;
   }catch{return null;}
