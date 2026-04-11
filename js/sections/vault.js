@@ -43,7 +43,7 @@ async function saveVaultEncrypted(data) {
   const buf = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, VAULT_CRYPTO_KEY, new TextEncoder().encode(JSON.stringify(data)));
   ls.set(VAULT_ENC_KEY, { salt:_b64(VAULT_CRYPTO_SALT), iv:_b64(iv), data:_b64(buf), v:1 });
   ls.setStr(K.SAVED, String(Date.now()));
-  window.scheduleDriveSync();
+  if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync();
 }
 
 
@@ -190,7 +190,7 @@ const VAULT_KEY        = 'ac_v4_vault';         // legacy plain store (migrated 
 const VAULT_PUBLIC_KEY = 'ac_v4_vault_public';  // non-private links (plain, always visible)
 
 function loadVaultPublic()  { return ls.get(VAULT_PUBLIC_KEY) || []; }
-function saveVaultPublic(d) { ls.set(VAULT_PUBLIC_KEY, d); ls.setStr(K.SAVED, String(Date.now())); window.scheduleDriveSync(); }
+function saveVaultPublic(d) { ls.set(VAULT_PUBLIC_KEY, d); ls.setStr(K.SAVED, String(Date.now())); if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync(); }
 function loadVault()  { return []; }   // kept for call-site compat
 function saveVault(d) { /* disabled — use saveVaultPublic or saveVaultEncrypted */ }
 
