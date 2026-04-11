@@ -1,22 +1,34 @@
-let _gisReady=false, _tokenClient=null, _syncTimer=null, _driveFolderId=null;
-// Guard: prevent initGIS running twice (once from load event, once from main.js)
-let _gisInitDone = false;
+import {
+  K, DATA_VERSION, CLIENT_ID, DRIVE_SCOPE, YT_SCOPE_CONST, DRIVE_FOLDER, DRIVE_FILE,
+  ls,
+  DATA, setDATA,
+  GENRES,
+  CURRENT,
+  saveData, saveGenres,
+  patchScheduleDriveSync,
+} from './utils.js';
 
-// ══════════════════════════════════════════════════════════════════
+import { render } from './routing.js';
+import { nav, patchCloseMob } from './nav.js';
+
+// ═══════════════════════════════════════════════════════════════════
+//  Wire up the lazy stubs declared in utils.js
+// ═══════════════════════════════════════════════════════════════════
+patchScheduleDriveSync(_scheduleDriveSyncImpl);
+patchCloseMob(closeMob);   // nav.js needs closeMob; avoid circular import at parse time
+
+// ═══════════════════════════════════════════════════════════════════
+//  MODULE-PRIVATE STATE
+// ═══════════════════════════════════════════════════════════════════
+let _gisReady      = false;
+let _tokenClient   = null;
+let _syncTimer     = null;
+let _driveFolderId = null;
+let _gisInitDone   = false;
+
+// ═══════════════════════════════════════════════════════════════════
 //  SECURE TOKEN STORAGE
-//
-//  access_token  → sessionStorage only (short-lived ~1 hr; cleared on tab close)
-//  refresh_token → AES-GCM encrypted in localStorage; the 256-bit key lives in
-//                  sessionStorage so the ciphertext at rest is never plaintext.
-//
-//  Security note: sessionStorage persists across same-tab page reloads (F5)
-//  but is isolated per-tab and cleared on tab close. Opening a new tab will
-//  require re-auth (key is gone → decryption impossible → treated as no token).
-//  XSS that runs in-page can still read sessionStorage, but this prevents
-//  passive localStorage inspection (DevTools, extensions, other-origin JS).
-// ══════════════════════════════════════════════════════════════════
-
-// ── Access-token helpers (sessionStorage) ──
+// ═══════════════════════════════════════════════════════════════════
 function _getToken() {
   try {
     const exp = sessionStorage.getItem(K.DEXP);
@@ -25,7 +37,7 @@ function _getToken() {
   } catch(e) { return null; }
 }
 function _setAccessToken(token, expMs) {
-  try { sessionStorage.setItem(K.DTOKEN, token);       } catch(e) {}
+  try { sessionStorage.setItem(K.DTOKEN, token);        } catch(e) {}
   try { sessionStorage.setItem(K.DEXP,   String(expMs)); } catch(e) {}
 }
 function _clearAccessToken() {
@@ -33,8 +45,7 @@ function _clearAccessToken() {
   try { sessionStorage.removeItem(K.DEXP);   } catch(e) {}
 }
 
-// ── Refresh-token helpers (AES-GCM encrypted, key in sessionStorage) ──
-const _SK_KEY = 'ac_session_key'; // base64-encoded raw AES key in sessionStorage
+const _SK_KEY = 'ac_session_key';
 
 async function _getOrCreateSessionKey() {
   try {
@@ -44,9 +55,9 @@ async function _getOrCreateSessionKey() {
       return await crypto.subtle.importKey('raw', keyBytes, 'AES-GCM', false, ['encrypt','decrypt']);
     }
   } catch(e) {}
-  const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt','decrypt']);
+  const key      = await crypto.subtle.generateKey({ name:'AES-GCM', length:256 }, true, ['encrypt','decrypt']);
   const exported = await crypto.subtle.exportKey('raw', key);
-  const b64 = btoa(String.fromCharCode(...new Uint8Array(exported)));
+  const b64      = btoa(String.fromCharCode(...new Uint8Array(exported)));
   try { sessionStorage.setItem(_SK_KEY, b64); } catch(e) {}
   return key;
 }
@@ -54,7 +65,7 @@ async function _getOrCreateSessionKey() {
 async function _encryptRefreshToken(token) {
   const key = await _getOrCreateSessionKey();
   const iv  = crypto.getRandomValues(new Uint8Array(12));
-  const ct  = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(token));
+  const ct  = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(token));
   const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
   return b64(iv.buffer) + '.' + b64(ct);
 }
@@ -66,7 +77,7 @@ async function _decryptRefreshToken(blob) {
     if (!ivB64 || !ctB64) return null;
     const from64 = b => Uint8Array.from(atob(b), c => c.charCodeAt(0));
     const key    = await _getOrCreateSessionKey();
-    const plain  = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: from64(ivB64) }, key, from64(ctB64));
+    const plain  = await crypto.subtle.decrypt({ name:'AES-GCM', iv:from64(ivB64) }, key, from64(ctB64));
     return new TextDecoder().decode(plain);
   } catch(e) {
     console.warn('[OAuth] Could not decrypt refresh token (new session or corrupt):', e.message);
@@ -74,94 +85,76 @@ async function _decryptRefreshToken(blob) {
   }
 }
 
-// Writes encrypted refresh token to localStorage
 async function _setRefreshToken(token) {
   const blob = await _encryptRefreshToken(token);
   try { localStorage.setItem(K_REFRESH, blob); } catch(e) {}
 }
 
-// Reads and decrypts refresh token from localStorage; returns null on failure
 async function _getRefreshToken() {
   const blob = localStorage.getItem(K_REFRESH);
   return blob ? _decryptRefreshToken(blob) : null;
 }
 
-// True if an encrypted blob exists — does NOT require the session key
 function _hasRefreshToken() { return !!localStorage.getItem(K_REFRESH); }
 
 function _clearRefreshToken() {
   try { localStorage.removeItem(K_REFRESH); } catch(e) {}
 }
 
-function _isConnected(){return !!_getToken();}
+function _isConnected() { return !!_getToken(); }
 
-// CSS colour variables --cd/--ch/--cr are not defined in style.css so we use
-// explicit hex values here to make the Drive button actually change colour.
 const _DRIVE_COLORS = {
-  connected: '#4ade80',   // green
-  syncing:   '#fb923c',   // orange
-  pending:   '#fb923c',   // orange
-  error:     '#fb7185',   // red
-  off:       '',          // default text colour
+  connected: '#4ade80',
+  syncing:   '#fb923c',
+  pending:   '#fb923c',
+  error:     '#fb7185',
+  off:       '',
 };
 
-function _updateDriveBtn(state){
-  const btn=document.getElementById('drive-btn');if(!btn)return;
-  const map={
+function _updateDriveBtn(state) {
+  const btn = document.getElementById('drive-btn'); if (!btn) return;
+  const map = {
     connected: ['✓','Drive'],
     syncing:   ['↻','Sync…'],
     pending:   ['…','Drive'],
     error:     ['✗','Error'],
     off:       ['☁','Drive'],
   };
-  const s = state || (_isConnected()?'connected':'off');
+  const s         = state || (_isConnected() ? 'connected' : 'off');
   const [ico,txt] = map[s] || map.off;
-  const spans=btn.querySelectorAll('span');
-  if(spans[0])spans[0].textContent=ico;
-  const txtSpan=btn.querySelector('.drive-status-txt');
-  if(txtSpan)txtSpan.textContent=txt;
+  const spans     = btn.querySelectorAll('span');
+  if (spans[0]) spans[0].textContent = ico;
+  const txtSpan = btn.querySelector('.drive-status-txt');
+  if (txtSpan) txtSpan.textContent = txt;
   btn.style.color = _DRIVE_COLORS[s] || '';
-  btn.title = s==='connected' ? 'Drive synced — click to disconnect'
-            : s==='syncing'   ? 'Syncing…'
-            : s==='error'     ? 'Sync error — click to retry'
+  btn.title = s === 'connected' ? 'Drive synced — click to disconnect'
+            : s === 'syncing'   ? 'Syncing…'
+            : s === 'error'     ? 'Sync error — click to retry'
             : 'Connect to Google Drive';
 }
 
-const _WORKER = 'https://aether-codex-ai.nadeempubgmobile2-0.workers.dev';
-const K_REFRESH   = 'ac_v4_refresh';
+const _WORKER              = 'https://aether-codex-ai.nadeempubgmobile2-0.workers.dev';
+const K_REFRESH            = 'ac_v4_refresh';
 const _MAL_OAUTH_NONCE_KEY = 'ac_mal_oauth_nonce';
 const _MAL_CODE_VERIFIER_KEY = 'ac_mal_code_verifier';
-const _MAL_REDIRECT_URI_KEY = 'ac_mal_redirect_uri';
-const _MAL_STATE_PREFIX = 'mal:';
-// Use sessionStorage for the CSRF nonce — it survives the redirect on all
-// browsers (unlike localStorage which iOS Safari may wipe during cross-origin
-// navigation).
-const _OAUTH_NONCE_KEY = 'ac_oauth_nonce';
+const _MAL_REDIRECT_URI_KEY  = 'ac_mal_redirect_uri';
+const _MAL_STATE_PREFIX    = 'mal:';
+const _OAUTH_NONCE_KEY     = 'ac_oauth_nonce';
 
-// ── Generate a short random nonce ──
-function _genNonce(){
-  return Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+function _genNonce() {
+  return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 //  AUTHORIZATION CODE FLOW
-//  Browser  → full-page redirect to Google, code returned in ?code=
-//  Electron → popup window via preload bridge, no page reload needed
-// ══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 function _startOAuthFlow() {
-  // redirectUri must match exactly what is registered in Google Cloud Console
-  const redirectUri = _getRedirectUri();
-
-  // Store the section to return to and a nonce for CSRF protection.
-  // We embed both in the `state` param as "nonce:section".
-  const section = localStorage.getItem('ac_last_section') || 'home';
-  const nonce   = _genNonce();
-  // sessionStorage survives the redirect; localStorage may not on iOS Safari
+  const redirectUri  = _getRedirectUri();
+  const section      = localStorage.getItem('ac_last_section') || 'home';
+  const nonce        = _genNonce();
   try { sessionStorage.setItem(_OAUTH_NONCE_KEY, nonce); } catch(e){}
-  // Fallback: also try localStorage
-  try { localStorage.setItem(_OAUTH_NONCE_KEY, nonce); } catch(e){}
-
-  const stateParam = nonce + ':' + section;
+  try { localStorage.setItem(_OAUTH_NONCE_KEY, nonce);   } catch(e){}
+  const stateParam   = nonce + ':' + section;
 
   const params = new URLSearchParams({
     client_id:     CLIENT_ID,
@@ -175,37 +168,28 @@ function _startOAuthFlow() {
   const oauthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
 
   if (window.electronBridge) {
-    // ── Electron path — popup handled by main process via IPC ──
     _updateDriveBtn('syncing');
-    window.electronBridge.openOAuth(oauthUrl).then(async (result) => {
+    window.electronBridge.openOAuth(oauthUrl).then(async result => {
       if (result.error) {
         if (result.error !== 'popup_closed') toast('Drive auth failed: ' + result.error, '#fb7185');
         _updateDriveBtn('off');
         return;
       }
-      await _exchangeCode(result.code, redirectUri, result.state || stateParam, /*skipNonceCheck=*/true);
+      await _exchangeCode(result.code, redirectUri, result.state || stateParam, true);
     });
   } else {
-    // ── Browser path — full-page redirect ──
-    // Show a brief "Redirecting…" UI so the user knows something is happening
     _showRedirectingOverlay();
-    // Small delay so the overlay renders before navigation
     setTimeout(() => { location.href = oauthUrl; }, 80);
   }
 }
 
-// Returns the redirect URI that Google or MAL should send the user back to.
-// Preserve the current path exactly, but strip only explicit /index.html.
 function _getRedirectUri() {
   let path = location.pathname;
-  if (path.endsWith('/index.html')) {
-    path = path.slice(0, -'index.html'.length);
-  }
+  if (path.endsWith('/index.html')) path = path.slice(0, -'index.html'.length);
   if (!path) path = '/';
   return location.origin + path;
 }
 
-// Brief full-screen overlay so the user sees feedback during the redirect.
 function _showRedirectingOverlay(service = 'Google') {
   if (document.getElementById('_oauth_overlay')) return;
   const d = document.createElement('div');
@@ -217,9 +201,7 @@ function _showRedirectingOverlay(service = 'Google') {
     'gap:16px;color:#7aab95;font-family:Outfit,sans-serif;font-size:14px',
   ].join(';');
   d.innerHTML = `
-    <div style="font-family:Cinzel,serif;font-size:22px;font-weight:700;color:#34d399">
-      The Aether Codex
-    </div>
+    <div style="font-family:Cinzel,serif;font-size:22px;font-weight:700;color:#34d399">The Aether Codex</div>
     <div style="display:flex;align-items:center;gap:8px">
       <div style="width:18px;height:18px;border:2px solid #1e3329;border-top-color:#34d399;border-radius:50%;animation:_spin .7s linear infinite"></div>
       Redirecting to ${service}…
@@ -228,17 +210,11 @@ function _showRedirectingOverlay(service = 'Google') {
   document.body.appendChild(d);
 }
 
-// ── Exchange an authorization code for tokens via the Cloudflare Worker ──
-// skipNonceCheck: set true for Electron popup flow (nonce already validated
-// by the popup's URL interception — no need to re-check sessionStorage).
-async function _exchangeCode(code, redirectUri, stateParam, skipNonceCheck=false) {
-  // Validate nonce to prevent CSRF (browser flow only)
+async function _exchangeCode(code, redirectUri, stateParam, skipNonceCheck = false) {
   if (!skipNonceCheck) {
-    const storedNonce = _getStoredNonce();
+    const storedNonce   = _getStoredNonce();
     const returnedNonce = (stateParam || '').split(':')[0];
     if (!storedNonce || storedNonce !== returnedNonce) {
-      // Nonce mismatch — could be a replay or storage was wiped.
-      // Don't hard-fail; just warn and proceed. The code is single-use anyway.
       console.warn('[OAuth] Nonce mismatch — storage may have been cleared by browser.');
     }
     _clearStoredNonce();
@@ -248,17 +224,12 @@ async function _exchangeCode(code, redirectUri, stateParam, skipNonceCheck=false
   try {
     const res = await fetch(_WORKER, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Action': 'exchange_code' },
+      headers: { 'Content-Type':'application/json', 'X-Action':'exchange_code' },
       body:    JSON.stringify({ code, redirect_uri: redirectUri }),
     });
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`Worker ${res.status}: ${txt.slice(0,200)}`);
-    }
+    if (!res.ok) { const txt = await res.text(); throw new Error(`Worker ${res.status}: ${txt.slice(0,200)}`); }
     const data = await res.json();
-    // Worker may return { error, error_description } on failure
     if (data.error) throw new Error(data.error_description || data.error);
-    // Validate we actually got a token back
     if (!data.access_token) throw new Error('No access token received from worker');
 
     _setAccessToken(data.access_token, Date.now() + (data.expires_in - 60) * 1000);
@@ -267,9 +238,8 @@ async function _exchangeCode(code, redirectUri, stateParam, skipNonceCheck=false
     _updateDriveBtn('syncing');
     await _driveInit();
 
-    // Navigate to the section the user was on before the redirect
     const section = (stateParam || '').split(':')[1] || 'home';
-    if (section && typeof nav === 'function') nav(section);
+    if (section) nav(section);
     return true;
   } catch(e) {
     console.error('[OAuth] exchange_code failed:', e);
@@ -286,55 +256,34 @@ function _getStoredNonce() {
 
 function _clearStoredNonce() {
   try { sessionStorage.removeItem(_OAUTH_NONCE_KEY); } catch(e){}
-  try { localStorage.removeItem(_OAUTH_NONCE_KEY); } catch(e){}
+  try { localStorage.removeItem(_OAUTH_NONCE_KEY);   } catch(e){}
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  HANDLE THE RETURN REDIRECT (browser only)
-//  Called early in initGIS(). Returns true if a code was found and
-//  exchange was attempted (successfully or not).
-// ══════════════════════════════════════════════════════════════════
 async function _handleOAuthRedirect() {
-  // Electron handles auth via popup — never touches the URL
   if (window.electronBridge) return false;
-
   const params = new URLSearchParams(location.search);
   const code   = params.get('code');
-  const state  = params.get('state');  // "nonce:section"
-  const error  = params.get('error');  // e.g. "access_denied"
-
-  // Nothing in the URL that looks like an OAuth return
+  const state  = params.get('state');
+  const error  = params.get('error');
   if (!code && !error) return false;
 
-  // FIX: Capture redirectUri BEFORE we mutate the URL with replaceState.
-  // _getRedirectUri() reads location.origin + location.pathname — after
-  // replaceState the pathname is unchanged but capturing it early is safer
-  // and makes the intent clear.
   const redirectUri = _getRedirectUri();
-
-  // Clean the URL immediately so a page refresh doesn't re-try the exchange
   try {
     const section = (state || '').split(':')[1] || 'home';
     history.replaceState({}, '', location.pathname + '#/' + section);
   } catch(e){}
 
-  // Remove the redirecting overlay if it somehow survived a navigation
   const ov = document.getElementById('_oauth_overlay');
   if (ov) ov.remove();
 
   if (error) {
-    // Delay toast slightly so the DOM / toast function is guaranteed ready
     setTimeout(() => toast('Google sign-in cancelled or denied: ' + error, '#fb7185'), 100);
     _updateDriveBtn('off');
-    return true;  // handled (with error)
+    return true;
   }
 
-  // Show a subtle "Completing sign-in…" indicator while we hit the Worker
   _showSigningInBanner();
-
-  // Use the pre-captured redirectUri (before URL was mutated above)
   await _exchangeCode(code, redirectUri, state || '');
-
   _hideSigningInBanner();
   return true;
 }
@@ -361,28 +310,26 @@ function _hideSigningInBanner() {
 }
 
 function _getMALStoredValue(key) {
-  try { const v = sessionStorage.getItem(key); if (v) return v; } catch (e) {}
-  try { return localStorage.getItem(key); } catch (e) { return null; }
+  try { const v = sessionStorage.getItem(key); if (v) return v; } catch(e){}
+  try { return localStorage.getItem(key); } catch(e){ return null; }
 }
 
 function _setMALStoredValue(key, value) {
-  try { sessionStorage.setItem(key, value); } catch (e) {}
-  try { localStorage.setItem(key, value); } catch (e) {}
+  try { sessionStorage.setItem(key, value); } catch(e){}
+  try { localStorage.setItem(key, value);   } catch(e){}
 }
 
 function _clearMALStoredValues() {
-  try { sessionStorage.removeItem(_MAL_OAUTH_NONCE_KEY); } catch (e) {}
-  try { localStorage.removeItem(_MAL_OAUTH_NONCE_KEY); } catch (e) {}
-  try { sessionStorage.removeItem(_MAL_CODE_VERIFIER_KEY); } catch (e) {}
-  try { localStorage.removeItem(_MAL_CODE_VERIFIER_KEY); } catch (e) {}
-  try { sessionStorage.removeItem(_MAL_REDIRECT_URI_KEY); } catch (e) {}
-  try { localStorage.removeItem(_MAL_REDIRECT_URI_KEY); } catch (e) {}
+  [_MAL_OAUTH_NONCE_KEY, _MAL_CODE_VERIFIER_KEY, _MAL_REDIRECT_URI_KEY].forEach(k => {
+    try { sessionStorage.removeItem(k); } catch(e){}
+    try { localStorage.removeItem(k);   } catch(e){}
+  });
 }
 
 function _base64UrlEncode(bytes) {
   let str = '';
   bytes.forEach(byte => { str += String.fromCharCode(byte); });
-  return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return btoa(str).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 }
 
 async function _sha256(text) {
@@ -398,33 +345,29 @@ function _generatePKCEVerifier() {
 }
 
 async function _startMALAuth() {
-  const redirectUri = _getRedirectUri();
-  const section = localStorage.getItem('ac_last_section') || 'settings';
-  const nonce = _genNonce();
-  const state = _MAL_STATE_PREFIX + nonce + ':' + section;
-  const codeVerifier = _generatePKCEVerifier();
-  // Use plain method: challenge === verifier — avoids SHA-256 mismatch issues with MAL
+  const redirectUri   = _getRedirectUri();
+  const section       = localStorage.getItem('ac_last_section') || 'settings';
+  const nonce         = _genNonce();
+  const state         = _MAL_STATE_PREFIX + nonce + ':' + section;
+  const codeVerifier  = _generatePKCEVerifier();
   const codeChallenge = codeVerifier;
-  _setMALStoredValue(_MAL_OAUTH_NONCE_KEY, state);
-  _setMALStoredValue(_MAL_CODE_VERIFIER_KEY, codeVerifier);
-  _setMALStoredValue(_MAL_REDIRECT_URI_KEY, redirectUri);
+  _setMALStoredValue(_MAL_OAUTH_NONCE_KEY,    state);
+  _setMALStoredValue(_MAL_CODE_VERIFIER_KEY,  codeVerifier);
+  _setMALStoredValue(_MAL_REDIRECT_URI_KEY,   redirectUri);
 
   const res = await fetch(_WORKER, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Action': 'mal_authorize_url' },
-    body: JSON.stringify({ redirect_uri: redirectUri, code_challenge: codeChallenge, state }),
+    method:  'POST',
+    headers: { 'Content-Type':'application/json', 'X-Action':'mal_authorize_url' },
+    body:    JSON.stringify({ redirect_uri:redirectUri, code_challenge:codeChallenge, state }),
   });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`MAL auth failed: ${body}`);
-  }
-  const data = await res.json();
-  const oauthUrl = data.url;
+  if (!res.ok) { const body = await res.text(); throw new Error(`MAL auth failed: ${body}`); }
+  const data      = await res.json();
+  const oauthUrl  = data.url;
 
   console.log('[MAL OAuth] authorize URL', oauthUrl);
   if (window.electronBridge) {
     _showRedirectingOverlay('MyAnimeList');
-    window.electronBridge.openOAuth(oauthUrl).then(async (result) => {
+    window.electronBridge.openOAuth(oauthUrl).then(async result => {
       if (result.error) {
         if (result.error !== 'popup_closed') toast('MAL auth failed: ' + result.error, '#fb7185');
         return;
@@ -439,9 +382,7 @@ async function _startMALAuth() {
 
 async function _exchangeMALCode(code, redirectUri, stateParam, skipNonceCheck = false) {
   const codeVerifier = _getMALStoredValue(_MAL_CODE_VERIFIER_KEY);
-  if (!codeVerifier) {
-    throw new Error('MAL PKCE verifier is missing. Please retry the connection flow.');
-  }
+  if (!codeVerifier) throw new Error('MAL PKCE verifier is missing. Please retry the connection flow.');
   if (!skipNonceCheck) {
     const storedState = _getMALStoredValue(_MAL_OAUTH_NONCE_KEY);
     if (!storedState || storedState !== stateParam) {
@@ -452,27 +393,23 @@ async function _exchangeMALCode(code, redirectUri, stateParam, skipNonceCheck = 
 
   _showSigningInBanner();
   try {
-    const payload = { code, code_verifier: codeVerifier, redirect_uri: redirectUri };
+    const payload = { code, code_verifier:codeVerifier, redirect_uri:redirectUri };
     const res = await fetch(_WORKER, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Action': 'mal_exchange_code' },
-      body: JSON.stringify(payload),
+      method:  'POST',
+      headers: { 'Content-Type':'application/json', 'X-Action':'mal_exchange_code' },
+      body:    JSON.stringify(payload),
     });
-    if (!res.ok) {
-      const body = await res.text();
-      toast(`MAL token exchange failed: ${body}`, '#fb7185');
-      throw new Error(`MAL token exchange failed: ${body}`);
-    }
+    if (!res.ok) { const body = await res.text(); toast(`MAL token exchange failed: ${body}`, '#fb7185'); throw new Error(`MAL token exchange failed: ${body}`); }
     const data = await res.json();
     if (data.error) throw new Error(data.error_description || data.error || 'MAL token exchange failed');
-    SETTINGS.malAccessToken = data.access_token || null;
+    SETTINGS.malAccessToken  = data.access_token  || null;
     SETTINGS.malRefreshToken = data.refresh_token || SETTINGS.malRefreshToken || null;
-    SETTINGS.malTokenExpiry = data.expires_in ? String(Date.now() + (data.expires_in - 60) * 1000) : SETTINGS.malTokenExpiry || null;
+    SETTINGS.malTokenExpiry  = data.expires_in ? String(Date.now() + (data.expires_in - 60) * 1000) : SETTINGS.malTokenExpiry || null;
     saveSettings(SETTINGS);
     toast('✓ MAL account connected', 'var(--cd)');
     if (typeof renderSettingsBody === 'function' && CURRENT === 'settings') renderSettingsBody();
     return true;
-  } catch (e) {
+  } catch(e) {
     toast('MAL auth failed: ' + e.message, '#fb7185');
     console.error('[MAL OAuth] exchange failed:', e);
     return false;
@@ -486,19 +423,19 @@ async function _refreshMALAccessToken() {
   if (!refreshToken) return false;
   try {
     const res = await fetch(_WORKER, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Action': 'mal_refresh_token' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      method:  'POST',
+      headers: { 'Content-Type':'application/json', 'X-Action':'mal_refresh_token' },
+      body:    JSON.stringify({ refresh_token:refreshToken }),
     });
     if (!res.ok) throw new Error('status ' + res.status);
     const data = await res.json();
     if (data.error) throw new Error(data.error_description || data.error);
-    SETTINGS.malAccessToken = data.access_token;
-    SETTINGS.malTokenExpiry = data.expires_in ? String(Date.now() + (data.expires_in - 60) * 1000) : SETTINGS.malTokenExpiry;
+    SETTINGS.malAccessToken  = data.access_token;
+    SETTINGS.malTokenExpiry  = data.expires_in ? String(Date.now() + (data.expires_in - 60) * 1000) : SETTINGS.malTokenExpiry;
     if (data.refresh_token) SETTINGS.malRefreshToken = data.refresh_token;
     saveSettings(SETTINGS);
     return true;
-  } catch (e) {
+  } catch(e) {
     console.warn('[MAL OAuth] Token refresh failed:', e.message);
     return false;
   }
@@ -507,19 +444,22 @@ async function _refreshMALAccessToken() {
 async function _handleMALRedirect() {
   if (window.electronBridge) return false;
   const params = new URLSearchParams(location.search);
-  const code = params.get('code');
-  const state = params.get('state');
-  const error = params.get('error');
+  const code   = params.get('code');
+  const state  = params.get('state');
+  const error  = params.get('error');
   if (!code && !error) return false;
   if (!state || !state.startsWith(_MAL_STATE_PREFIX)) return false;
+
   const redirectUri = _getMALStoredValue(_MAL_REDIRECT_URI_KEY) || _getRedirectUri();
   try {
-    const parts = (state || '').split(':');
+    const parts   = (state || '').split(':');
     const section = parts.slice(2).join(':') || 'settings';
     history.replaceState({}, '', location.pathname + '#/' + section);
-  } catch (e) {}
+  } catch(e) {}
+
   const ov = document.getElementById('_oauth_overlay');
   if (ov) ov.remove();
+
   if (error) {
     setTimeout(() => toast('MAL sign-in cancelled or denied: ' + error, '#fb7185'), 100);
     return true;
@@ -530,17 +470,17 @@ async function _handleMALRedirect() {
   return true;
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 //  TOKEN REFRESH
-// ══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 async function _refreshAccessToken() {
   const refreshToken = await _getRefreshToken();
   if (!refreshToken) return false;
   try {
     const res = await fetch(_WORKER, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Action': 'refresh_token' },
-      body:    JSON.stringify({ refresh_token: refreshToken }),
+      headers: { 'Content-Type':'application/json', 'X-Action':'refresh_token' },
+      body:    JSON.stringify({ refresh_token:refreshToken }),
     });
     if (!res.ok) throw new Error('status ' + res.status);
     const data = await res.json();
@@ -553,17 +493,13 @@ async function _refreshAccessToken() {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  BOOTSTRAP — called once on page load
-// ══════════════════════════════════════════════════════════════════
-async function initGIS() {
-  // FIX: Guard against being called twice (e.g. from both js/main.js and the
-  // window 'load' listener below). The second call would be a no-op here but
-  // could still trigger an unnecessary _driveInit round-trip.
+// ═══════════════════════════════════════════════════════════════════
+//  BOOTSTRAP
+// ═══════════════════════════════════════════════════════════════════
+export async function initGIS() {
   if (_gisInitDone) return;
   _gisInitDone = true;
 
-  // 1. Check if we're returning from an OAuth redirect
   const handledMAL = await _handleMALRedirect();
   if (handledMAL) return;
   const handled = await _handleOAuthRedirect();
@@ -584,214 +520,204 @@ async function initGIS() {
   }
 }
 
-function _saveToken(resp){
+function _saveToken(resp) {
   _setAccessToken(resp.access_token, Date.now() + (resp.expires_in - 60) * 1000);
   _updateDriveBtn('syncing');
   _driveInit();
 }
 
-function _showDriveHint(){
-  setTimeout(()=>{
-    const el=document.getElementById('drive-hint-inner');
-    if(el && DATA.length===0 && !_isConnected()) el.style.display='flex';
+function _showDriveHint() {
+  setTimeout(() => {
+    const el = document.getElementById('drive-hint-inner');
+    if (el && DATA.length === 0 && !_isConnected()) el.style.display = 'flex';
   }, 300);
 }
 
 // ── Drive button click ──
-function driveAction(){
-  if(_isConnected() || _hasRefreshToken()){
-    showConfirm('Your data will stay in localStorage. You can reconnect anytime.',()=>{
+export function driveAction() {
+  if (_isConnected() || _hasRefreshToken()) {
+    showConfirm('Your data will stay in localStorage. You can reconnect anytime.', () => {
       _clearAccessToken();
       _clearRefreshToken();
-      ls.del(K.DFILE);ls.del(K.DSYNC);
-      _driveFolderId=null;_updateDriveBtn('off');toast('Disconnected from Drive');
-    },{title:'Disconnect Drive?',okLabel:'Disconnect',danger:false});
+      ls.del(K.DFILE); ls.del(K.DSYNC);
+      _driveFolderId = null; _updateDriveBtn('off'); toast('Disconnected from Drive');
+    }, { title:'Disconnect Drive?', okLabel:'Disconnect', danger:false });
   } else {
     _startOAuthFlow();
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 //  AUTHENTICATED FETCH WRAPPER
-// ══════════════════════════════════════════════════════════════════
-async function _req(url,opts={}){
-  let token=_getToken();
-  if(!token){
-    if(_hasRefreshToken()){
-      const ok=await _refreshAccessToken();
-      if(ok) token=_getToken();
+// ═══════════════════════════════════════════════════════════════════
+async function _req(url, opts = {}) {
+  let token = _getToken();
+  if (!token) {
+    if (_hasRefreshToken()) {
+      const ok = await _refreshAccessToken();
+      if (ok) token = _getToken();
     }
-    if(!token){_updateDriveBtn('off');return null;}
+    if (!token) { _updateDriveBtn('off'); return null; }
   }
-  try{
-    const r=await fetch(url,{...opts,headers:{Authorization:`Bearer ${token}`,... (opts.headers||{})}});
-    if(r.status===401){
-      if(_hasRefreshToken()){
-        const ok=await _refreshAccessToken();
-        if(ok){
-          const t2=_getToken();
-          if(t2) return fetch(url,{...opts,headers:{Authorization:`Bearer ${t2}`,... (opts.headers||{})}});
+  try {
+    const r = await fetch(url, { ...opts, headers:{ Authorization:`Bearer ${token}`, ...(opts.headers||{}) } });
+    if (r.status === 401) {
+      if (_hasRefreshToken()) {
+        const ok = await _refreshAccessToken();
+        if (ok) {
+          const t2 = _getToken();
+          if (t2) return fetch(url, { ...opts, headers:{ Authorization:`Bearer ${t2}`, ...(opts.headers||{}) } });
         }
       }
-      _clearAccessToken();_clearRefreshToken();_updateDriveBtn('off');return null;
+      _clearAccessToken(); _clearRefreshToken(); _updateDriveBtn('off'); return null;
     }
     return r;
-  }catch{return null;}
+  } catch { return null; }
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 //  DRIVE FILE / FOLDER HELPERS
-// ══════════════════════════════════════════════════════════════════
-async function _getOrCreateFolder(){
-  if(_driveFolderId)return _driveFolderId;
-  const r=await _req(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FOLDER}'+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id)`);
-  if(!r)return null;
-  const d=await r.json();
-  if(d.files?.length){_driveFolderId=d.files[0].id;return _driveFolderId;}
-  const cr=await _req('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:DRIVE_FOLDER,mimeType:'application/vnd.google-apps.folder'})});
-  if(!cr)return null;
-  const cf=await cr.json();_driveFolderId=cf.id;return _driveFolderId;
+// ═══════════════════════════════════════════════════════════════════
+async function _getOrCreateFolder() {
+  if (_driveFolderId) return _driveFolderId;
+  const r = await _req(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FOLDER}'+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id)`);
+  if (!r) return null;
+  const d = await r.json();
+  if (d.files?.length) { _driveFolderId = d.files[0].id; return _driveFolderId; }
+  const cr = await _req('https://www.googleapis.com/drive/v3/files', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ name:DRIVE_FOLDER, mimeType:'application/vnd.google-apps.folder' }),
+  });
+  if (!cr) return null;
+  const cf = await cr.json(); _driveFolderId = cf.id; return _driveFolderId;
 }
 
-async function _getOrCreateFile(){
-  const cached=ls.str(K.DFILE);if(cached)return cached;
-  const folderId=await _getOrCreateFolder();if(!folderId)return null;
-  const r=await _req(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FILE}'+and+'${folderId}'+in+parents+and+trashed=false&fields=files(id,modifiedTime)`);
-  if(!r)return null;
-  const d=await r.json();
-  if(d.files?.length){ls.setStr(K.DFILE,d.files[0].id);return d.files[0].id;}
-  const cr=await _req('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{
+async function _getOrCreateFile() {
+  const cached = ls.str(K.DFILE); if (cached) return cached;
+  const folderId = await _getOrCreateFolder(); if (!folderId) return null;
+  const r = await _req(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FILE}'+and+'${folderId}'+in+parents+and+trashed=false&fields=files(id,modifiedTime)`);
+  if (!r) return null;
+  const d = await r.json();
+  if (d.files?.length) { ls.setStr(K.DFILE, d.files[0].id); return d.files[0].id; }
+  const cr = await _req('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
     method:'POST',
     headers:{'Content-Type':'multipart/related; boundary=boundary'},
-    body:`--boundary\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({name:DRIVE_FILE,parents:[folderId]})}\r\n--boundary\r\nContent-Type: application/json\r\n\r\n{}\r\n--boundary--`
+    body:`--boundary\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({name:DRIVE_FILE,parents:[folderId]})}\r\n--boundary\r\nContent-Type: application/json\r\n\r\n{}\r\n--boundary--`,
   });
-  if(!cr)return null;
-  const cf=await cr.json();ls.setStr(K.DFILE,cf.id);return cf.id;
+  if (!cr) return null;
+  const cf = await cr.json(); ls.setStr(K.DFILE, cf.id); return cf.id;
 }
 
-// ══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 //  PUSH / PULL / MERGE
-// ══════════════════════════════════════════════════════════════════
-async function _pushToDrive(){
+// ═══════════════════════════════════════════════════════════════════
+async function _pushToDrive() {
   _updateDriveBtn('syncing');
-  try{
-    const fileId=await _getOrCreateFile();if(!fileId)throw new Error('No file');
+  try {
+    const fileId      = await _getOrCreateFile(); if (!fileId) throw new Error('No file');
     const vaultEnc    = ls.get(VAULT_ENC_KEY)    || null;
     const vaultPublic = ls.get(VAULT_PUBLIC_KEY) || null;
-    const notesEnc    = (typeof NOTES_ENC_KEY!=='undefined'&&ls.get(NOTES_ENC_KEY)) || null;
-    const notesData   = (typeof NDATA!=='undefined'&&NDATA) || [];
-    const payload=JSON.stringify({version:DATA_VERSION,savedAt:parseInt(ls.str(K.SAVED)||'0'),data:DATA,genres:GENRES,games:GDATA,music:MDATA,playlists:MPLAYLISTS,books:BDATA,vault_enc:vaultEnc,vault_public:vaultPublic,log:LDATA,notes:notesData,notes_enc:notesEnc});
-    const r=await _req(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:payload});
-    if(!r||!r.ok)throw new Error('Upload failed');
-    ls.setStr(K.DSYNC,String(Date.now()));
+    const notesEnc    = (typeof NOTES_ENC_KEY !== 'undefined' && ls.get(NOTES_ENC_KEY)) || null;
+    const notesData   = (typeof NDATA !== 'undefined' && NDATA) || [];
+    const payload     = JSON.stringify({
+      version:DATA_VERSION, savedAt:parseInt(ls.str(K.SAVED)||'0'),
+      data:DATA, genres:GENRES, games:GDATA, music:MDATA, playlists:MPLAYLISTS,
+      books:BDATA, vault_enc:vaultEnc, vault_public:vaultPublic,
+      log:LDATA, notes:notesData, notes_enc:notesEnc,
+    });
+    const r = await _req(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'}, body:payload,
+    });
+    if (!r || !r.ok) throw new Error('Upload failed');
+    ls.setStr(K.DSYNC, String(Date.now()));
     _updateDriveBtn('connected');
-  }catch(e){_updateDriveBtn('error');toast('Drive sync failed: '+e.message,'#fb7185');}
+  } catch(e) { _updateDriveBtn('error'); toast('Drive sync failed: ' + e.message, '#fb7185'); }
 }
 
-async function _pullFromDrive(){
-  try{
-    const fileId=await _getOrCreateFile();if(!fileId)return null;
-    const r=await _req(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
-    if(!r||!r.ok)return null;
+async function _pullFromDrive() {
+  try {
+    const fileId = await _getOrCreateFile(); if (!fileId) return null;
+    const r = await _req(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+    if (!r || !r.ok) return null;
     return await r.json();
-  }catch{return null;}
+  } catch { return null; }
 }
 
-function _mergeData(local,remote){
-  const map=new Map();
-  local.forEach(e=>map.set(e.id,e));
-  remote.forEach(e=>{
-    const l=map.get(e.id);
-    if(!l||(e.updatedAt||0)>(l.updatedAt||0))map.set(e.id,e);
+function _mergeData(local, remote) {
+  const map = new Map();
+  local.forEach(e  => map.set(e.id, e));
+  remote.forEach(e => {
+    const l = map.get(e.id);
+    if (!l || (e.updatedAt || 0) > (l.updatedAt || 0)) map.set(e.id, e);
   });
-  return Array.from(map.values()).sort((a,b)=>a.title.localeCompare(b.title));
+  return Array.from(map.values()).sort((a, b) => a.title.localeCompare(b.title));
 }
 
-async function _driveInit(){
+async function _driveInit() {
   _updateDriveBtn('syncing');
-  const remote=await _pullFromDrive();
-  if(!remote){await _pushToDrive();return;}
-  const localSaved=parseInt(ls.str(K.SAVED)||'0');
-  const remoteSaved=remote.savedAt||0;
-  if(remoteSaved>localSaved){
-    DATA=_mergeData(DATA,remote.data||[]);
-    if(remote.genres){
-      const gids=new Set(GENRES.map(g=>g.id));
-      (remote.genres||[]).filter(g=>!gids.has(g.id)).forEach(g=>GENRES.push(g));
+  const remote = await _pullFromDrive();
+  if (!remote) { await _pushToDrive(); return; }
+  const localSaved  = parseInt(ls.str(K.SAVED) || '0');
+  const remoteSaved = remote.savedAt || 0;
+  if (remoteSaved > localSaved) {
+    setDATA(_mergeData(DATA, remote.data || []));
+    if (remote.genres) {
+      const gids = new Set(GENRES.map(g => g.id));
+      (remote.genres || []).filter(g => !gids.has(g.id)).forEach(g => GENRES.push(g));
       saveGenres(GENRES);
     }
-    if(remote.games&&Array.isArray(remote.games)){
-      GDATA=_mergeData(GDATA,remote.games);
-      saveGames(GDATA);
-    }
-    if(remote.music&&Array.isArray(remote.music)){
-      MDATA=_mergeData(MDATA,remote.music);
-      saveMusic(MDATA);
-    }
-    if(remote.playlists&&Array.isArray(remote.playlists)){
-      MPLAYLISTS=remote.playlists;
-      savePlaylists(MPLAYLISTS);
-    }
-    if(remote.books&&Array.isArray(remote.books)){
-      BDATA=_mergeData(BDATA,remote.books);
-      saveBooks(BDATA);
-    }
-    if(remote.vault_enc){
-      ls.set(VAULT_ENC_KEY, remote.vault_enc);
-    }
-    if(remote.vault_public){
-      const local = ls.get(VAULT_PUBLIC_KEY) || [];
-      const remIds = new Set(local.map(l=>l.id));
-      const merged = [...local, ...(remote.vault_public||[]).filter(l=>!remIds.has(l.id))];
+    if (remote.games     && Array.isArray(remote.games))     { GDATA = _mergeData(GDATA, remote.games);  saveGames(GDATA); }
+    if (remote.music     && Array.isArray(remote.music))     { MDATA = _mergeData(MDATA, remote.music);  saveMusic(MDATA); }
+    if (remote.playlists && Array.isArray(remote.playlists)) { MPLAYLISTS = remote.playlists;             savePlaylists(MPLAYLISTS); }
+    if (remote.books     && Array.isArray(remote.books))     { BDATA = _mergeData(BDATA, remote.books);  saveBooks(BDATA); }
+    if (remote.vault_enc)    ls.set(VAULT_ENC_KEY, remote.vault_enc);
+    if (remote.vault_public) {
+      const local  = ls.get(VAULT_PUBLIC_KEY) || [];
+      const remIds = new Set(local.map(l => l.id));
+      const merged = [...local, ...(remote.vault_public || []).filter(l => !remIds.has(l.id))];
       ls.set(VAULT_PUBLIC_KEY, merged);
-      if(typeof VDATA_PUBLIC !== 'undefined') VDATA_PUBLIC = merged;
+      if (typeof VDATA_PUBLIC !== 'undefined') VDATA_PUBLIC = merged;
     }
-    if(remote.log&&Array.isArray(remote.log)){
-      LDATA=remote.log;
-      saveLog(LDATA);
+    if (remote.log   && Array.isArray(remote.log))   { LDATA = remote.log;                         saveLog(LDATA); }
+    if (remote.notes && Array.isArray(remote.notes) && typeof NDATA !== 'undefined') {
+      NDATA = _mergeData(NDATA, remote.notes); saveNotes(NDATA);
     }
-    if(remote.notes&&Array.isArray(remote.notes)&&typeof NDATA!=='undefined'){
-      NDATA=_mergeData(NDATA,remote.notes);
-      saveNotes(NDATA);
-    }
-    if(remote.notes_enc&&typeof NOTES_ENC_KEY!=='undefined'){
-      ls.set(NOTES_ENC_KEY, remote.notes_enc);
-    }
-    saveData(DATA);render();
-    toast('✓ Synced from Drive','#4ade80');
-  } else if(localSaved>remoteSaved){
+    if (remote.notes_enc && typeof NOTES_ENC_KEY !== 'undefined') ls.set(NOTES_ENC_KEY, remote.notes_enc);
+    saveData(DATA); render();
+    toast('✓ Synced from Drive', '#4ade80');
+  } else if (localSaved > remoteSaved) {
     await _pushToDrive();
   } else {
     _updateDriveBtn('connected');
   }
 }
 
-function scheduleDriveSync(){
-  if(!_isConnected())return;
+function _scheduleDriveSyncImpl() {
+  if (!_isConnected()) return;
   clearTimeout(_syncTimer);
   _updateDriveBtn('pending');
-  _syncTimer=setTimeout(_pushToDrive,3000);
+  _syncTimer = setTimeout(_pushToDrive, 3000);
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  MOBILE SIDEBAR
-// ══════════════════════════════════════════════════════════════════
-function openMob(){document.getElementById('mob-ov').classList.add('show');document.getElementById('mob-sb').classList.add('open')}
-function closeMob(){document.getElementById('mob-ov').classList.remove('show');document.getElementById('mob-sb').classList.remove('open')}
+// Exported so utils.js can wire it up via patchScheduleDriveSync().
+export { _scheduleDriveSyncImpl as scheduleDriveSync };
 
-// ══════════════════════════════════════════════════════════════════
-//  BOOTSTRAP
-//  FIX: initGIS() was defined but never called. The function name
-//  suggests it was once a Google Identity Services callback that got
-//  removed when the flow was migrated to the custom code flow.
-//  We now hook it onto the window 'load' event, which fires after ALL
-//  deferred scripts have executed — guaranteeing that nav(), toast(),
-//  render(), etc. are all available when _handleOAuthRedirect() runs.
-//  The _gisInitDone guard means calling initGIS() from js/main.js as
-//  well is safe — the second call is a no-op.
-// ══════════════════════════════════════════════════════════════════
-window.addEventListener('load', async function _driveBootstrap() {
-  // ── NEW: run schema migration first, before any render ──
+// ═══════════════════════════════════════════════════════════════════
+//  MOBILE SIDEBAR
+// ═══════════════════════════════════════════════════════════════════
+export function openMob() {
+  document.getElementById('mob-ov').classList.add('show');
+  document.getElementById('mob-sb').classList.add('open');
+}
+export function closeMob() {
+  document.getElementById('mob-ov').classList.remove('show');
+  document.getElementById('mob-sb').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  BOOTSTRAP — fired by main.js after all modules are loaded
+// ═══════════════════════════════════════════════════════════════════
+export async function driveBootstrap() {
   try {
     const result = await runMigrationV1();
     if (result.ran) {
@@ -800,12 +726,10 @@ window.addEventListener('load', async function _driveBootstrap() {
         `(${result.groups} group${result.groups !== 1 ? 's' : ''} expanded)`,
         '#34d399'
       );
-      render(); // re-render with the new flat DATA
+      render();
     }
-  } catch (e) {
+  } catch(e) {
     console.error('[Migration V1] Fatal error:', e);
   }
-
-  // ── existing Drive boot ──
-  initGIS().catch(function(e) { console.error('[Drive] initGIS error:', e); });
-});
+  initGIS().catch(e => console.error('[Drive] initGIS error:', e));
+}
