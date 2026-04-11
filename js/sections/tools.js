@@ -1437,4 +1437,17 @@ async function toolsDownloadZIP(username, files, btnId, progressId) {
   }
 }
 
-window.renderTools = renderTools;
+
+// ── Register all tools functions as globals ───────────────────────────────
+Object.assign(window, {
+  renderTools, renderToolsTabContent, setToolsTab,
+  renderToolsPosts, toolsFetchPosts, toolsPostsError, toolsRenderSinglePostResult,
+  renderToolsProfilePicTab, toolsFetchProfilePic, toolsPPError, toolsRenderProfilePicResult,
+  renderToolsProfile, toolsFetchProfile, toolsProfError, toolsRenderProfileResult,
+  renderToolsStory, toolsFetchStory, toolsStoryError, toolsRenderStoryResult,
+  renderToolsReels, toolsFetchReels,
+  toolsDownload, toolsDownloadAll, toolsDownloadReel, toolsDownloadReelAll,
+  toolsDownloadZIP, toolsOpenFullView,
+  toolsExtractUsername, toolsExtractShortcode,
+  toolsApiHeaders, toolsLoadPreview,
+});

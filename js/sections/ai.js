@@ -330,3 +330,13 @@ function aiSend() {
 }
 
 function aiKeydown(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiSend(); } }
+
+// ── Register all AI functions as globals ─────────────────────────────────
+Object.assign(window, {
+  getAIKey, setAIKey,
+  buildAIContext, sendAIMessage, handleAIAction,
+  toggleAI, showAIKeyPrompt, saveAIKeyFromInput,
+  renderAIMessages, appendAIMessage, setAITyping,
+  aiSend, aiKeydown,
+  AI_HISTORY, AI_OPEN, AI_TYPING,
+});

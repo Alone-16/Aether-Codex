@@ -193,3 +193,9 @@ function renderWrappedContent(type) {
       No activity tracked for ${label} yet.<br>Keep using the app and check back!
     </div>`:''}`;
 }
+
+// ── Register wrapped functions as globals ─────────────────────────────────
+Object.assign(window, {
+  openWrapped,
+  renderWrappedContent,
+});

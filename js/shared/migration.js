@@ -291,3 +291,10 @@ function resetMigrationV1Stamp() {
   ls.del(MIGRATION_V1_KEY);
   console.warn('[Migration V1] Stamp cleared. Reload to re-run migration.');
 }
+// ── Register on window so drive.js and main.js can call it as a global ──
+Object.assign(window, {
+  runMigrationV1,
+  getLinkedGroup,
+  linkedGroupLabel,
+  resetMigrationV1Stamp,
+});

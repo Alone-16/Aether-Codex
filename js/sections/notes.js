@@ -513,4 +513,16 @@ function closeNotePanel() {
   render();
 }
 
-window.renderNotes = renderNotes;
+
+// ── Register all notes functions as globals ───────────────────────────────
+Object.assign(window, {
+  renderNotes, renderNotesBody,
+  noteCardHtml,
+  openNoteDetail, openNewNote,
+  renderNotePanelEdit,
+  onNoteImgInput, scheduleNoteAutoSave, commitNoteAutoSave,
+  addChecklistItem,
+  changeNoteColor, toggleNotePin, quickNotePin, quickNoteDelete, toggleNoteLock,
+  closeNotePanel,
+  unlockPrivateNotes, lockPrivateNotes,
+});

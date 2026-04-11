@@ -1464,4 +1464,41 @@ function _malUpdateCoverPreview(url) {
   else       wrap.style.display = 'none';
 }
 
-window.renderMedia = renderMedia;
+
+// ── Register all media functions as globals ───────────────────────────────
+Object.assign(window, {
+  // Core render
+  renderMedia, renderMediaBody, renderSectionStub,
+  setMediaPage, setMediaChip,
+
+  // List / grid
+  renderList, expandRows, filteredData,
+  toggleColl, entryStats, activeSeason, rowHtml,
+
+  // Quick actions
+  quickEp, quickTlEp,
+
+  // Dashboard / tabs
+  renderDash, renderUpcoming, renderIncomplete,
+
+  // Panel
+  openPanel, closePanel, openDetail, openEdit, openAdd, openAddLinkedEntry,
+  renderDetailPanel, renderFormPanel, saveEntry,
+
+  // Linking
+  getLinkedEntries, renderLinkedEntries, linkedEpDelta,
+  openLinkPicker, renderLinkPickerList, confirmLinkEntries, unlinkEntry,
+
+  // Delete
+  askDel,
+
+  // Context menu / hold
+  startHold, cancelHold, showCtxMenu, hideCtxMenu, ctxPin,
+
+  // MAL
+  malBulkSyncAll, malSearchInput,
+  runLinkedMigrationV3,
+
+  // Filter chips
+  _renderFilterChips,
+});

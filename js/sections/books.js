@@ -480,4 +480,17 @@ function renderBooksUpcoming(c) {
     ${rows||`<div class="empty"><div class="empty-ico">📅</div><p style="font-family:'Comic Neue',cursive">No upcoming books</p></div>`}`;
 }
 
-window.renderBooks = renderBooks;
+
+// ── Register all books functions as globals ───────────────────────────────
+Object.assign(window, {
+  renderBooks, renderBooksBody, setBooksPage, setBGenre,
+  filteredBooks, bookEntryStats,
+  renderBooksList, bookRowHtml, toggleBColl,
+  quickBookPage,
+  openBookDetail, renderBookDetailPanel,
+  openAddBook, openEditBook, openBookForm, renderBookFormPanel,
+  bookVolHtml, addBookVol, removeBookVol, refreshBFtl, collectBookVols,
+  saveBook, askDelBook,
+  renderBooksDash, renderBooksUpcoming,
+  bstag,
+});

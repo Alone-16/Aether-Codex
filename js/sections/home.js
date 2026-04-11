@@ -298,4 +298,28 @@ Object.assign(window, {
   renderAiringWidget,
   selectAiringDay,
   renderUpcomingWidget,
+
+// ── entryStats fallback (defined in media.js — stub until it loads) ───────
+if (typeof window.entryStats !== 'function') {
+  window.entryStats = function(e) {
+    const epCur = parseInt(e.epCur) || 0;
+    const epTot = parseInt(e.epTot) || 0;
+    return {
+      pct: epTot ? Math.min(100, Math.round(epCur / epTot * 100)) : 0,
+      epCur, epTot,
+      label: epTot ? `${epCur}/${epTot}` : `${epCur}`,
+      isDone: e.status === 'completed',
+    };
+  };
+}
+if (typeof window.activeSeason !== 'function') {
+  window.activeSeason = function() { return null; };
+}
+
+// ── Register all home functions as globals ────────────────────────────────
+Object.assign(window, {
+  renderHome,
+  renderAiringWidget,
+  selectAiringDay,
+  renderUpcomingWidget,
 });

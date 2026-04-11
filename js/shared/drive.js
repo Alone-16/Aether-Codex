@@ -719,7 +719,7 @@ export function closeMob() {
 // ═══════════════════════════════════════════════════════════════════
 export async function driveBootstrap() {
   try {
-    const result = await runMigrationV1();
+    const result = typeof window.runMigrationV1 === 'function' ? await window.runMigrationV1() : { ran: false };
     if (result.ran) {
       toast(
         `✓ Schema updated: ${result.entriesAfter} flat entries ` +
@@ -733,3 +733,7 @@ export async function driveBootstrap() {
   }
   initGIS().catch(e => console.error('[Drive] initGIS error:', e));
 }
+
+// Expose internals needed by settings.js and other sections
+window._isConnected = _isConnected;
+window._pushToDrive = _pushToDrive;

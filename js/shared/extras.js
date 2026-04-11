@@ -426,3 +426,14 @@ function airingMobileList() {
     </div>`;
   }).join('');
 }
+
+// ── Register all extras functions as globals ──────────────────────────────
+Object.assign(window, {
+  startRewatch, saveRewatch, updateRewatchEp, openEditRewatch,
+  updateRewatch, deleteRewatch,
+  toastWithUndo,
+  initNotifications, sendAiringNotifications,
+  initKeyboardShortcuts, showKeyboardHelp,
+  openCDD, setCDD,
+  airingMobileList,
+});

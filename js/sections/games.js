@@ -785,4 +785,34 @@ function renderGamesUpcoming(c) {
     ${rows||`<div class="empty"><div class="empty-ico">📅</div><p>No upcoming games</p></div>`}`;
 }
 
-window.renderGames = renderGames;
+
+// ── Register all games functions + constants as globals ───────────────────
+Object.assign(window, {
+  // Constants needed by settings.js
+  GAMES_KEY,
+
+  // PIN (shared with vault/settings)
+  getPin, setPin,
+
+  // Core render
+  renderGames, renderGamesBody, setGamesPage,
+  filteredGames, renderGamesLibrary, renderGamesDash, renderGamesUpcoming,
+  gameRowHtml, toggleGColl,
+
+  // Lock
+  showPinModal, unlockGames, toggleGamesLock, startGamesIdleTimer,
+
+  // Panel
+  openGameDetail, renderGameDetailPanel,
+  openAddGame, openEditGame, openGameForm, renderGameFormPanel,
+  saveGame, askDelGame,
+
+  // Form helpers
+  gamePartHtml, gamePtInnerHtml,
+  addGamePart, removeGamePart, refreshGFtl,
+  addGamePtInner, removeGamePtInner,
+  collectGameParts,
+
+  // Drive uploads
+  uploadSaveFile,
+});

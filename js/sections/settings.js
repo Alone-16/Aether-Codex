@@ -983,4 +983,22 @@ Object.assign(window, {
   showConfirm,
   showAlert,
   toast,
+
+// ── Register all settings functions as globals ────────────────────────────
+Object.assign(window, {
+  renderSettings, setSettingsTab, renderSettingsBody,
+  applySettings, rebuildSidebar,
+  renderSettingsSections, ssDragStart, ssDragOver, ssDrop,
+  toggleSection, saveSectionOrder,
+  renderSettingsDrive, saveBackupDays,
+  renderSettingsStorage,
+  renderSettingsAI, saveAIKeySetting, clearAIKey,
+  setFontSize, setDensity,
+  renderSettingsSecurity,
+  renderSettingsDesktop,
+  openMALBulkLinkModal, _malLinkToggle, saveMALBulkLinks,
+  startMALBulkSync, disconnectMALAccount,
+  clearPin, saveIdleTimeout,
+  onSearch, exportData, importFile,
+  showConfirm, showAlert, toast,
 });

@@ -60,18 +60,18 @@ export let DDRG       = null;
 export let FDRG       = null;
 
 // ── Setters for reassignable state ───────────────────────────────────────────
-export function setDATA(d)         { DATA       = d; }
-export function setGENRES(g)       { GENRES     = g; }
-export function setGACTIVE(id)     { GACTIVE    = id; }
-export function setCURRENT(id)     { CURRENT    = id; }
-export function setMEDIA_PAGE(p)   { MEDIA_PAGE = p; }
-export function setSEARCH(s)       { SEARCH     = s; }
-export function setPANEL(v)        { PANEL      = v; }
-export function setPEDIT(v)        { PEDIT      = v; }
-export function setFORM_TL(v)      { FORM_TL    = v; }
-export function setCOLLAPSED(v)    { COLLAPSED  = v; }
-export function setDDRG(v)         { DDRG       = v; }
-export function setFDRG(v)         { FDRG       = v; }
+export function setDATA(d)         { DATA       = d; window.DATA       = d; }
+export function setGENRES(g)       { GENRES     = g; window.GENRES     = g; }
+export function setGACTIVE(id)     { GACTIVE    = id; window.GACTIVE    = id; }
+export function setCURRENT(id)     { CURRENT    = id; window.CURRENT    = id; }
+export function setMEDIA_PAGE(p)   { MEDIA_PAGE = p; window.MEDIA_PAGE = p; }
+export function setSEARCH(s)       { SEARCH     = s; window.SEARCH     = s; }
+export function setPANEL(v)        { PANEL      = v; window.PANEL      = v; }
+export function setPEDIT(v)        { PEDIT      = v; window.PEDIT      = v; }
+export function setFORM_TL(v)      { FORM_TL    = v; window.FORM_TL    = v; }
+export function setCOLLAPSED(v)    { COLLAPSED  = v; window.COLLAPSED  = v; }
+export function setDDRG(v)         { DDRG       = v; window.DDRG       = v; }
+export function setFDRG(v)         { FDRG       = v; window.FDRG       = v; }
 
 // ── Persist helpers ───────────────────────────────────────────────────────────
 export function saveData(d) {

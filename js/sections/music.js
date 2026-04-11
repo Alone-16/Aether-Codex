@@ -471,4 +471,16 @@ function renderMusicDash(c) {
     </div>` : ''}`;
 }
 
-window.renderMusic = renderMusic;
+
+// ── Register all music functions as globals ───────────────────────────────
+Object.assign(window, {
+  renderMusic, renderMusicBody, setMusicPage,
+  handleMusicSync, syncYouTubePlaylists,
+  renderMusicLibrary, songRowHtml, fmtTotalDuration,
+  openSongDetail, delSong,
+  renderMusicPlaylists, togglePlaylistSync,
+  openAddSong, saveManualSong,
+  renderMusicDash,
+  initYTAuth, updateMusicSyncBtn,
+  parseISO8601Duration, fmtDuration, extractArtist,
+});

@@ -113,4 +113,10 @@ function clearOldLogs() {
   }, {title:'Clear Log?', okLabel:'Clear', danger:false});
 }
 
-window.renderLog = renderLog;
+
+// ── Register all log functions as globals ─────────────────────────────────
+Object.assign(window, {
+  renderLog, renderLogBody,
+  setLogFilter, clearOldLogs, addLog,
+  fmtLogTime,
+});

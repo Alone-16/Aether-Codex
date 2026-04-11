@@ -588,4 +588,16 @@ function resetVaultEncryption() {
   );
 }
 
-window.renderVault = renderVault;
+
+// ── Register all vault functions as globals ───────────────────────────────
+Object.assign(window, {
+  renderVault, renderVaultBody,
+  vaultCardHtml, copyVaultLink, openPrivateTab,
+  openAddLink, openEditLink, renderVaultForm, saveVaultLink,
+  askDelLink,
+  unlockVault, lockVault, lockVaultOnNav, startVaultIdleTimer,
+  showVaultPasswordSetup, handleVaultPasswordSetup,
+  showVaultPasswordUnlock, handleVaultUnlock,
+  forceReEncryptVault, resetVaultEncryption,
+  checkVaultMigration, faviconUrl,
+});

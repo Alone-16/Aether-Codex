@@ -302,3 +302,15 @@ async function handleRevokePublicLink() {
     renderSettingsPublicShare(document.getElementById('settings-body'));
   }, {title:'Revoke Link?', okLabel:'Revoke', danger:false});
 }
+
+// ── Register all public/share functions as globals ───────────────────────
+Object.assign(window, {
+  checkPublicView,
+  renderPublicView,
+  renderPublicContent,
+  generatePublicLink,
+  revokePublicLink,
+  renderSettingsPublicShare,
+  handleGeneratePublicLink,
+  handleRevokePublicLink,
+});
