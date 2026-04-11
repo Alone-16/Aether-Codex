@@ -432,12 +432,12 @@ async function _exchangeMALCode(code, redirectUri, stateParam, skipNonceCheck = 
     if (!res.ok) { const body = await res.text(); _toast(`MAL token exchange failed: ${body}`, '#fb7185'); throw new Error(`MAL token exchange failed: ${body}`); }
     const data = await res.json();
     if (data.error) throw new Error(data.error_description || data.error || 'MAL token exchange failed');
-    SETTINGS.malAccessToken  = data.access_token  || null;
-    SETTINGS.malRefreshToken = data.refresh_token || SETTINGS.malRefreshToken || null;
-    SETTINGS.malTokenExpiry  = data.expires_in ? String(Date.now() + (data.expires_in - 60) * 1000) : SETTINGS.malTokenExpiry || null;
-    saveSettings(SETTINGS);
+    window.SETTINGS.malAccessToken  = data.access_token  || null;
+    window.SETTINGS.malRefreshToken = data.refresh_token || window.SETTINGS.malRefreshToken || null;
+    window.SETTINGS.malTokenExpiry  = data.expires_in ? String(Date.now() + (data.expires_in - 60) * 1000) : window.SETTINGS.malTokenExpiry || null;
+    window.saveSettings(window.SETTINGS);
     _toast('✓ MAL account connected', 'var(--cd)');
-    if (typeof renderSettingsBody === 'function' && CURRENT === 'settings') renderSettingsBody();
+    if (typeof window.renderSettingsBody === 'function' && CURRENT === 'settings') window.renderSettingsBody();
     return true;
   } catch(e) {
     _toast('MAL auth failed: ' + e.message, '#fb7185');
@@ -449,7 +449,7 @@ async function _exchangeMALCode(code, redirectUri, stateParam, skipNonceCheck = 
 }
 
 async function _refreshMALAccessToken() {
-  const refreshToken = SETTINGS?.malRefreshToken;
+  const refreshToken = window.SETTINGS?.malRefreshToken;
   if (!refreshToken) return false;
   try {
     const res = await fetch(_WORKER, {
@@ -460,10 +460,10 @@ async function _refreshMALAccessToken() {
     if (!res.ok) throw new Error('status ' + res.status);
     const data = await res.json();
     if (data.error) throw new Error(data.error_description || data.error);
-    SETTINGS.malAccessToken  = data.access_token;
-    SETTINGS.malTokenExpiry  = data.expires_in ? String(Date.now() + (data.expires_in - 60) * 1000) : SETTINGS.malTokenExpiry;
-    if (data.refresh_token) SETTINGS.malRefreshToken = data.refresh_token;
-    saveSettings(SETTINGS);
+    window.SETTINGS.malAccessToken  = data.access_token;
+    window.SETTINGS.malTokenExpiry  = data.expires_in ? String(Date.now() + (data.expires_in - 60) * 1000) : window.SETTINGS.malTokenExpiry;
+    if (data.refresh_token) window.SETTINGS.malRefreshToken = data.refresh_token;
+    window.saveSettings(window.SETTINGS);
     return true;
   } catch(e) {
     console.warn('[MAL OAuth] Token refresh failed:', e.message);

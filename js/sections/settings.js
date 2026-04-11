@@ -948,4 +948,5 @@ Object.assign(window, {
   clearPin, saveIdleTimeout,
   onSearch, exportData, importFile,
   showConfirm, showAlert, toast,
+  saveSettings,
 });
