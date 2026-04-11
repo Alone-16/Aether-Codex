@@ -929,9 +929,4 @@ function toast(msg,col){
   setTimeout(()=>{el.style.opacity='0';setTimeout(()=>el.remove(),300)},2200);
 }
 
-// ═══════════════════════════════
-//  DRIVE (stub - Phase 4)
-// ═══════════════════════════════
-// ═══════════════════════════════
-//  GOOGLE DRIVE SYNC
-// ═══════════════════════════════
+window.renderSettings = renderSettings;

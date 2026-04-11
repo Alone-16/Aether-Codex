@@ -784,3 +784,5 @@ function renderGamesUpcoming(c) {
   c.innerHTML = `<div style="font-family:var(--fd);font-size:18px;font-weight:700;margin-bottom:16px;letter-spacing:2px;text-transform:uppercase;color:var(--ac)">🗓 Upcoming Games</div>
     ${rows||`<div class="empty"><div class="empty-ico">📅</div><p>No upcoming games</p></div>`}`;
 }
+
+window.renderGames = renderGames;

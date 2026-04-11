@@ -470,3 +470,5 @@ function renderMusicDash(c) {
         </div>`).join('')}
     </div>` : ''}`;
 }
+
+window.renderMusic = renderMusic;

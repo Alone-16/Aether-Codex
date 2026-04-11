@@ -112,3 +112,5 @@ function clearOldLogs() {
     toast('Activity log cleared');
   }, {title:'Clear Log?', okLabel:'Clear', danger:false});
 }
+
+window.renderLog = renderLog;

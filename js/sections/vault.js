@@ -587,3 +587,5 @@ function resetVaultEncryption() {
     {title:'Reset Vault Password?', okLabel:'Reset', danger:false}
   );
 }
+
+window.renderVault = renderVault;

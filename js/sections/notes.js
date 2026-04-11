@@ -512,3 +512,5 @@ function closeNotePanel() {
   document.getElementById('poverlay').onclick = closePanel;
   render();
 }
+
+window.renderNotes = renderNotes;

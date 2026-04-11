@@ -270,3 +270,5 @@ function renderUpcomingWidget(){
     <div style="padding:10px">${rows||`<div style="color:var(--mu);font-size:13px;text-align:center;padding:14px">No upcoming items</div>`}</div>
   </div>`;
 }
+
+window.renderHome = renderHome;

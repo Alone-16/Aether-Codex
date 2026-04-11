@@ -1436,3 +1436,5 @@ async function toolsDownloadZIP(username, files, btnId, progressId) {
     if (btn) { btn.disabled = false; btn.innerHTML = `📦 Download All as ZIP (${total})`; }
   }
 }
+
+window.renderTools = renderTools;

@@ -1463,3 +1463,5 @@ function _malUpdateCoverPreview(url) {
   if (url) { img.src = url; wrap.style.display = 'block'; }
   else       wrap.style.display = 'none';
 }
+
+window.renderMedia = renderMedia;
