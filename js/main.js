@@ -70,7 +70,7 @@ await import('./shared/extras.js').catch(e =>
 //    GitHub Pages returns an HTML page for missing files; a static
 //    import of that fails with "disallowed MIME type" and kills the
 //    entire module graph. Dynamic import() + catch() isolates it.
-const migration = await import('./migration.js').catch(() => null);
+const migration = await import('./shared/migration.js').catch(() => null);
 
 // ── Boot ──────────────────────────────────────────────────────────
 (async function boot() {
