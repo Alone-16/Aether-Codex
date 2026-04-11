@@ -112,26 +112,26 @@ function renderHome(c){
             </div>
             <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('games')">
               <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>◈</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#f59e0b">Games</span></div>
-              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#f59e0b">${GDATA.length||'—'}</div>
-              <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${GDATA.filter(g=>g.status==='playing').length} playing · ${GDATA.filter(g=>g.status==='completed').length} done</div>
-              <div style="height:2px;background:rgba(245,158,11,.15);border-radius:1px;overflow:hidden"><div style="height:100%;width:${GDATA.length?Math.round(GDATA.filter(g=>g.status==='completed').length/GDATA.length*100):0}%;background:#f59e0b;border-radius:1px"></div></div>
+              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#f59e0b">${(window.GDATA||[]).length||'—'}</div>
+              <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${(window.GDATA||[]).filter(g=>g.status==='playing').length} playing · ${(window.GDATA||[]).filter(g=>g.status==='completed').length} done</div>
+              <div style="height:2px;background:rgba(245,158,11,.15);border-radius:1px;overflow:hidden"><div style="height:100%;width:${(window.GDATA||[]).length?Math.round((window.GDATA||[]).filter(g=>g.status==='completed').length/(window.GDATA||[]).length*100):0}%;background:#f59e0b;border-radius:1px"></div></div>
             </div>
             <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('books')">
               <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>◎</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#a78bfa">Books</span></div>
-              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#a78bfa">${BDATA.length||'—'}</div>
-              <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${BDATA.filter(b=>b.status==='reading').length} reading · ${BDATA.filter(b=>b.status==='completed').length} done</div>
-              <div style="height:2px;background:rgba(167,139,250,.15);border-radius:1px;overflow:hidden"><div style="height:100%;width:${BDATA.length?Math.round(BDATA.filter(b=>b.status==='completed').length/BDATA.length*100):0}%;background:#a78bfa;border-radius:1px"></div></div>
+              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#a78bfa">${(window.BDATA||[]).length||'—'}</div>
+              <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${(window.BDATA||[]).filter(b=>b.status==='reading').length} reading · ${(window.BDATA||[]).filter(b=>b.status==='completed').length} done</div>
+              <div style="height:2px;background:rgba(167,139,250,.15);border-radius:1px;overflow:hidden"><div style="height:100%;width:${(window.BDATA||[]).length?Math.round((window.BDATA||[]).filter(b=>b.status==='completed').length/(window.BDATA||[]).length*100):0}%;background:#a78bfa;border-radius:1px"></div></div>
             </div>
             <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('music')">
               <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>♪</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#fb923c">Music</span></div>
-              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#fb923c">${MDATA.filter(s=>!s.removedFromPlaylist).length||'—'}</div>
-              <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${MPLAYLISTS.filter(p=>p.synced).length} playlist${MPLAYLISTS.filter(p=>p.synced).length!==1?'s':''} synced</div>
+              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#fb923c">${(window.MDATA||[]).filter(s=>!s.removedFromPlaylist).length||'—'}</div>
+              <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${(window.MPLAYLISTS||[]).filter(p=>p.synced).length} playlist${(window.MPLAYLISTS||[]).filter(p=>p.synced).length!==1?'s':''} synced</div>
               <div style="height:2px;background:rgba(251,146,60,.15);border-radius:1px"></div>
             </div>
             <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('notes')">
               <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>✎</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#14532d">Notes</span></div>
-              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#14532d">${typeof NDATA!=='undefined'?NDATA.length||'—':'—'}</div>
-              <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${typeof NDATA!=='undefined'?NDATA.filter(n=>n.pinned).length:0} pinned</div>
+              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#14532d">${(window.NDATA||[]).length||'—'}</div>
+              <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${(window.NDATA||[]).filter(n=>n.pinned).length} pinned</div>
               <div style="height:2px;background:rgba(20,83,45,.15);border-radius:1px"></div>
             </div>
           </div>
