@@ -5,7 +5,7 @@
 // ── Shared infrastructure (must come first) ──────────────────────
 import {
   DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K,
-  uid, esc, today, fmtDate, h2r, gbyid,
+  uid, esc, today, fmtDate, h2r, gbyid, estTime, fmtMin,
   saveData, saveGenres,
   setDATA, setGENRES, setGACTIVE, setCURRENT, setSEARCH, setMEDIA_PAGE,
   PANEL, PEDIT, FORM_TL, COLLAPSED, DDRG, FDRG,
@@ -27,7 +27,7 @@ Object.assign(window, {
   nav, render, renderPage,
   openMob, closeMob, driveAction,
   DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K,
-  uid, esc, today, fmtDate, h2r, gbyid,
+  uid, esc, today, fmtDate, h2r, gbyid, estTime, fmtMin,
   saveData, saveGenres,
   setDATA, setGENRES, setGACTIVE, setCURRENT, setSEARCH, setMEDIA_PAGE,
   PANEL, PEDIT, FORM_TL, COLLAPSED, DDRG, FDRG,

@@ -11,6 +11,27 @@ import {
 import { render } from './routing.js';
 import { nav, patchCloseMob } from './nav.js';
 
+// ── Fallback storage-key constants ────────────────────────────────────────
+// These are normally defined and set on window by their respective section
+// files (vault.js, games.js, music.js, books.js, log.js, notes.js).
+// The fallbacks here prevent ReferenceErrors if drive.js pushes before
+// those sections have loaded, or if a section is disabled.
+const VAULT_ENC_KEY    = window.VAULT_ENC_KEY    || 'ac_v4_vault_enc';
+const VAULT_PUBLIC_KEY = window.VAULT_PUBLIC_KEY || 'ac_v4_vault_pub';
+const NOTES_ENC_KEY    = window.NOTES_ENC_KEY    || 'ac_v4_notes_enc';
+function _GDATA()       { return window.GDATA      || []; }
+function _MDATA()       { return window.MDATA      || []; }
+function _MPLAYLISTS()  { return window.MPLAYLISTS || []; }
+function _BDATA()       { return window.BDATA      || []; }
+function _LDATA()       { return window.LDATA      || []; }
+function _NDATA()       { return window.NDATA      || []; }
+function _saveGames(d)      { if (typeof window.saveGames      === 'function') window.saveGames(d);      }
+function _saveMusic(d)      { if (typeof window.saveMusic      === 'function') window.saveMusic(d);      }
+function _savePlaylists(d)  { if (typeof window.savePlaylists  === 'function') window.savePlaylists(d);  }
+function _saveBooks(d)      { if (typeof window.saveBooks      === 'function') window.saveBooks(d);      }
+function _saveLog(d)        { if (typeof window.saveLog        === 'function') window.saveLog(d);        }
+function _saveNotes(d)      { if (typeof window.saveNotes      === 'function') window.saveNotes(d);      }
+
 // ═══════════════════════════════════════════════════════════════════
 //  Wire up the lazy stubs declared in utils.js
 // ═══════════════════════════════════════════════════════════════════
@@ -626,13 +647,13 @@ async function _pushToDrive() {
     const fileId      = await _getOrCreateFile(); if (!fileId) throw new Error('No file');
     const vaultEnc    = ls.get(VAULT_ENC_KEY)    || null;
     const vaultPublic = ls.get(VAULT_PUBLIC_KEY) || null;
-    const notesEnc    = (typeof NOTES_ENC_KEY !== 'undefined' && ls.get(NOTES_ENC_KEY)) || null;
-    const notesData   = (typeof NDATA !== 'undefined' && NDATA) || [];
+    const notesEnc    = ls.get(NOTES_ENC_KEY)    || null;
+    const notesData   = _NDATA();
     const payload     = JSON.stringify({
       version:DATA_VERSION, savedAt:parseInt(ls.str(K.SAVED)||'0'),
-      data:DATA, genres:GENRES, games:GDATA, music:MDATA, playlists:MPLAYLISTS,
-      books:BDATA, vault_enc:vaultEnc, vault_public:vaultPublic,
-      log:LDATA, notes:notesData, notes_enc:notesEnc,
+      data:DATA, genres:GENRES, games:_GDATA(), music:_MDATA(), playlists:_MPLAYLISTS(),
+      books:_BDATA(), vault_enc:vaultEnc, vault_public:vaultPublic,
+      log:_LDATA(), notes:notesData, notes_enc:notesEnc,
     });
     const r = await _req(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
       method:'PATCH', headers:{'Content-Type':'application/json'}, body:payload,
@@ -675,23 +696,23 @@ async function _driveInit() {
       (remote.genres || []).filter(g => !gids.has(g.id)).forEach(g => GENRES.push(g));
       saveGenres(GENRES);
     }
-    if (remote.games     && Array.isArray(remote.games))     { GDATA = _mergeData(GDATA, remote.games);  saveGames(GDATA); }
-    if (remote.music     && Array.isArray(remote.music))     { MDATA = _mergeData(MDATA, remote.music);  saveMusic(MDATA); }
-    if (remote.playlists && Array.isArray(remote.playlists)) { MPLAYLISTS = remote.playlists;             savePlaylists(MPLAYLISTS); }
-    if (remote.books     && Array.isArray(remote.books))     { BDATA = _mergeData(BDATA, remote.books);  saveBooks(BDATA); }
+    if (remote.games     && Array.isArray(remote.games))     { const d = _mergeData(_GDATA(), remote.games);  window.GDATA = d; _saveGames(d); }
+    if (remote.music     && Array.isArray(remote.music))     { const d = _mergeData(_MDATA(), remote.music);  window.MDATA = d; _saveMusic(d); }
+    if (remote.playlists && Array.isArray(remote.playlists)) { window.MPLAYLISTS = remote.playlists;             _savePlaylists(remote.playlists); }
+    if (remote.books     && Array.isArray(remote.books))     { const d = _mergeData(_BDATA(), remote.books);  window.BDATA = d; _saveBooks(d); }
     if (remote.vault_enc)    ls.set(VAULT_ENC_KEY, remote.vault_enc);
     if (remote.vault_public) {
       const local  = ls.get(VAULT_PUBLIC_KEY) || [];
       const remIds = new Set(local.map(l => l.id));
       const merged = [...local, ...(remote.vault_public || []).filter(l => !remIds.has(l.id))];
       ls.set(VAULT_PUBLIC_KEY, merged);
-      if (typeof VDATA_PUBLIC !== 'undefined') VDATA_PUBLIC = merged;
+      if (typeof window.VDATA_PUBLIC !== 'undefined') window.VDATA_PUBLIC = merged;
     }
-    if (remote.log   && Array.isArray(remote.log))   { LDATA = remote.log;                         saveLog(LDATA); }
-    if (remote.notes && Array.isArray(remote.notes) && typeof NDATA !== 'undefined') {
-      NDATA = _mergeData(NDATA, remote.notes); saveNotes(NDATA);
+    if (remote.log   && Array.isArray(remote.log))   { window.LDATA = remote.log; _saveLog(remote.log); }
+    if (remote.notes && Array.isArray(remote.notes)) {
+      const d = _mergeData(_NDATA(), remote.notes); window.NDATA = d; _saveNotes(d);
     }
-    if (remote.notes_enc && typeof NOTES_ENC_KEY !== 'undefined') ls.set(NOTES_ENC_KEY, remote.notes_enc);
+    if (remote.notes_enc) ls.set(NOTES_ENC_KEY, remote.notes_enc);
     saveData(DATA); render();
     _toast('✓ Synced from Drive', '#4ade80');
   } else if (localSaved > remoteSaved) {
