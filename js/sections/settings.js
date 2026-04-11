@@ -944,7 +944,7 @@ Object.assign(window, {
   renderSettingsSecurity,
   renderSettingsDesktop,
   openMALBulkLinkModal, _malLinkToggle, saveMALBulkLinks,
-  startMALBulkSync, disconnectMALAccount,
+  connectMALAccount, startMALBulkSync, disconnectMALAccount,
   clearPin, saveIdleTimeout,
   onSearch, exportData, importFile,
   showConfirm, showAlert, toast,
