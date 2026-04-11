@@ -5,9 +5,10 @@ const GAMES_KEY = 'ac_v4_games';
 const GAMES_VER = '1.0';
 
 function loadGames()  { return ls.get(GAMES_KEY) || []; }
-function saveGames(d) { ls.set(GAMES_KEY, d); ls.setStr(K.SAVED, String(Date.now())); scheduleDriveSync(); }
+function saveGames(d) { GDATA = d; window.GDATA = d; ls.set(GAMES_KEY, d); ls.setStr(K.SAVED, String(Date.now())); window.scheduleDriveSync(); }
 
 let GDATA       = loadGames();
+window.GDATA = GDATA;
 let GAMES_PAGE  = 'library';
 let GSEARCH     = '';
 let GPANEL      = null;

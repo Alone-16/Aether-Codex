@@ -173,11 +173,11 @@ async function generatePublicLink(sections) {
       genre: gbyid(e.genreId)?.name,
       progress: (() => { const s=entryStats(e); return s.tot?`${s.cur}/${s.tot}ep`:null; })()
     })) : [],
-    games: sections.includes('games') ? GDATA.filter(g=>!g.adult18).map(g => ({
+    games: sections.includes('games') ? window.GDATA.filter(g=>!g.adult18).map(g => ({
       title: g.title, status: g.status, rating: g.rating,
       platform: PLAT_LABEL[g.platform], totalHours: g.totalHours
     })) : [],
-    books: sections.includes('books') ? BDATA.map(b => ({
+    books: sections.includes('books') ? window.BDATA.map(b => ({
       title: b.title, status: b.status, rating: b.rating, author: b.author
     })) : [],
   };

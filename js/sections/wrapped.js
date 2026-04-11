@@ -95,14 +95,14 @@ function renderWrappedContent(type) {
   const rated = DATA.filter(e=>e.rating).sort((a,b)=>parseFloat(b.rating)-parseFloat(a.rating)).slice(0,3);
 
   // Games stats
-  const gamesInRange = GDATA.filter(g => (g.updatedAt||g.addedAt||0) >= startMs && (g.updatedAt||g.addedAt||0) <= endMs);
+  const gamesInRange = window.GDATA.filter(g => (g.updatedAt||g.addedAt||0) >= startMs && (g.updatedAt||g.addedAt||0) <= endMs);
   const gamesCompleted = gamesInRange.filter(g=>g.status==='completed');
   const totalGameHours = gamesInRange.reduce((a,g)=>a+(parseFloat(g.totalHours)||0),0);
 
   // Books stats
-  const booksInRange = BDATA.filter(b=>(b.updatedAt||b.addedAt||0)>=startMs&&(b.updatedAt||b.addedAt||0)<=endMs);
+  const booksInRange = window.BDATA.filter(b=>(b.updatedAt||b.addedAt||0)>=startMs&&(b.updatedAt||b.addedAt||0)<=endMs);
   const booksCompleted = booksInRange.filter(b=>b.status==='completed');
-  const totalPages = booksInRange.reduce((a,b)=>{const st=bookEntryStats(b);return a+st.cur;},0);
+  const totalPages = booksInRange.reduce((a,b)=>{const st=window.bookEntryStats(b);return a+st.cur;},0);
 
   // Fun highlight
   const totalHours = Math.round(totalMin/60);

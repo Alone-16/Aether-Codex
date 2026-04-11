@@ -58,14 +58,14 @@ ${JSON.stringify(stats, null, 2)}
 ALL MEDIA ENTRIES (${allMedia.length} total):
 ${JSON.stringify(allMedia, null, 2)}
 
-GAMES (${GDATA.length}):
-${JSON.stringify(GDATA.map(g=>({id:g.id,title:g.title,platform:g.platform,status:g.status,hours:g.totalHours,rating:g.rating})), null, 2)}
+GAMES (${window.GDATA.length}):
+${JSON.stringify(window.GDATA.map(g=>({id:g.id,title:g.title,platform:g.platform,status:g.status,hours:g.totalHours,rating:g.rating})), null, 2)}
 
-BOOKS (${BDATA.length}):
-${JSON.stringify(BDATA.map(b=>({id:b.id,title:b.title,author:b.author,status:b.status,rating:b.rating})), null, 2)}
+BOOKS (${window.BDATA.length}):
+${JSON.stringify(window.BDATA.map(b=>({id:b.id,title:b.title,author:b.author,status:b.status,rating:b.rating})), null, 2)}
 
-MUSIC (${MDATA.filter(s=>!s.removedFromPlaylist).length} songs):
-${JSON.stringify(MDATA.filter(s=>!s.removedFromPlaylist).slice(0,50).map(s=>({title:s.title,artist:s.artist,album:s.album})), null, 2)}${MDATA.length>50?`\n... and ${MDATA.length-50} more songs`:''}
+MUSIC (${window.MDATA.filter(s=>!s.removedFromPlaylist).length} songs):
+${JSON.stringify(window.MDATA.filter(s=>!s.removedFromPlaylist).slice(0,50).map(s=>({title:s.title,artist:s.artist,album:s.album})), null, 2)}${window.MDATA.length>50?`\n... and ${window.MDATA.length-50} more songs`:''}
 
 INSTRUCTIONS:
 - Be conversational, friendly and concise. Use short responses.
@@ -209,14 +209,14 @@ function handleAIAction(action) {
       break;
     }
     case 'update_hours': {
-      const g = GDATA.find(x => x.id === action.id || x.title.toLowerCase() === (action.title||'').toLowerCase()) ||
-                GDATA.find(x => x.title.toLowerCase().includes((action.title||'').toLowerCase())) ||
-                GDATA.find(x => (action.title||'').toLowerCase().includes(x.title.toLowerCase().split(' ').slice(0,3).join(' ')));
+      const g = window.GDATA.find(x => x.id === action.id || x.title.toLowerCase() === (action.title||'').toLowerCase()) ||
+                window.GDATA.find(x => x.title.toLowerCase().includes((action.title||'').toLowerCase())) ||
+                window.GDATA.find(x => (action.title||'').toLowerCase().includes(x.title.toLowerCase().split(' ').slice(0,3).join(' ')));
       if (!g) { appendAIMessage('assistant', "I couldn't find that game."); return; }
       showConfirm(`Update hours for "${g.title}" to ${action.value}h?`, () => {
         g.totalHours = parseFloat(action.value);
         g.updatedAt = Date.now();
-        saveGames(GDATA);
+        window.saveGames(window.GDATA);
         if (CURRENT === 'games') renderGamesBody();
         appendAIMessage('assistant', `✓ Hours for "${g.title}" updated to ${action.value}h.`);
       }, { title: 'Confirm Update', okLabel: 'Yes', danger: false });
