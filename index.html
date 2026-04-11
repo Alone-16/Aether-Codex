@@ -17,17 +17,36 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 (function(){
-  const bg = {
+  var VALID = ['home','media','games','books','music','vault','notes','log','tools','settings'];
+  var bg = {
     home:'#070d0b', media:'#07000f', games:'#080600',
     books:'#f5f0e8', music:'#080400', vault:'#f0eefa',
     log:'#010c14', tools:'#080006', settings:'#0a0a12', notes:'#d0e8d0'
   };
-  const h = location.hash.replace('#/','').replace('#','')
-         || localStorage.getItem('ac_last_section')
-         || 'home';
-  const col = bg[h] || bg.home;
-  document.documentElement.setAttribute('data-section', h);
-  document.documentElement.style.background = col;
+
+  // Read hash and validate it — ignore anything that isn't a real section
+  var rawHash = location.hash.replace('#/','').replace('#','').trim();
+  var hash    = VALID.indexOf(rawHash) !== -1 ? rawHash : '';
+
+  // Clear bad hash from URL immediately so it doesn't confuse the JS boot
+  if (rawHash && !hash) {
+    history.replaceState({}, '', location.pathname);
+  }
+
+  // Saved section — only trust it if it's a known section
+  var saved = localStorage.getItem('ac_last_section');
+  if (VALID.indexOf(saved) === -1) saved = null;
+
+  // First visit: no hash, nothing saved → default to home and remember it
+  if (!hash && !saved) {
+    localStorage.setItem('ac_last_section', 'home');
+  }
+
+  var section = hash || saved || 'home';
+  var col     = bg[section] || bg.home;
+
+  document.documentElement.setAttribute('data-section', section);
+  document.documentElement.style.background      = col;
   document.documentElement.style.backgroundColor = col;
 })();
 </script>
@@ -180,13 +199,6 @@
 #ai-messages::-webkit-scrollbar{width:3px}
 </style>
 
-<!--
-  ┌──────────────────────────────────────────────────────────────────┐
-  │  SINGLE MODULE ENTRY POINT                                        │
-  │  Replaces the 20 individual <script defer> tags.                 │
-  │  type="module" scripts are deferred automatically by the browser. │
-  └──────────────────────────────────────────────────────────────────┘
--->
 <script type="module" src="js/main.js"></script>
 
 <script>

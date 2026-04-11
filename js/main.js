@@ -20,8 +20,6 @@ import {
 } from './shared/drive.js';
 
 // ── Expose globals IMMEDIATELY so inline onclick="" handlers work ──
-//    This runs synchronously as soon as the imports above resolve,
-//    before any section files or async work starts.
 Object.assign(window, {
   nav, render, renderPage,
   openMob, closeMob, driveAction,
@@ -66,15 +64,13 @@ await import('./shared/extras.js').catch(e =>
   console.warn('[main] extras.js failed to load:', e.message)
 );
 
-// ── Migration — dynamic import so a 404 is non-fatal ─────────────
-//    GitHub Pages returns an HTML page for missing files; a static
-//    import of that fails with "disallowed MIME type" and kills the
-//    entire module graph. Dynamic import() + catch() isolates it.
+// ── Migration ─────────────────────────────────────────────────────
 const migration = await import('./shared/migration.js').catch(() => null);
 
 // ── Boot ──────────────────────────────────────────────────────────
 (async function boot() {
-  // Run schema migration before first render.
+
+  // ── Run schema migration before first render ───────────────────
   if (migration?.runMigrationV1) {
     try {
       const result = await migration.runMigrationV1();
@@ -90,17 +86,41 @@ const migration = await import('./shared/migration.js').catch(() => null);
     }
   }
 
-  // Determine initial section.
-  const h       = location.hash.replace('#/', '').replace('#', '');
-  const initial = h || localStorage.getItem('ac_last_section') || 'home';
+  // ── Determine initial section ──────────────────────────────────
+  //    Priority: URL hash → last saved section → home
+  //    On first ever visit (no hash, no saved section) → always home.
+  const VALID_SECTIONS = [
+    'home','media','games','books','music',
+    'vault','notes','log','tools','settings',
+    'ai','wrapped','public',
+  ];
 
-  // First render.
+  const rawHash = location.hash.replace('#/', '').replace('#', '').trim();
+  const hash    = VALID_SECTIONS.includes(rawHash) ? rawHash : '';
+
+  // Clear any stale / invalid hash from the URL bar
+  if (rawHash && !hash) {
+    history.replaceState({}, '', location.pathname);
+  }
+
+  const saved   = localStorage.getItem('ac_last_section');
+  const isFirstVisit = !hash && !saved;
+
+  // On first visit stamp home so returning visits remember it
+  if (isFirstVisit) {
+    localStorage.setItem('ac_last_section', 'home');
+  }
+
+  const initial = hash || (VALID_SECTIONS.includes(saved) ? saved : 'home');
+
+  // ── First render ───────────────────────────────────────────────
   nav(initial, false);
 
-  // Drive auth (non-blocking — UI is already visible).
+  // ── Drive auth (non-blocking) ──────────────────────────────────
   driveBootstrap().catch(e => console.error('[Drive] bootstrap error:', e));
 
-  // Reveal app.
+  // ── Reveal app ────────────────────────────────────────────────
   document.body.style.visibility            = 'visible';
   document.documentElement.style.visibility = 'visible';
+
 })();
