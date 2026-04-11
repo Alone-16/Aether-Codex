@@ -604,7 +604,7 @@ function renderDetailPanel(e) {
     ${e.malId ? `<div style="padding:8px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:8px;background:rgba(0,229,255,.03)">
       <span style="font-size:9px;font-weight:800;letter-spacing:.5px;background:rgba(0,229,255,.12);color:#00e5ff;border:1px solid rgba(0,229,255,.25);border-radius:3px;padding:1px 6px;flex-shrink:0">MAL</span>
       <span style="font-size:11px;color:var(--tx2)">ID #${esc(String(e.malId))}</span>
-      ${window.SETTINGS?.malRefreshToken
+      ${window.window.SETTINGS?.malRefreshToken
         ? `<span style="font-size:10px;color:#4ade80;margin-left:2px">● Connected</span>
            <button onclick="event.stopPropagation();_syncMALListEntry(DATA.find(x=>x.id==='${e.id}')).catch(()=>toast('MAL sync failed','#fb7185'))"
              style="margin-left:auto;font-size:11px;color:#00e5ff;background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.2);border-radius:4px;padding:3px 9px;cursor:pointer;white-space:nowrap">↻ Sync Now</button>`
@@ -1095,7 +1095,7 @@ function saveEntry(eid) {
   if (eid) { const i=DATA.findIndex(x=>x.id===eid); DATA[i]=entry; } else DATA.unshift(entry);
   saveData(DATA); closePanel(); render(); toast('✓ Saved');
   if (entry.malId) {
-    if (!window.SETTINGS?.malRefreshToken) {
+    if (!window.window.SETTINGS?.malRefreshToken) {
       toast('Entry saved — MAL not connected (Settings → Security)', '#fbbf24');
     } else {
       const shouldSync = !existing || entry.status !== existing.status || String(entry.epCur) !== String(existing.epCur) || String(entry.rating) !== String(existing.rating);
@@ -1111,7 +1111,7 @@ function saveEntry(eid) {
 
 async function _syncMALListEntry(entry, silent = false) {
   if (!entry?.malId) return false;
-  if (!window.SETTINGS?.malRefreshToken) {
+  if (!window.window.SETTINGS?.malRefreshToken) {
     if (!silent) toast('MAL not connected — go to Settings → Security to connect', '#fbbf24');
     return false;
   }
@@ -1130,8 +1130,8 @@ async function _syncMALListEntry(entry, silent = false) {
   const score  = entry.rating != null && entry.rating !== '' ? Number(entry.rating) : undefined;
 
   const payload = {
-    access_token:  window.SETTINGS?.malAccessToken || null,
-    refresh_token: window.SETTINGS?.malRefreshToken || null,
+    access_token:  window.window.SETTINGS?.malAccessToken || null,
+    refresh_token: window.window.SETTINGS?.malRefreshToken || null,
     status,
     num_watched_episodes: epCur,
   };
@@ -1148,11 +1148,11 @@ async function _syncMALListEntry(entry, silent = false) {
   }
   const data = await res.json();
   if (data.access_token) {
-    window.SETTINGS.malAccessToken = data.access_token;
-    if (data.expires_in) window.SETTINGS.malTokenExpiry = String(Date.now() + (data.expires_in - 60) * 1000);
+    window.window.SETTINGS.malAccessToken = data.access_token;
+    if (data.expires_in) window.window.SETTINGS.malTokenExpiry = String(Date.now() + (data.expires_in - 60) * 1000);
   }
-  if (data.refresh_token) window.SETTINGS.malRefreshToken = data.refresh_token;
-  saveSettings(window.SETTINGS);
+  if (data.refresh_token) window.window.SETTINGS.malRefreshToken = data.refresh_token;
+  saveSettings(window.window.SETTINGS);
   if (data.updated) {
     ls.setStr('ac_mal_last_sync', String(Date.now()));
     ls.setStr('ac_mal_last_sync_title', entry.title || '');
@@ -1162,14 +1162,14 @@ async function _syncMALListEntry(entry, silent = false) {
 }
 
 function _malSyncQuiet(e) {
-  if (!e?.malId || !window.SETTINGS?.malRefreshToken) return;
+  if (!e?.malId || !window.window.SETTINGS?.malRefreshToken) return;
   _syncMALListEntry(e, true).catch(err => console.warn('[MAL] background sync failed:', err));
 }
 
 async function malBulkSyncAll(onProgress) {
   const entries = DATA.filter(e => e.malId);
   if (!entries.length) return { total: 0, success: 0, failed: 0 };
-  if (!window.SETTINGS?.malRefreshToken) return { error: 'not_connected' };
+  if (!window.window.SETTINGS?.malRefreshToken) return { error: 'not_connected' };
   let success = 0, failed = 0;
   for (let i = 0; i < entries.length; i++) {
     try {
@@ -1496,7 +1496,7 @@ Object.assign(window, {
   startHold, cancelHold, showCtxMenu, hideCtxMenu, ctxPin, _HOLD_FIRED,
 
   // MAL
-  malBulkSyncAll, malSearchInput,
+  malBulkSyncAll, malSearchInput, _syncMALListEntry,
   runLinkedMigrationV3,
 
   // Filter chips
