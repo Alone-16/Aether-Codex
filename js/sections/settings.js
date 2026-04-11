@@ -929,4 +929,58 @@ function toast(msg,col){
   setTimeout(()=>{el.style.opacity='0';setTimeout(()=>el.remove(),300)},2200);
 }
 
-window.renderSettings = renderSettings;
+
+// ── Register all functions as globals so inline onclick="" handlers work ──
+Object.assign(window, {
+  // Settings core
+  renderSettings,
+  setSettingsTab,
+  renderSettingsBody,
+  applySettings,
+  rebuildSidebar,
+
+  // Sections tab
+  renderSettingsSections,
+  ssDragStart,
+  ssDragOver,
+  ssDrop,
+  toggleSection,
+  saveSectionOrder,
+
+  // Drive tab
+  renderSettingsDrive,
+  saveBackupDays,
+
+  // Storage tab
+  renderSettingsStorage,
+
+  // AI tab
+  renderSettingsAI,
+  saveAIKeySetting,
+  clearAIKey,
+
+  // Appearance
+  setFontSize,
+  setDensity,
+
+  // Security / MAL tab
+  renderSettingsSecurity,
+  openMALBulkLinkModal,
+  _malLinkToggle,
+  saveMALBulkLinks,
+  startMALBulkSync,
+  disconnectMALAccount,
+  clearPin,
+  saveIdleTimeout,
+
+  // Desktop tab
+  renderSettingsDesktop,
+
+  // Shared utilities (used across sections)
+  onSearch,
+  exportData,
+  importFile,
+  showConfirm,
+  showAlert,
+  toast,
+});

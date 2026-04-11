@@ -4,9 +4,11 @@
 
 // ── Shared infrastructure (must come first) ──────────────────────
 import {
-  DATA, GENRES, GACTIVE, CURRENT, SEARCH, ls, K,
+  DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K,
   uid, esc, today, fmtDate, h2r, gbyid,
   saveData, saveGenres,
+  setDATA, setGENRES, setGACTIVE, setCURRENT, setSEARCH, setMEDIA_PAGE,
+  setPANEL, setPEDIT, setFORM_TL, setCOLLAPSED, setDDRG, setFDRG,
   stag, rewatchBadge, pcol, SL, SC, SO, SSL,
   applyGenre, buildGenreMenu, toggleGdrop,
   selectGenre, changeGenreColor, addGenre,
@@ -23,9 +25,11 @@ import {
 Object.assign(window, {
   nav, render, renderPage,
   openMob, closeMob, driveAction,
-  DATA, GENRES, GACTIVE, CURRENT, SEARCH, ls, K,
+  DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K,
   uid, esc, today, fmtDate, h2r, gbyid,
   saveData, saveGenres,
+  setDATA, setGENRES, setGACTIVE, setCURRENT, setSEARCH, setMEDIA_PAGE,
+  setPANEL, setPEDIT, setFORM_TL, setCOLLAPSED, setDDRG, setFDRG,
   stag, rewatchBadge, pcol, SL, SC, SO, SSL,
   applyGenre, buildGenreMenu, toggleGdrop,
   selectGenre, changeGenreColor, addGenre,

@@ -271,4 +271,31 @@ function renderUpcomingWidget(){
   </div>`;
 }
 
-window.renderHome = renderHome;
+
+// ── entryStats fallback ───────────────────────────────────────────
+// entryStats is defined in media.js. If home.js renders before media.js
+// loads, we provide a safe stub so the page never crashes.
+// The real function on window will take over as soon as media.js loads.
+if (typeof window.entryStats !== 'function') {
+  window.entryStats = function(e) {
+    const epCur = parseInt(e.epCur) || 0;
+    const epTot = parseInt(e.epTot) || 0;
+    return {
+      pct      : epTot ? Math.min(100, Math.round(epCur / epTot * 100)) : 0,
+      epCur,
+      epTot,
+      label    : epTot ? `${epCur}/${epTot}` : `${epCur}`,
+      isDone   : e.status === 'completed',
+      isOnHold : e.status === 'on_hold',
+      isDropped: e.status === 'dropped',
+    };
+  };
+}
+
+// ── Register all home functions as globals ────────────────────────
+Object.assign(window, {
+  renderHome,
+  renderAiringWidget,
+  selectAiringDay,
+  renderUpcomingWidget,
+});
