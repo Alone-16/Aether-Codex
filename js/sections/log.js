@@ -21,8 +21,8 @@ function addLog(section, action, title, detail) {
 }
 
 const LOG_SECTION_COLOR = {
-  media:  '#e879a0', games: '#f59e0b',
-  books:  '#a78bfa', music: '#fb923c', vault: '#38bdf8',
+  media:  'var(--ac)', games: 'var(--ac)',
+  books:  'var(--ac)', music: 'var(--ac)', vault: 'var(--ac)',
 };
 const LOG_SECTION_ICON = {
   media:'◉', games:'◈', books:'◎', music:'♪', vault:'◈',

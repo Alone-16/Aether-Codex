@@ -369,7 +369,7 @@ function vaultCardHtml(l) {
 }
 
 function copyVaultLink(url) {
-  navigator.clipboard?.writeText(url).then(() => toast('✓ URL copied')).catch(() => toast('Copy failed', 'var(--cr)'));
+  navigator.clipboard?.writeText(url).then(() => toast('✓ URL copied')).catch(() => toast('Copy failed', 'var(--err)'));
 }
 
 function openPrivateTab(url) {

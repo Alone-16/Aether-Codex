@@ -35,7 +35,7 @@ const BS_SECTION = {
 };
 
 function bstag(s) {
-  return `<span class="stag" style="background:${BS_COLOR[s]}1a;color:${BS_COLOR[s]};font-family:'Comic Neue',cursive">${BS_LABEL[s]||s}</span>`;
+  return `<span class="stag" style="background:${BS_COLOR[s]}1a;color:${BS_COLOR[s]};font-family:var(--fb)">${BS_LABEL[s]||s}</span>`;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -44,18 +44,18 @@ function bstag(s) {
 function renderBooks(c) {
   const tabs = ['List','Dashboard','Upcoming'];
   const genreOpts = BOOK_GENRES.map(g =>
-    `<button class="stab${BGENRE===g.id?' active':''}" onclick="setBGenre('${g.id}')" style="font-family:'Comic Neue',cursive">${g.name}</button>`
+    `<button class="stab${BGENRE===g.id?' active':''}" onclick="setBGenre('${g.id}')" style="font-family:var(--fb)">${g.name}</button>`
   ).join('');
 
   c.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <div class="sub-tabs" style="font-family:'Comic Neue',cursive">
-          ${tabs.map((t,i) => `<button class="stab${BOOKS_PAGE===['list','dashboard','upcoming'][i]?' active':''}" onclick="setBooksPage('${['list','dashboard','upcoming'][i]}')" style="font-family:'Comic Neue',cursive">${t}</button>`).join('')}
+        <div class="sub-tabs" style="font-family:var(--fb)">
+          ${tabs.map((t,i) => `<button class="stab${BOOKS_PAGE===['list','dashboard','upcoming'][i]?' active':''}" onclick="setBooksPage('${['list','dashboard','upcoming'][i]}')" style="font-family:var(--fb)">${t}</button>`).join('')}
         </div>
         <div class="sub-tabs">${genreOpts}</div>
       </div>
-      <button class="nb-btn ac" onclick="openAddBook()" style="font-family:'Comic Neue',cursive;font-weight:700">+ Add Book</button>
+      <button class="nb-btn ac" onclick="openAddBook()" style="font-family:var(--fb);font-weight:700">+ Add Book</button>
     </div>
     <div id="books-body"></div>`;
   renderBooksBody();
@@ -99,7 +99,7 @@ function bookEntryStats(b) {
 function renderBooksList(c) {
   const data = filteredBooks();
   if (!data.length) {
-    c.innerHTML = `<div class="empty" style="font-family:'Comic Neue',cursive"><div class="empty-ico">📚</div><p>No books yet — add your first one!</p></div>`;
+    c.innerHTML = `<div class="empty" style="font-family:var(--fb)"><div class="empty-ico">📚</div><p>No books yet — add your first one!</p></div>`;
     return;
   }
   const byS = {};
@@ -111,7 +111,7 @@ function renderBooksList(c) {
     const coll = BCOLLAPSED['b_'+s];
     html += `<div class="ss-section">
       <div class="ss-head" onclick="toggleBColl('${s}')">
-        <span class="ss-lbl" style="color:${col};font-family:'Bangers',cursive;letter-spacing:1px">${lbl}</span>
+        <span class="ss-lbl" style="color:${col};font-family:var(--fd);letter-spacing:1px">${lbl}</span>
         <span class="ss-cnt">${rows.length}</span>
         <span class="ss-line" style="background:${col}33"></span>
         <span class="ss-arr${coll?' coll':''}">▾</span>
@@ -137,22 +137,22 @@ function bookRowHtml(b) {
     onclick="openBookDetail('${b.id}')">
     <div class="row-bar" style="background:${col}"></div>
     <div class="row-info">
-      <div class="row-title" style="font-family:'Comic Neue',cursive;font-weight:700">${esc(b.title)}</div>
+      <div class="row-title" style="font-family:var(--fb);font-weight:700">${esc(b.title)}</div>
       <div class="row-meta">
         ${bstag(b.status)}
-        ${b.author?`<span style="font-size:11px;color:var(--tx2);font-family:'Comic Neue',cursive">${esc(b.author)}</span>`:''}
+        ${b.author?`<span style="font-size:11px;color:var(--tx2);font-family:var(--fb)">${esc(b.author)}</span>`:''}
         ${vols.length?`<span style="font-size:10px;color:var(--mu)">${vols.length} vol${vols.length!==1?'s':''}</span>`:''}
       </div>
     </div>
     <div class="row-r">
       ${hasBar?`<div class="row-prog">
         <div class="prog-bar"><div class="prog-fill" style="width:${st.pct}%;background:${col}"></div></div>
-        <span class="prog-txt" style="font-family:'Comic Neue',cursive">${st.cur}${st.tot?'/'+st.tot:''}p</span>
+        <span class="prog-txt" style="font-family:var(--fb)">${st.cur}${st.tot?'/'+st.tot:''}p</span>
       </div>`:''}
       <div class="row-btns" onclick="event.stopPropagation()">
         ${b.status==='reading'&&hasBar?`<div class="ep-inline">
           <button class="ep-pm" onclick="quickBookPage('${b.id}',-10)">−</button>
-          <span class="ep-val" style="font-family:'Comic Neue',cursive">${st.cur}</span>
+          <span class="ep-val" style="font-family:var(--fb)">${st.cur}</span>
           <button class="ep-pm" onclick="quickBookPage('${b.id}',10)">+</button>
         </div>`:''}
         <button class="rbt" onclick="openEditBook('${b.id}')">✏</button>
@@ -199,40 +199,40 @@ function renderBookDetailPanel(b) {
     const pct = tot ? Math.round(cur/tot*100) : 0;
     return `<div style="background:var(--surf2);border:2px solid var(--brd);border-radius:7px;box-shadow:2px 2px 0 var(--brd);padding:10px 12px;margin-bottom:5px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-family:'Comic Neue',cursive;font-weight:700;font-size:13px">${esc(v.name||`Volume ${i+1}`)}</span>
+        <span style="font-family:var(--fb);font-weight:700;font-size:13px">${esc(v.name||`Volume ${i+1}`)}</span>
         ${bstag(v.status||'want')}
       </div>
-      <div style="font-size:11px;color:var(--tx2);font-family:'Comic Neue',cursive">${cur}${tot?'/'+tot:''}p${v.rating?' · ★'+v.rating:''}</div>
+      <div style="font-size:11px;color:var(--tx2);font-family:var(--fb)">${cur}${tot?'/'+tot:''}p${v.rating?' · ★'+v.rating:''}</div>
       ${tot?`<div style="height:3px;background:var(--surf3);border-radius:2px;margin-top:6px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${BS_COLOR[v.status]||'var(--ac)'};border-radius:2px"></div></div>`:''}
     </div>`;
-  }).join('') : `<div style="color:var(--mu);font-size:13px;font-family:'Comic Neue',cursive">No volumes — tracking as single book</div>`;
+  }).join('') : `<div style="color:var(--mu);font-size:13px;font-family:var(--fb)">No volumes — tracking as single book</div>`;
 
   document.getElementById('panel-inner').innerHTML = `
     <div class="ph">
       <div>
-        <div class="ph-title" style="font-family:'Bangers',cursive;letter-spacing:1px;font-size:18px">${esc(b.title)}</div>
+        <div class="ph-title" style="font-family:var(--fd);letter-spacing:1px;font-size:18px">${esc(b.title)}</div>
         <div class="pbadges">
           ${bstag(b.status)}
-          ${b.author?`<span style="font-size:11px;color:var(--tx2);font-family:'Comic Neue',cursive">by ${esc(b.author)}</span>`:''}
+          ${b.author?`<span style="font-size:11px;color:var(--tx2);font-family:var(--fb)">by ${esc(b.author)}</span>`:''}
           ${b.favorite?'<span style="color:#fbbf24">★</span>':''}
         </div>
       </div>
       <button class="ph-close" onclick="closePanel()">✕</button>
     </div>
     <div class="pstats">
-      <div class="pstat"><div class="pstat-v" style="font-family:'Bangers',cursive">${st.tot||'—'}</div><div class="pstat-l">Pages</div></div>
-      <div class="pstat"><div class="pstat-v" style="font-family:'Bangers',cursive">${st.cur}</div><div class="pstat-l">Read</div></div>
-      <div class="pstat"><div class="pstat-v" style="font-family:'Bangers',cursive">${st.pct}%</div><div class="pstat-l">Progress</div><div class="pprog"><div class="pprog-fill" style="width:${st.pct}%"></div></div></div>
-      <div class="pstat"><div class="pstat-v" style="font-family:'Bangers',cursive">${b.rating||'—'}</div><div class="pstat-l">Rating</div></div>
+      <div class="pstat"><div class="pstat-v" style="font-family:var(--fd)">${st.tot||'—'}</div><div class="pstat-l">Pages</div></div>
+      <div class="pstat"><div class="pstat-v" style="font-family:var(--fd)">${st.cur}</div><div class="pstat-l">Read</div></div>
+      <div class="pstat"><div class="pstat-v" style="font-family:var(--fd)">${st.pct}%</div><div class="pstat-l">Progress</div><div class="pprog"><div class="pprog-fill" style="width:${st.pct}%"></div></div></div>
+      <div class="pstat"><div class="pstat-v" style="font-family:var(--fd)">${b.rating||'—'}</div><div class="pstat-l">Rating</div></div>
     </div>
-    ${(b.startDate||b.endDate)?`<div style="padding:7px 16px;border-bottom:1px solid var(--brd);display:flex;gap:14px;font-size:11px;font-family:'Comic Neue',cursive;color:var(--tx2)">
+    ${(b.startDate||b.endDate)?`<div style="padding:7px 16px;border-bottom:1px solid var(--brd);display:flex;gap:14px;font-size:11px;font-family:var(--fb);color:var(--tx2)">
       ${b.startDate?`<span>Started: <b>${fmtDate(b.startDate)}</b></span>`:''}
       ${b.endDate?`<span>Finished: <b>${fmtDate(b.endDate)}</b></span>`:''}
     </div>`:''}
-    <div class="sec-div"><span class="sec-div-lbl" style="font-family:'Bangers',cursive;letter-spacing:1px">Volumes / Series</span><div class="sec-div-line"></div></div>
+    <div class="sec-div"><span class="sec-div-lbl" style="font-family:var(--fd);letter-spacing:1px">Volumes / Series</span><div class="sec-div-line"></div></div>
     <div style="padding:0 16px 8px">${volsHtml}</div>
-    ${b.notes?`<div class="sec-div"><span class="sec-div-lbl" style="font-family:'Bangers',cursive">Notes</span><div class="sec-div-line"></div></div>
-    <div class="pnotes"><div class="pnotes-box" style="font-family:'Comic Neue',cursive">${esc(b.notes)}</div></div>`:''}
+    ${b.notes?`<div class="sec-div"><span class="sec-div-lbl" style="font-family:var(--fd)">Notes</span><div class="sec-div-line"></div></div>
+    <div class="pnotes"><div class="pnotes-box" style="font-family:var(--fb)">${esc(b.notes)}</div></div>`:''}
     <div class="panel-actions">
       <button class="btn-del" onclick="askDelBook('${b.id}')">Delete</button>
       <button class="btn-cancel" onclick="openEditBook('${b.id}')">Edit</button>
@@ -259,10 +259,10 @@ function renderBookFormPanel(b) {
 
   document.getElementById('panel-inner').innerHTML = `
     <div class="ph">
-      <div class="ph-title" style="font-family:'Bangers',cursive;letter-spacing:1px;font-size:18px">${isEdit?'Edit Book':'Add New Book'}</div>
+      <div class="ph-title" style="font-family:var(--fd);letter-spacing:1px;font-size:18px">${isEdit?'Edit Book':'Add New Book'}</div>
       <button class="ph-close" onclick="closePanel()">✕</button>
     </div>
-    <div class="form-wrap" style="font-family:'Comic Neue',cursive">
+    <div class="form-wrap" style="font-family:var(--fb)">
       <div class="fg">
         <label class="flbl">Title *</label>
         <input class="fin" id="bf-title" placeholder="e.g. Dune" value="${esc(b?b.title:'')}">
@@ -312,10 +312,10 @@ function renderBookFormPanel(b) {
       <div class="fg"><label class="flbl">Notes</label>
         <textarea class="fin" id="bf-notes" placeholder="Your thoughts...">${esc(b?b.notes||'':'')}</textarea>
       </div>
-      <div class="f-sec" style="font-family:'Bangers',cursive;letter-spacing:1px">Volumes / Series</div>
+      <div class="f-sec" style="font-family:var(--fd);letter-spacing:1px">Volumes / Series</div>
       <div id="bftl-list">${BFORM_TL.map((v,i) => bookVolHtml(v,i)).join('')}</div>
       <div class="ftl-add-row">
-        <button class="ftl-add" onclick="addBookVol()" style="font-family:'Comic Neue',cursive;font-weight:700">+ Add Volume</button>
+        <button class="ftl-add" onclick="addBookVol()" style="font-family:var(--fb);font-weight:700">+ Add Volume</button>
       </div>
     </div>
     <div class="panel-actions">
@@ -331,7 +331,7 @@ function bookVolHtml(v, i) {
     <button class="ftl-rm" onclick="removeBookVol(${i})">✕</button>
     <div class="ftl-head">
       <span class="ftl-drag">⠿</span>
-      <span class="tl-type-pill tp-s" style="font-family:'Comic Neue',cursive">Vol ${i+1}</span>
+      <span class="tl-type-pill tp-s" style="font-family:var(--fb)">Vol ${i+1}</span>
     </div>
     <div class="fg-row" style="margin-bottom:7px">
       <div class="fg"><label class="flbl">Volume Name</label>
@@ -438,7 +438,7 @@ function renderBooksDash(c) {
   const byGenre = BOOK_GENRES.map(g => ({...g, count:all.filter(b=>b.genreId===g.id).length})).filter(g=>g.count);
 
   c.innerHTML = `
-    <div style="font-family:'Bangers',cursive;font-size:24px;font-weight:700;margin-bottom:16px;letter-spacing:2px;color:var(--ac)">📚 Book Dashboard</div>
+    <div style="font-family:var(--fd);font-size:24px;font-weight:700;margin-bottom:16px;letter-spacing:2px;color:var(--ac)">📚 Book Dashboard</div>
     <div class="dash-grid" style="margin-bottom:20px">
       <div class="dc"><div class="dc-v">${all.length}</div><div class="dc-l">Total</div></div>
       <div class="dc"><div class="dc-v">${cnt.reading||0}</div><div class="dc-l">Reading</div></div>
@@ -447,10 +447,10 @@ function renderBooksDash(c) {
       <div class="dc"><div class="dc-v">${totalPages.toLocaleString()}</div><div class="dc-l">Pages Read</div></div>
       <div class="dc"><div class="dc-v">${cnt.on_hold||0}</div><div class="dc-l">On Hold</div></div>
     </div>
-    <div style="background:var(--surf);border:2px solid var(--brd);border-radius:var(--cr);box-shadow:3px 3px 0 var(--brd);padding:16px;max-width:400px">
-      <div style="font-family:'Bangers',cursive;font-size:14px;letter-spacing:1px;color:var(--mu);margin-bottom:10px">BY TYPE</div>
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);box-shadow:var(--sh);padding:16px;max-width:400px">
+      <div style="font-family:var(--fd);font-size:14px;letter-spacing:1px;color:var(--mu);margin-bottom:10px">BY TYPE</div>
       ${byGenre.map(g=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--brd);font-family:'Comic Neue',cursive">
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--brd);font-family:var(--fb)">
           <span style="flex:1;font-size:13px">${g.name}</span>
           <span style="font-size:14px;font-weight:700;color:var(--ac)">${g.count}</span>
         </div>`).join('')}
@@ -472,13 +472,13 @@ function renderBooksUpcoming(c) {
     else if(diff<=14){cls='up-near';lbl=`${diff}d`;}
     return`<div class="up-card" style="border:2px solid var(--brd);box-shadow:2px 2px 0 var(--brd)" onclick="openBookDetail('${b.id}')">
       <div class="up-date-box"><div class="up-mon">${mon}</div><div class="up-day">${d.getDate()}</div></div>
-      <div class="up-info"><div class="up-title" style="font-family:'Comic Neue',cursive;font-weight:700">${esc(b.title)}</div>
-        <div class="up-sub" style="font-family:'Comic Neue',cursive">${b.author?esc(b.author):''}</div></div>
+      <div class="up-info"><div class="up-title" style="font-family:var(--fb);font-weight:700">${esc(b.title)}</div>
+        <div class="up-sub" style="font-family:var(--fb)">${b.author?esc(b.author):''}</div></div>
       <div class="up-pill ${cls}">${lbl}</div>
     </div>`;
   }).join('');
-  c.innerHTML=`<div style="font-family:'Bangers',cursive;font-size:22px;font-weight:700;margin-bottom:16px;letter-spacing:2px;color:var(--ac)">🗓 Upcoming Books</div>
-    ${rows||`<div class="empty"><div class="empty-ico">📅</div><p style="font-family:'Comic Neue',cursive">No upcoming books</p></div>`}`;
+  c.innerHTML=`<div style="font-family:var(--fd);font-size:22px;font-weight:700;margin-bottom:16px;letter-spacing:2px;color:var(--ac)">🗓 Upcoming Books</div>
+    ${rows||`<div class="empty"><div class="empty-ico">📅</div><p style="font-family:var(--fb)">No upcoming books</p></div>`}`;
 }
 
 

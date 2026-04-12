@@ -26,7 +26,7 @@ function initYTAuth() {
     client_id: CLIENT_ID,
     scope: DRIVE_SCOPE + ' ' + YT_SCOPE,
     callback: async resp => {
-      if (resp.error) { toast('YouTube auth failed: ' + resp.error, 'var(--cr)'); return; }
+      if (resp.error) { toast('YouTube auth failed: ' + resp.error, 'var(--err)'); return; }
       // Store token (reuse drive token storage — same account)
       ls.setStr(K.DTOKEN, resp.access_token);
       ls.setStr(K.DEXP, String(Date.now() + (resp.expires_in - 60) * 1000));
@@ -84,7 +84,7 @@ async function syncYouTubePlaylists() {
     if (CURRENT === 'music') renderMusicBody();
   } catch(e) {
     updateMusicSyncBtn('error');
-    if (e.message !== 'Not connected') toast('YouTube sync failed: ' + e.message, 'var(--cr)');
+    if (e.message !== 'Not connected') toast('YouTube sync failed: ' + e.message, 'var(--err)');
   } finally {
     YT_SYNCING = false;
   }
@@ -193,10 +193,10 @@ function extractArtist(title, channelTitle) {
 function updateMusicSyncBtn(state) {
   const btn = document.getElementById('music-sync-btn'); if (!btn) return;
   const map = {
-    syncing: ['↻ Syncing', '#fb923c'],
+    syncing: ['↻ Syncing', 'var(--ac)'],
     synced:  ['✓ Synced',  '#4ade80'],
     error:   ['✗ Sync',    '#fb7185'],
-    idle:    ['⟳ Sync YT', '#fb923c'],
+    idle:    ['⟳ Sync YT', 'var(--ac)'],
   };
   const [label, color] = map[state] || map.idle;
   btn.textContent = label; btn.style.color = color;
@@ -213,7 +213,7 @@ function renderMusic(c) {
         ${tabs.map((t,i) => `<button class="stab${MUSIC_PAGE===['library','playlists','dashboard'][i]?' active':''}" onclick="setMusicPage('${['library','playlists','dashboard'][i]}')">${t}</button>`).join('')}
       </div>
       <div style="display:flex;gap:6px;align-items:center">
-        <button id="music-sync-btn" onclick="handleMusicSync()" class="nb-btn" style="color:#fb923c">⟳ Sync YT</button>
+        <button id="music-sync-btn" onclick="handleMusicSync()" class="nb-btn" style="color:var(--ac)">⟳ Sync YT</button>
         <button onclick="openAddSong()" class="nb-btn ac">+ Add Song</button>
       </div>
     </div>
@@ -366,7 +366,7 @@ function renderMusicPlaylists(c) {
         ${pl.lastSync?`<div style="font-size:10px;color:var(--mu);margin-top:2px">Last synced: ${new Date(pl.lastSync).toLocaleDateString()}</div>`:''}
       </div>
       <button onclick="togglePlaylistSync('${pl.id}')" style="padding:6px 14px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid;white-space:nowrap;
-        ${isSynced?'background:rgba(251,146,60,.12);color:#fb923c;border-color:rgba(251,146,60,.3)':'background:var(--surf2);color:var(--tx2);border-color:var(--brd)'}">
+        ${isSynced?'background:rgba(var(--ac-rgb),.12);color:var(--ac);border-color:rgba(var(--ac-rgb),.3)':'background:var(--surf2);color:var(--tx2);border-color:var(--brd)'}">
         ${isSynced?'✓ Synced':'+ Sync'}
       </button>
     </div>`;
@@ -393,7 +393,7 @@ async function togglePlaylistSync(id) {
       renderMusicBody();
       toast(`✓ Playlist synced`, 'var(--cd)');
     } else {
-      toast('Connect YouTube first', 'var(--cr)');
+      toast('Connect YouTube first', 'var(--err)');
       pl.synced = false; savePlaylists(MPLAYLISTS);
     }
   }

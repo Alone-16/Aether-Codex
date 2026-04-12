@@ -17,12 +17,12 @@ let NDATA_PRIVATE  = [];
 let _noteAutoSaveTimer = null;
 
 const NOTE_COLORS = {
-  default: { bg:'#e0f0e0', brd:'#a0c8a0', label:'Default' },
-  green:   { bg:'#c8e4c8', brd:'#6db86d', label:'Green'   },
-  yellow:  { bg:'#fef9e0', brd:'#fde68a', label:'Yellow'  },
-  blue:    { bg:'#e0eef8', brd:'#93c5fd', label:'Blue'    },
-  pink:    { bg:'#fce8f0', brd:'#f9a8d4', label:'Pink'    },
-  white:   { bg:'#f8fff8', brd:'#c8e0c8', label:'White'   },
+  default: { bg:'var(--surf2)', brd:'var(--brd)', label:'Default' },
+  green:   { bg:'rgba(74,222,128,.1)', brd:'rgba(74,222,128,.28)', label:'Green'   },
+  yellow:  { bg:'rgba(251,191,36,.1)', brd:'rgba(251,191,36,.28)', label:'Yellow'  },
+  blue:    { bg:'rgba(56,189,248,.1)', brd:'rgba(56,189,248,.28)', label:'Blue'    },
+  pink:    { bg:'rgba(244,114,182,.1)', brd:'rgba(244,114,182,.28)', label:'Pink'    },
+  white:   { bg:'rgba(255,255,255,.06)', brd:'var(--brd2)', label:'White'   },
 };
 
 // ── Encrypted private notes (reuse vault crypto) ──
@@ -85,7 +85,7 @@ function renderNotes(c) {
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
         ${NOTES_UNLOCKED
-          ? `<button onclick="lockPrivateNotes()" style="height:28px;border-radius:5px;background:rgba(167,139,250,.1);border:1px solid rgba(167,139,250,.25);color:#a78bfa;font-size:11px;font-weight:700;padding:0 10px;cursor:pointer">🔓 Lock Private</button>`
+          ? `<button onclick="lockPrivateNotes()" style="height:28px;border-radius:5px;background:rgba(var(--ac-rgb),.1);border:1px solid rgba(var(--ac-rgb),.25);color:var(--ac);font-size:11px;font-weight:700;padding:0 10px;cursor:pointer">🔓 Lock Private</button>`
           : ''}
         <button class="nb-btn ac" onclick="openNewNote('text')">✎ Text</button>
         <button class="nb-btn" onclick="openNewNote('checklist')">☑ List</button>

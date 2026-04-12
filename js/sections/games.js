@@ -55,7 +55,7 @@ function showPinModal(onSuccess, context='unlock') {
   // If locked out
   if (!isSetup && Date.now() < PIN_LOCKOUT_UNTIL) {
     const secs = Math.ceil((PIN_LOCKOUT_UNTIL - Date.now()) / 1000);
-    toast(`Too many attempts. Try again in ${secs}s`, 'var(--cr)');
+    toast(`Too many attempts. Try again in ${secs}s`, 'var(--err)');
     return;
   }
 
@@ -74,7 +74,7 @@ function showPinModal(onSuccess, context='unlock') {
         autofocus>
       ${isSetup ? `<input id="pin-confirm" type="password" maxlength="20" placeholder="Confirm PIN"
         style="width:100%;background:var(--surf2);border:1px solid var(--brd);border-radius:6px;padding:10px 14px;font-size:16px;color:var(--tx);outline:none;text-align:center;letter-spacing:4px;margin-bottom:8px">` : ''}
-      <div id="pin-error" style="color:var(--cr);font-size:12px;min-height:18px;margin-bottom:8px"></div>
+      <div id="pin-error" style="color:var(--err);font-size:12px;min-height:18px;margin-bottom:8px"></div>
       <div style="display:flex;gap:8px;justify-content:center">
         <button onclick="this.closest('div[style]').remove()" style="background:var(--surf2);color:var(--tx2);border:1px solid var(--brd);border-radius:5px;padding:8px 18px;font-size:13px;cursor:pointer">Cancel</button>
         <button id="pin-submit" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer">
@@ -108,7 +108,7 @@ function showPinModal(onSuccess, context='unlock') {
         if (PIN_FAILS >= 3) {
           PIN_LOCKOUT_UNTIL = Date.now() + 30000;
           overlay.remove();
-          toast('3 failed attempts — locked for 30 seconds', 'var(--cr)');
+          toast('3 failed attempts — locked for 30 seconds', 'var(--err)');
         } else {
           err.textContent = `Wrong PIN (${3 - PIN_FAILS} attempt${3-PIN_FAILS!==1?'s':''} left)`;
           inp.value = '';
@@ -641,7 +641,7 @@ async function saveGame(eid) {
       setTimeout(() => statusEl?.remove(), 2000);
     } else {
       if (statusEl) statusEl.innerHTML = `<span style="color:#fb7185">✗ Upload failed — check Drive connection</span>`;
-      toast('Save folder upload failed', 'var(--cr)');
+      toast('Save folder upload failed', 'var(--err)');
     }
   }
 

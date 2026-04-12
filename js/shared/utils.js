@@ -115,9 +115,9 @@ export function estTime(eps, dur) { if (!eps) return '—'; const tot=eps*((pars
 export function fmtMin(min)   { if (!min) return '—'; const d=Math.floor(min/1440),h=Math.floor((min%1440)/60),m=min%60; if(d>0) return `${d}d ${h}h`; if(h>0) return `${h}h${m>0?' '+m+'m':''}`; return `${m}m`; }
 
 export const SL  = { watching:'▶ Watching', completed:'✓ Done', on_hold:'⏸ On Hold', dropped:'✗ Dropped', plan:'◻ Planned', upcoming:'◉ Upcoming', not_started:'○ Not Started' };
-export const SC  = { watching:'#38bdf8', completed:'#4ade80', on_hold:'#fbbf24', dropped:'#fb7185', plan:'#a78bfa', upcoming:'#fb923c', not_started:'var(--mu)' };
+export const SC  = { watching:'#7dd3fc', completed:'#4ade80', on_hold:'#fbbf24', dropped:'#fb7185', plan:'#a78bfa', upcoming:'#fb923c', not_started:'var(--mu)' };
 export const SO  = ['watching','plan','not_started','completed','on_hold','dropped','upcoming'];
-export const SSL = { watching:['#38bdf8','WATCHING'], plan:['#a78bfa','PLAN TO WATCH'], not_started:['var(--mu)','NOT STARTED'], completed:['#4ade80','COMPLETED'], on_hold:['#fbbf24','ON HOLD'], dropped:['#fb7185','DROPPED'], upcoming:['#fb923c','UPCOMING'] };
+export const SSL = { watching:['#7dd3fc','WATCHING'], plan:['#a78bfa','PLAN TO WATCH'], not_started:['var(--mu)','NOT STARTED'], completed:['#4ade80','COMPLETED'], on_hold:['#fbbf24','ON HOLD'], dropped:['#fb7185','DROPPED'], upcoming:['#fb923c','UPCOMING'] };
 
 export function stag(s)         { return `<span class="stag st-${s}">${SL[s] || s}</span>`; }
 export function rewatchBadge(e) { if (e.rewatches?.length) return `<span style="font-size:10px;color:#60a5fa;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.2);border-radius:3px;padding:1px 5px">↺ ${e.rewatches.length}×</span>`; return ''; }

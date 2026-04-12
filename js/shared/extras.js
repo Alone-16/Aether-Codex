@@ -354,7 +354,7 @@ function showKeyboardHelp() {
   el.innerHTML = `
     <div style="background:#0a0a12;border:1px solid #2a2a3a;border-radius:12px;padding:24px;min-width:320px;max-width:460px;width:100%">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <div style="font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:#eeedf8">⌨ Keyboard Shortcuts</div>
+        <div style="font-family:var(--fd);font-size:16px;font-weight:700;color:var(--tx)">⌨ Keyboard Shortcuts</div>
         <button onclick="document.getElementById('kb-help-modal').remove()" style="width:26px;height:26px;border-radius:50%;background:#18181f;border:1px solid #2a2a3a;color:#8888aa;cursor:pointer;font-size:14px">✕</button>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px">

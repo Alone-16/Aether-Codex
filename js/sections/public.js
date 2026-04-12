@@ -22,16 +22,16 @@ function checkPublicView() {
 async function renderPublicView(fileId) {
   document.body.innerHTML = `
     <style>html,body{height:auto!important;overflow:auto!important;display:block!important}</style>
-    <div style="min-height:100vh;background:#070d0b;color:#e8f5f0;font-family:'Outfit',sans-serif;display:flex;flex-direction:column">
-      <div style="background:#0d1512;border-bottom:1px solid #1e3329;padding:14px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10">
-        <div style="font-family:'Cinzel',serif;font-size:18px;font-weight:700;color:#34d399">The Aether Codex</div>
-        <div style="font-size:12px;color:#3a5a4a;padding:2px 8px;background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.15);border-radius:10px">Public List</div>
+    <div style="min-height:100vh;background:#000000;color:rgba(255,255,255,.93);font-family:'Outfit',sans-serif;display:flex;flex-direction:column">
+      <div style="background:#111111;border-bottom:1px solid rgba(255,255,255,.08);padding:14px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10">
+        <div style="font-family:'Outfit',sans-serif;font-size:18px;font-weight:700;color:#38bdf8">The Aether Codex</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.45);padding:2px 8px;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.22);border-radius:10px">Public List</div>
       </div>
       <div id="pub-content" style="flex:1;max-width:860px;margin:0 auto;width:100%;padding:24px 16px">
-        <div style="text-align:center;padding:40px;color:#3a5a4a">Loading...</div>
+        <div style="text-align:center;padding:40px;color:rgba(255,255,255,.45)">Loading...</div>
       </div>
-      <div style="padding:16px;text-align:center;border-top:1px solid #1e3329;font-size:12px;color:#3a5a4a">
-        Powered by <span style="color:#34d399">The Aether Codex</span>
+      <div style="padding:16px;text-align:center;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:rgba(255,255,255,.45)">
+        Powered by <span style="color:#38bdf8">The Aether Codex</span>
       </div>
     </div>`;
   // Fix scroll on public view - override app CSS
@@ -57,8 +57,8 @@ async function renderPublicView(fileId) {
     document.getElementById('pub-content').innerHTML = `
       <div style="text-align:center;padding:60px 20px">
         <div style="font-size:32px;margin-bottom:12px">🔒</div>
-        <div style="font-size:16px;font-weight:600;color:#e8f5f0;margin-bottom:6px">List not available</div>
-        <div style="font-size:13px;color:#3a5a4a">This list may have been revoked or the link is invalid.</div>
+        <div style="font-size:16px;font-weight:600;color:rgba(255,255,255,.93);margin-bottom:6px">List not available</div>
+        <div style="font-size:13px;color:rgba(255,255,255,.45)">This list may have been revoked or the link is invalid.</div>
       </div>`;
   }
 }
@@ -69,13 +69,13 @@ function renderPublicContent(snap) {
   const owner = snap.owner || 'Someone';
   const generated = snap.generatedAt ? new Date(snap.generatedAt).toLocaleDateString() : '';
 
-  const STATUS_COLORS = { watching:'#38bdf8', completed:'#4ade80', plan:'#a78bfa', on_hold:'#fbbf24', dropped:'#fb7185' };
+  const STATUS_COLORS = { watching:'#7dd3fc', completed:'#4ade80', plan:'#a78bfa', on_hold:'#fbbf24', dropped:'#fb7185' };
   const STATUS_LABELS = { watching:'Watching', completed:'Completed', plan:'Plan', on_hold:'On Hold', dropped:'Dropped' };
 
   let html = `
     <div style="margin-bottom:24px">
-      <div style="font-family:'Cinzel',serif;font-size:22px;font-weight:700;color:#34d399;margin-bottom:4px">${esc(owner)}'s List</div>
-      ${generated ? `<div style="font-size:12px;color:#3a5a4a">Last updated: ${generated}</div>` : ''}
+      <div style="font-family:'Outfit',sans-serif;font-size:22px;font-weight:700;color:#38bdf8;margin-bottom:4px">${esc(owner)}'s List</div>
+      ${generated ? `<div style="font-size:12px;color:rgba(255,255,255,.45)">Last updated: ${generated}</div>` : ''}
     </div>`;
 
   // Media section
@@ -85,9 +85,9 @@ function renderPublicContent(snap) {
     const order = ['watching','completed','plan','on_hold','dropped'];
 
     html += `<div style="margin-bottom:28px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#e879a0;margin-bottom:12px;display:flex;align-items:center;gap:8px">
-        <span>◉ Media</span><div style="flex:1;height:1px;background:rgba(232,121,160,.2)"></div>
-        <span style="font-size:11px;color:#3a5a4a">${snap.media.length} entries</span>
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#38bdf8;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+        <span>◉ Media</span><div style="flex:1;height:1px;background:rgba(56,189,248,.2)"></div>
+        <span style="font-size:11px;color:rgba(255,255,255,.45)">${snap.media.length} entries</span>
       </div>`;
 
     order.forEach(s => {
@@ -96,14 +96,14 @@ function renderPublicContent(snap) {
         <div style="font-size:11px;font-weight:700;color:${STATUS_COLORS[s]};margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">${STATUS_LABELS[s]} (${rows.length})</div>
         <div style="display:flex;flex-direction:column;gap:4px">
         ${rows.map(e => `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#0d1512;border:1px solid #1e3329;border-radius:6px">
-            <div style="width:3px;height:32px;background:${STATUS_COLORS[s]||'#34d399'};border-radius:2px;flex-shrink:0"></div>
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#111111;border:1px solid rgba(255,255,255,.08);border-radius:6px">
+            <div style="width:3px;height:32px;background:${STATUS_COLORS[s]||'#38bdf8'};border-radius:2px;flex-shrink:0"></div>
             <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:600;color:#e8f5f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</div>
-              <div style="font-size:11px;color:#3a5a4a;margin-top:1px">${e.genre||''}</div>
+              <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,.93);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:1px">${e.genre||''}</div>
             </div>
             ${e.rating ? `<span style="font-size:12px;font-weight:700;color:#fbbf24">★ ${e.rating}</span>` : ''}
-            ${e.progress ? `<span style="font-size:11px;color:#3a5a4a">${e.progress}</span>` : ''}
+            ${e.progress ? `<span style="font-size:11px;color:rgba(255,255,255,.45)">${e.progress}</span>` : ''}
           </div>`).join('')}
         </div>
       </div>`;
@@ -114,20 +114,20 @@ function renderPublicContent(snap) {
   // Games section
   if (sections.includes('games') && snap.games?.length) {
     html += `<div style="margin-bottom:28px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#f59e0b;margin-bottom:12px;display:flex;align-items:center;gap:8px">
-        <span>◈ Games</span><div style="flex:1;height:1px;background:rgba(245,158,11,.2)"></div>
-        <span style="font-size:11px;color:#3a5a4a">${snap.games.length} entries</span>
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#38bdf8;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+        <span>◈ Games</span><div style="flex:1;height:1px;background:rgba(56,189,248,.2)"></div>
+        <span style="font-size:11px;color:rgba(255,255,255,.45)">${snap.games.length} entries</span>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px">
       ${snap.games.map(g => `
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#0d1512;border:1px solid #1e3329;border-radius:6px">
-          <div style="width:3px;height:32px;background:${STATUS_COLORS[g.status]||'#f59e0b'};border-radius:2px;flex-shrink:0"></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#111111;border:1px solid rgba(255,255,255,.08);border-radius:6px">
+          <div style="width:3px;height:32px;background:${STATUS_COLORS[g.status]||'#38bdf8'};border-radius:2px;flex-shrink:0"></div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;color:#e8f5f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(g.title)}</div>
-            <div style="font-size:11px;color:#3a5a4a">${g.platform||''}</div>
+            <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,.93);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(g.title)}</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.45)">${g.platform||''}</div>
           </div>
           ${g.rating ? `<span style="font-size:12px;font-weight:700;color:#fbbf24">★ ${g.rating}</span>` : ''}
-          ${g.totalHours ? `<span style="font-size:11px;color:#3a5a4a">${g.totalHours}h</span>` : ''}
+          ${g.totalHours ? `<span style="font-size:11px;color:rgba(255,255,255,.45)">${g.totalHours}h</span>` : ''}
         </div>`).join('')}
       </div>
     </div>`;
@@ -136,17 +136,17 @@ function renderPublicContent(snap) {
   // Books section
   if (sections.includes('books') && snap.books?.length) {
     html += `<div style="margin-bottom:28px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#a78bfa;margin-bottom:12px;display:flex;align-items:center;gap:8px">
-        <span>◎ Books</span><div style="flex:1;height:1px;background:rgba(167,139,250,.2)"></div>
-        <span style="font-size:11px;color:#3a5a4a">${snap.books.length} entries</span>
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#38bdf8;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+        <span>◎ Books</span><div style="flex:1;height:1px;background:rgba(56,189,248,.2)"></div>
+        <span style="font-size:11px;color:rgba(255,255,255,.45)">${snap.books.length} entries</span>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px">
       ${snap.books.map(b => `
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#0d1512;border:1px solid #1e3329;border-radius:6px">
-          <div style="width:3px;height:32px;background:${STATUS_COLORS[b.status]||'#a78bfa'};border-radius:2px;flex-shrink:0"></div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#111111;border:1px solid rgba(255,255,255,.08);border-radius:6px">
+          <div style="width:3px;height:32px;background:${STATUS_COLORS[b.status]||'#38bdf8'};border-radius:2px;flex-shrink:0"></div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;color:#e8f5f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.title)}</div>
-            <div style="font-size:11px;color:#3a5a4a">${b.author||''}</div>
+            <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,.93);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.title)}</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.45)">${b.author||''}</div>
           </div>
           ${b.rating ? `<span style="font-size:12px;font-weight:700;color:#fbbf24">★ ${b.rating}</span>` : ''}
         </div>`).join('')}
@@ -242,7 +242,7 @@ function renderSettingsPublicShare(el) {
   const publicUrl = s.fileId ? `https://alone-16.github.io/Aether-Codex/?share=${s.fileId}` : null;
   const sectionOpts = [
     {id:'media', label:'Media', color:'#e879a0'},
-    {id:'games', label:'Games', color:'#f59e0b'},
+    {id:'games', label:'Games', color:'#38bdf8'},
     {id:'books', label:'Books', color:'#a78bfa'},
   ];
 
@@ -291,7 +291,7 @@ async function handleGeneratePublicLink() {
     toast('✓ Public link generated!', 'var(--cd)');
     renderSettingsPublicShare(document.getElementById('settings-body'));
   } catch(e) {
-    toast('Failed: ' + e.message, 'var(--cr)');
+    toast('Failed: ' + e.message, 'var(--err)');
   }
 }
 

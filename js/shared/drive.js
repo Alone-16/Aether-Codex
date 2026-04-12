@@ -135,8 +135,8 @@ function _isConnected() { return !!_getToken(); }
 
 const _DRIVE_COLORS = {
   connected: '#4ade80',
-  syncing:   '#fb923c',
-  pending:   '#fb923c',
+  syncing:   'var(--ac)',
+  pending:   'var(--ac)',
   error:     '#fb7185',
   off:       '',
 };
@@ -231,9 +231,9 @@ function _showRedirectingOverlay(service = 'Google') {
     'gap:16px;color:#7aab95;font-family:Outfit,sans-serif;font-size:14px',
   ].join(';');
   d.innerHTML = `
-    <div style="font-family:Cinzel,serif;font-size:22px;font-weight:700;color:#34d399">The Aether Codex</div>
+    <div style="font-family:'Outfit',sans-serif;font-size:22px;font-weight:700;color:#38bdf8">The Aether Codex</div>
     <div style="display:flex;align-items:center;gap:8px">
-      <div style="width:18px;height:18px;border:2px solid #1e3329;border-top-color:#34d399;border-radius:50%;animation:_spin .7s linear infinite"></div>
+      <div style="width:18px;height:18px;border:2px solid rgba(255,255,255,.1);border-top-color:#38bdf8;border-radius:50%;animation:_spin .7s linear infinite"></div>
       Redirecting to ${service}…
     </div>
     <style>@keyframes _spin{to{transform:rotate(360deg)}}</style>`;
@@ -329,7 +329,7 @@ function _showSigningInBanner() {
     'font-family:Outfit,sans-serif;font-size:13px;color:#7aab95',
   ].join(';');
   d.innerHTML = `
-    <div style="width:16px;height:16px;border:2px solid #1e3329;border-top-color:#34d399;border-radius:50%;animation:_spin .7s linear infinite;flex-shrink:0"></div>
+    <div style="width:16px;height:16px;border:2px solid rgba(255,255,255,.1);border-top-color:#38bdf8;border-radius:50%;animation:_spin .7s linear infinite;flex-shrink:0"></div>
     Completing Google sign-in…`;
   document.body.prepend(d);
 }
@@ -754,7 +754,7 @@ export async function driveBootstrap() {
       _toast(
         `✓ Schema updated: ${result.entriesAfter} flat entries ` +
         `(${result.groups} group${result.groups !== 1 ? 's' : ''} expanded)`,
-        '#34d399'
+        'var(--ac)'
       );
       render();
     }

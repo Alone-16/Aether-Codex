@@ -105,34 +105,34 @@ function renderHome(c){
           </div>
           <div class="section-ov-grid" style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:9px">
             <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('media')">
-              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>◉</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#e879a0">Media</span></div>
-              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#e879a0">${mediaEntries.length}</div>
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>◉</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ac)">Media</span></div>
+              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--ac)">${mediaEntries.length}</div>
               <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${watching} watching · ${completed} done</div>
-              <div style="height:2px;background:rgba(232,121,160,.15);border-radius:1px"><div style="height:100%;width:${Math.round(completed/mediaEntries.length*100)}%;background:#e879a0;border-radius:1px"></div></div>
+              <div style="height:2px;background:rgba(var(--ac-rgb),.15);border-radius:1px"><div style="height:100%;width:${Math.round(completed/mediaEntries.length*100)}%;background:var(--ac);border-radius:1px"></div></div>
             </div>
             <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('games')">
-              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>◈</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#f59e0b">Games</span></div>
-              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#f59e0b">${(window.GDATA||[]).length||'—'}</div>
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>◈</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ac)">Games</span></div>
+              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--ac)">${(window.GDATA||[]).length||'—'}</div>
               <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${(window.GDATA||[]).filter(g=>g.status==='playing').length} playing · ${(window.GDATA||[]).filter(g=>g.status==='completed').length} done</div>
-              <div style="height:2px;background:rgba(245,158,11,.15);border-radius:1px;overflow:hidden"><div style="height:100%;width:${(window.GDATA||[]).length?Math.round((window.GDATA||[]).filter(g=>g.status==='completed').length/(window.GDATA||[]).length*100):0}%;background:#f59e0b;border-radius:1px"></div></div>
+              <div style="height:2px;background:rgba(var(--ac-rgb),.15);border-radius:1px;overflow:hidden"><div style="height:100%;width:${(window.GDATA||[]).length?Math.round((window.GDATA||[]).filter(g=>g.status==='completed').length/(window.GDATA||[]).length*100):0}%;background:var(--ac);border-radius:1px"></div></div>
             </div>
             <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('books')">
-              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>◎</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#a78bfa">Books</span></div>
-              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#a78bfa">${(window.BDATA||[]).length||'—'}</div>
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>◎</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ac)">Books</span></div>
+              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--ac)">${(window.BDATA||[]).length||'—'}</div>
               <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${(window.BDATA||[]).filter(b=>b.status==='reading').length} reading · ${(window.BDATA||[]).filter(b=>b.status==='completed').length} done</div>
-              <div style="height:2px;background:rgba(167,139,250,.15);border-radius:1px;overflow:hidden"><div style="height:100%;width:${(window.BDATA||[]).length?Math.round((window.BDATA||[]).filter(b=>b.status==='completed').length/(window.BDATA||[]).length*100):0}%;background:#a78bfa;border-radius:1px"></div></div>
+              <div style="height:2px;background:rgba(var(--ac-rgb),.15);border-radius:1px;overflow:hidden"><div style="height:100%;width:${(window.BDATA||[]).length?Math.round((window.BDATA||[]).filter(b=>b.status==='completed').length/(window.BDATA||[]).length*100):0}%;background:var(--ac);border-radius:1px"></div></div>
             </div>
             <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('music')">
-              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>♪</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#fb923c">Music</span></div>
-              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#fb923c">${(window.MDATA||[]).filter(s=>!s.removedFromPlaylist).length||'—'}</div>
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>♪</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ac)">Music</span></div>
+              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--ac)">${(window.MDATA||[]).filter(s=>!s.removedFromPlaylist).length||'—'}</div>
               <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${(window.MPLAYLISTS||[]).filter(p=>p.synced).length} playlist${(window.MPLAYLISTS||[]).filter(p=>p.synced).length!==1?'s':''} synced</div>
-              <div style="height:2px;background:rgba(251,146,60,.15);border-radius:1px"></div>
+              <div style="height:2px;background:rgba(var(--ac-rgb),.15);border-radius:1px"></div>
             </div>
             <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('notes')">
-              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>✎</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#14532d">Notes</span></div>
-              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:#14532d">${(window.NDATA||[]).length||'—'}</div>
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>✎</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ac)">Notes</span></div>
+              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--ac)">${(window.NDATA||[]).length||'—'}</div>
               <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${(window.NDATA||[]).filter(n=>n.pinned).length} pinned</div>
-              <div style="height:2px;background:rgba(20,83,45,.15);border-radius:1px"></div>
+              <div style="height:2px;background:rgba(var(--ac-rgb),.15);border-radius:1px"></div>
             </div>
           </div>
         </div>

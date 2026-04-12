@@ -12,21 +12,21 @@ function openWrapped() {
   const year = now.getFullYear();
 
   modal.innerHTML = `
-    <div style="background:#0a0a12;border:1px solid #2a2a3a;border-radius:14px;width:100%;max-width:560px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
-      <div style="padding:20px 24px;border-bottom:1px solid #2a2a3a;display:flex;align-items:center;justify-content:space-between">
+    <div style="background:#111111;border:1px solid rgba(255,255,255,.08);border-radius:14px;width:100%;max-width:560px;max-height:90vh;overflow:hidden;display:flex;flex-direction:column">
+      <div style="padding:20px 24px;border-bottom:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:space-between">
         <div>
-          <div style="font-family:'Cinzel',serif;font-size:20px;font-weight:700;color:#34d399">✦ Wrapped</div>
-          <div style="font-size:12px;color:#8888aa;margin-top:2px">Your viewing summary</div>
+          <div style="font-family:'Outfit',sans-serif;font-size:20px;font-weight:700;color:#38bdf8">✦ Wrapped</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:2px">Your viewing summary</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
-          <div style="display:flex;gap:4px;background:#111118;border:1px solid #2a2a3a;border-radius:6px;padding:3px">
+          <div style="display:flex;gap:4px;background:#161616;border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:3px">
             <button onclick="renderWrappedContent('monthly')" id="wrap-monthly-btn"
-              style="padding:5px 12px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:#34d399;color:#000">Monthly</button>
+              style="padding:5px 12px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:#38bdf8;color:#000">Monthly</button>
             <button onclick="renderWrappedContent('yearly')" id="wrap-yearly-btn"
-              style="padding:5px 12px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:transparent;color:#8888aa">Yearly</button>
+              style="padding:5px 12px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:transparent;color:rgba(255,255,255,.5)">Yearly</button>
           </div>
           <button onclick="document.getElementById('wrapped-modal').remove()"
-            style="width:30px;height:30px;border-radius:50%;background:#18181f;border:1px solid #2a2a3a;color:#8888aa;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+            style="width:30px;height:30px;border-radius:50%;background:#161616;border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.5);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
         </div>
       </div>
       <div id="wrapped-content" style="overflow-y:auto;flex:1;padding:20px"></div>
@@ -41,8 +41,8 @@ function renderWrappedContent(type) {
   // Update tab buttons
   const mb = document.getElementById('wrap-monthly-btn');
   const yb = document.getElementById('wrap-yearly-btn');
-  if (mb) { mb.style.background = type==='monthly'?'#34d399':'transparent'; mb.style.color = type==='monthly'?'#000':'#8888aa'; }
-  if (yb) { yb.style.background = type==='yearly'?'#34d399':'transparent'; yb.style.color = type==='yearly'?'#000':'#8888aa'; }
+  if (mb) { mb.style.background = type==='monthly'?'#38bdf8':'transparent'; mb.style.color = type==='monthly'?'#000':'rgba(255,255,255,.5)'; }
+  if (yb) { yb.style.background = type==='yearly'?'#38bdf8':'transparent'; yb.style.color = type==='yearly'?'#000':'rgba(255,255,255,.5)'; }
 
   const now = new Date();
   const el = document.getElementById('wrapped-content'); if (!el) return;
@@ -118,10 +118,10 @@ function renderWrappedContent(type) {
 
   el.innerHTML = `
     <!-- Header -->
-    <div style="text-align:center;margin-bottom:24px;padding:20px;background:linear-gradient(135deg,rgba(52,211,153,.08),rgba(52,211,153,.02));border:1px solid rgba(52,211,153,.15);border-radius:10px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:2px;color:#34d399;margin-bottom:6px">Your ${type==='monthly'?'Monthly':'Yearly'} Wrapped</div>
-      <div style="font-family:'Cinzel',serif;font-size:28px;font-weight:700;color:#fff;margin-bottom:4px">${label}</div>
-      <div style="font-size:13px;color:#8888aa">${highlights[0]||'Keep tracking!'}</div>
+    <div style="text-align:center;margin-bottom:24px;padding:20px;background:linear-gradient(135deg,rgba(56,189,248,.1),rgba(56,189,248,.02));border:1px solid rgba(56,189,248,.2);border-radius:10px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:2px;color:#38bdf8;margin-bottom:6px">Your ${type==='monthly'?'Monthly':'Yearly'} Wrapped</div>
+      <div style="font-family:'Outfit',sans-serif;font-size:28px;font-weight:700;color:#fff;margin-bottom:4px">${label}</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.5)">${highlights[0]||'Keep tracking!'}</div>
     </div>
 
     <!-- Key stats grid -->
@@ -134,62 +134,62 @@ function renderWrappedContent(type) {
         ['🎮', gamesCompleted.length||'—', 'Games Done'],
         ['📚', booksCompleted.length||'—', 'Books Done'],
       ].map(([ico,val,lbl])=>`
-        <div style="background:#111118;border:1px solid #2a2a3a;border-radius:8px;padding:12px;text-align:center">
+        <div style="background:#161616;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:12px;text-align:center">
           <div style="font-size:18px;margin-bottom:4px">${ico}</div>
-          <div style="font-family:'Cinzel',serif;font-size:18px;font-weight:700;color:#34d399;line-height:1">${val}</div>
-          <div style="font-size:10px;color:#8888aa;margin-top:3px;text-transform:uppercase;letter-spacing:.5px">${lbl}</div>
+          <div style="font-family:'Outfit',sans-serif;font-size:18px;font-weight:700;color:#38bdf8;line-height:1">${val}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:3px;text-transform:uppercase;letter-spacing:.5px">${lbl}</div>
         </div>`).join('')}
     </div>
 
     <!-- Top Genres -->
     ${topGenres.length ? `
-    <div style="background:#111118;border:1px solid #2a2a3a;border-radius:10px;padding:16px;margin-bottom:12px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#8888aa;margin-bottom:12px">🎭 Top Genres</div>
+    <div style="background:#161616;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.5);margin-bottom:12px">🎭 Top Genres</div>
       ${topGenres.map((g,i)=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:7px 0;${i<topGenres.length-1?'border-bottom:1px solid #1a1a2e':''}">
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 0;${i<topGenres.length-1?'border-bottom:1px solid rgba(255,255,255,.06)':''}">
           <div style="width:8px;height:8px;border-radius:50%;background:${g.color};flex-shrink:0"></div>
-          <span style="flex:1;font-size:13px;color:#eeedf8">${g.name}</span>
-          <div style="width:80px;height:3px;background:#2a2a3a;border-radius:2px;overflow:hidden">
+          <span style="flex:1;font-size:13px;color:rgba(255,255,255,.93)">${g.name}</span>
+          <div style="width:80px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden">
             <div style="height:100%;width:${Math.round(g.cnt/topGenres[0].cnt*100)}%;background:${g.color};border-radius:2px"></div>
           </div>
-          <span style="font-size:12px;font-weight:700;color:#8888aa;min-width:20px;text-align:right">${g.cnt}</span>
+          <span style="font-size:12px;font-weight:700;color:rgba(255,255,255,.5);min-width:20px;text-align:right">${g.cnt}</span>
         </div>`).join('')}
     </div>` : ''}
 
     <!-- Top Rated -->
     ${rated.length ? `
-    <div style="background:#111118;border:1px solid #2a2a3a;border-radius:10px;padding:16px;margin-bottom:12px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#8888aa;margin-bottom:12px">⭐ Your Top Rated</div>
+    <div style="background:#161616;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.5);margin-bottom:12px">⭐ Your Top Rated</div>
       ${rated.map((e,i)=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:7px 0;${i<rated.length-1?'border-bottom:1px solid #1a1a2e':''}">
-          <span style="font-size:11px;font-weight:800;color:#34d399;min-width:16px">#${i+1}</span>
-          <span style="flex:1;font-size:13px;color:#eeedf8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</span>
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 0;${i<rated.length-1?'border-bottom:1px solid rgba(255,255,255,.06)':''}">
+          <span style="font-size:11px;font-weight:800;color:#38bdf8;min-width:16px">#${i+1}</span>
+          <span style="flex:1;font-size:13px;color:rgba(255,255,255,.93);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</span>
           <span style="font-size:13px;font-weight:700;color:#fbbf24">★ ${e.rating}</span>
         </div>`).join('')}
     </div>` : ''}
 
     <!-- Fun highlights -->
     ${highlights.length > 1 ? `
-    <div style="background:linear-gradient(135deg,rgba(52,211,153,.06),rgba(96,165,250,.04));border:1px solid rgba(52,211,153,.12);border-radius:10px;padding:16px;margin-bottom:12px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#8888aa;margin-bottom:10px">✨ Highlights</div>
-      ${highlights.map(h=>`<div style="font-size:13px;color:#eeedf8;padding:5px 0;line-height:1.5">${h}</div>`).join('<div style="height:1px;background:#1a1a2e;margin:2px 0"></div>')}
+    <div style="background:linear-gradient(135deg,rgba(56,189,248,.08),rgba(56,189,248,.02));border:1px solid rgba(56,189,248,.15);border-radius:10px;padding:16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.5);margin-bottom:10px">✨ Highlights</div>
+      ${highlights.map(h=>`<div style="font-size:13px;color:rgba(255,255,255,.93);padding:5px 0;line-height:1.5">${h}</div>`).join('<div style="height:1px;background:rgba(255,255,255,.06);margin:2px 0"></div>')}
     </div>` : ''}
 
     <!-- Completion rate -->
     ${newAdded.length > 0 ? `
-    <div style="background:#111118;border:1px solid #2a2a3a;border-radius:10px;padding:16px">
+    <div style="background:#161616;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:16px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#8888aa">Completion Rate</div>
+        <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,.5)">Completion Rate</div>
         <span style="font-size:14px;font-weight:700;color:${completionRate>=70?'#4ade80':completionRate>=40?'#fbbf24':'#fb7185'}">${completionRate}%</span>
       </div>
-      <div style="height:6px;background:#2a2a3a;border-radius:3px;overflow:hidden">
+      <div style="height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden">
         <div style="height:100%;width:${completionRate}%;background:${completionRate>=70?'#4ade80':completionRate>=40?'#fbbf24':'#fb7185'};border-radius:3px;transition:width .5s"></div>
       </div>
-      <div style="font-size:11px;color:#8888aa;margin-top:6px">${completed.length} completed of ${newAdded.length} added this ${type==='monthly'?'month':'year'}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:6px">${completed.length} completed of ${newAdded.length} added this ${type==='monthly'?'month':'year'}</div>
     </div>` : ''}
 
     ${totalEps===0&&newAdded.length===0&&gamesInRange.length===0?`
-    <div style="text-align:center;padding:30px;color:#8888aa;font-size:13px">
+    <div style="text-align:center;padding:30px;color:rgba(255,255,255,.5);font-size:13px">
       No activity tracked for ${label} yet.<br>Keep using the app and check back!
     </div>`:''}`;
 }

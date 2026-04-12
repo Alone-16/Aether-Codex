@@ -119,8 +119,8 @@ function rebuildSidebar() {
 // ─── SETTINGS RENDER ───
 function renderSettings(c) {
   const isElectron = !!(window.electronBridge);
-  const tabs       = ['sections','drive','storage','ai','security','share', ...(isElectron ? ['desktop'] : [])];
-  const tabLabels  = ['Sections','Drive','Storage','AI Assistant','Security','Public Share', ...(isElectron ? ['Desktop App'] : [])];
+  const tabs       = ['sections','sync','storage','ai','security','share', ...(isElectron ? ['desktop'] : [])];
+  const tabLabels  = ['Sections','Sync','Storage','AI Assistant','Security','Public Share', ...(isElectron ? ['Desktop App'] : [])];
 
   c.innerHTML = `
     <div style="font-family:var(--fd);font-size:20px;font-weight:700;margin-bottom:20px;color:var(--tx)">⚙ Settings</div>
@@ -136,7 +136,7 @@ function setSettingsTab(t) { SETTINGS_TAB = t; renderSettingsBody(); }
 function renderSettingsBody() {
   const el = document.getElementById('settings-body'); if (!el) return;
   if      (SETTINGS_TAB === 'sections')   renderSettingsSections(el);
-  else if (SETTINGS_TAB === 'drive')      renderSettingsDrive(el);
+  else if (SETTINGS_TAB === 'sync')       renderSettingsSync(el);
   else if (SETTINGS_TAB === 'storage')    renderSettingsStorage(el);
   else if (SETTINGS_TAB === 'ai')         renderSettingsAI(el);
   else if (SETTINGS_TAB === 'share')       renderSettingsPublicShare(el);
@@ -144,7 +144,7 @@ function renderSettingsBody() {
   else if (SETTINGS_TAB === 'desktop')    renderSettingsDesktop(el);
   // Update active tab
   document.querySelectorAll('.stab').forEach(t => {
-    const tabs = ['sections','drive','storage','appearance','security'];
+    const tabs = ['sections','sync','storage','appearance','security'];
     t.classList.toggle('active', t.textContent.toLowerCase() === (tabs.find(x => x === SETTINGS_TAB) || ''));
   });
 }
@@ -154,14 +154,14 @@ function renderSettingsSections(el) {
   const order   = [...(SETTINGS.sectionOrder || ['home','media','games','books','music'])];
   const enabled = SETTINGS.sectionEnabled || {};
   const meta = {
-    home:  { icon:'⌂', color:'#34d399', desc:'Master dashboard' },
-    media: { icon:'◉', color:'#e879a0', desc:'Anime, K-Drama, Manhwa & more' },
-    games: { icon:'◈', color:'#f59e0b', desc:'PC & Mobile game tracker' },
-    books: { icon:'◎', color:'#a78bfa', desc:'Novels, Audiobooks & Manga' },
-    music: { icon:'♪', color:'#fb923c', desc:'Music library & YouTube sync' },
-    vault: { icon:'🔗', color:'#a78bfa', desc:'Save and manage links privately' },
-    tools: { icon:'⬇', color:'#f43f5e', desc:'Instagram downloader & utilities' },
-    notes: { icon:'✎', color:'#14532d', desc:'Personal notes, checklists & ideas' },
+    home:  { icon:'⌂', color:'var(--ac)', desc:'Master dashboard' },
+    media: { icon:'◉', color:'var(--ac)', desc:'Anime, K-Drama, Manhwa & more' },
+    games: { icon:'◈', color:'var(--ac)', desc:'PC & Mobile game tracker' },
+    books: { icon:'◎', color:'var(--ac)', desc:'Novels, Audiobooks & Manga' },
+    music: { icon:'♪', color:'var(--ac)', desc:'Music library & YouTube sync' },
+    vault: { icon:'🔗', color:'var(--ac)', desc:'Save and manage links privately' },
+    tools: { icon:'⬇', color:'var(--ac)', desc:'Instagram downloader & utilities' },
+    notes: { icon:'✎', color:'var(--ac)', desc:'Personal notes, checklists & ideas' },
   };
 
   el.innerHTML = `
@@ -250,11 +250,27 @@ function saveSectionOrder() {
   toast('✓ Section order saved', 'var(--cd)');
 }
 
-// ── DRIVE TAB ──
-function renderSettingsDrive(el) {
+// ── SYNC TAB ──
+function renderSettingsSync(el) {
   const connected = _isConnected();
   const lastSync  = ls.str(K.DSYNC) ? new Date(parseInt(ls.str(K.DSYNC))).toLocaleString() : 'Never';
   const lastSaved = ls.str(K.SAVED) ? new Date(parseInt(ls.str(K.SAVED))).toLocaleString() : 'Never';
+
+  const malConnected     = !!SETTINGS.malRefreshToken;
+  const malTokenValid    = malConnected && SETTINGS.malAccessToken && Date.now() < (parseInt(SETTINGS.malTokenExpiry) || 0);
+  const malTotalCount    = (typeof DATA !== 'undefined') ? DATA.length : 0;
+  const malLinkedCount   = (typeof DATA !== 'undefined') ? DATA.filter(e => e.malId).length : 0;
+  const malUnlinkedCount = malTotalCount - malLinkedCount;
+  const lastSyncRaw      = ls.str('ac_mal_last_sync');
+  const lastSyncTime     = lastSyncRaw ? new Date(parseInt(lastSyncRaw)).toLocaleString() : null;
+  const lastSyncTitle    = ls.str('ac_mal_last_sync_title') || '';
+  const malDesc = malTokenValid
+    ? 'Connected and ready. Episode changes, status and ratings sync automatically.'
+    : malConnected
+      ? 'Refresh token is saved but access token may be expired. Try syncing — it will auto-refresh. If it fails, reconnect.'
+      : 'Connect your MAL account to auto-sync anime status, episode progress and ratings to MyAnimeList.';
+  const malLabel  = malConnected ? 'Disconnect MAL Account' : 'Connect MAL Account';
+  const malAction = malConnected ? 'disconnectMALAccount()' : 'connectMALAccount()';
 
   el.innerHTML = `
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
@@ -290,6 +306,50 @@ function renderSettingsDrive(el) {
         <span style="font-size:13px;color:var(--tx2)">days</span>
         <button onclick="saveBackupDays()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
       </div>
+    </div>
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-top:12px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap">
+          <div style="font-size:13px;font-weight:700;color:var(--tx)">MyAnimeList Sync</div>
+          <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;${
+            malConnected && malTokenValid
+              ? 'background:rgba(74,222,128,.1);color:#4ade80'
+              : malConnected
+                ? 'background:rgba(251,191,36,.1);color:#fbbf24'
+                : 'background:rgba(251,113,133,.1);color:#fb7185'
+          }">
+            ${malConnected && malTokenValid ? '● Connected' : malConnected ? '● Needs Refresh' : '○ Not Connected'}
+          </span>
+        </div>
+        <div style="font-size:12px;color:var(--mu)">
+          <span style="color:${malLinkedCount>0?'#4ade80':'var(--mu)'}">✓ ${malLinkedCount} linked</span>
+          ${malUnlinkedCount > 0 ? `<span style="color:var(--mu)"> · ${malUnlinkedCount} unlinked</span>` : ''}
+          <span style="color:var(--mu)"> · ${malTotalCount} total entries</span>
+        </div>
+        ${lastSyncTime ? `<div style="font-size:11px;color:var(--ac);margin-top:3px">✓ Last sync: ${lastSyncTime}${lastSyncTitle ? ' · ' + lastSyncTitle : ''}</div>` : ''}
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:12px;color:var(--tx2);line-height:1.6">${malDesc}</div>
+        <div id="mal-bulk-progress" style="display:none;background:var(--surf2);border:1px solid var(--brd);border-radius:6px;padding:10px 12px"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button onclick="${malAction}"
+            style="background:${malConnected?'rgba(251,113,133,.1)':'rgba(var(--ac-rgb),.12)'};color:${malConnected?'#fb7185':'var(--ac)'};border:1px solid ${malConnected?'rgba(251,113,133,.25)':'rgba(var(--ac-rgb),.3)'};border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
+            ${malLabel}
+          </button>
+          ${malConnected && malLinkedCount > 0 ? `
+            <button onclick="startMALBulkSync()"
+              style="background:rgba(var(--ac-rgb),.08);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.25);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
+              ↻ Sync ${malLinkedCount} Linked to MAL
+            </button>` : ''}
+          ${malConnected && malUnlinkedCount > 0 ? `
+            <button onclick="openMALBulkLinkModal()"
+              style="background:rgba(251,191,36,.08);color:#fbbf24;border:1px solid rgba(251,191,36,.25);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
+              🔗 Auto-Link ${malUnlinkedCount} Unlinked
+            </button>` : ''}
+          ${!malConnected ? `
+            <span style="font-size:12px;color:var(--mu)">Connect MAL account above to enable sync</span>` : ''}
+        </div>
+      </div>
     </div>`;
 }
 
@@ -317,7 +377,7 @@ function disconnectMALAccount() {
     SETTINGS.malRefreshToken = null;
     SETTINGS.malTokenExpiry = null;
     saveSettings(SETTINGS);
-    renderSettingsSecurity(document.getElementById('settings-body'));
+    renderSettingsBody();
     toast('✓ MAL disconnected', 'var(--cd)');
   }, { title:'Disconnect MAL?', okLabel:'Disconnect', danger:false });
 }
@@ -326,10 +386,10 @@ function disconnectMALAccount() {
 function renderSettingsStorage(el) {
   const keys = [
     { label:'Media',     key:K.DATA,                                         color:'#e879a0' },
-    { label:'Games',     key:(window.GAMES_KEY    || 'ac_v4_games'),         color:'#f59e0b' },
+    { label:'Games',     key:(window.GAMES_KEY    || 'ac_v4_games'),         color:'var(--ac)' },
     { label:'Books',     key:(window.BOOKS_KEY    || 'ac_v4_books'),         color:'#a78bfa' },
-    { label:'Music',     key:(window.MUSIC_KEY    || 'ac_v4_music'),         color:'#fb923c' },
-    { label:'Playlists', key:(window.MUSIC_PL_KEY || 'ac_v4_playlists'),     color:'#fb923c' },
+    { label:'Music',     key:(window.MUSIC_KEY    || 'ac_v4_music'),         color:'var(--ac)' },
+    { label:'Playlists', key:(window.MUSIC_PL_KEY || 'ac_v4_playlists'),     color:'var(--ac)' },
     { label:'Genres',    key:K.GENRES,                                        color:'#8888aa' },
     { label:'Settings',  key:SETTINGS_KEY,                                    color:'#8888aa' },
   ];
@@ -405,7 +465,7 @@ function renderSettingsAI(el) {
 
 function saveAIKeySetting() {
   const val = document.getElementById('ai-key-setting')?.value?.trim();
-  if (!val) { toast('Please enter an API key', 'var(--cr)'); return; }
+  if (!val) { toast('Please enter an API key', 'var(--err)'); return; }
   setAIKey(val); toast('✓ API key saved', 'var(--cd)');
   renderSettingsAI(document.getElementById('settings-body'));
 }
@@ -435,21 +495,6 @@ function setDensity(v) {
 // ── SECURITY TAB ──
 function renderSettingsSecurity(el) {
   const hasPin = !!getPin();
-  const malConnected     = !!SETTINGS.malRefreshToken;
-  const malTokenValid    = malConnected && SETTINGS.malAccessToken && Date.now() < (parseInt(SETTINGS.malTokenExpiry) || 0);
-  const malTotalCount    = (typeof DATA !== 'undefined') ? DATA.length : 0;
-  const malLinkedCount   = (typeof DATA !== 'undefined') ? DATA.filter(e => e.malId).length : 0;
-  const malUnlinkedCount = malTotalCount - malLinkedCount;
-  const lastSyncRaw      = ls.str('ac_mal_last_sync');
-  const lastSyncTime     = lastSyncRaw ? new Date(parseInt(lastSyncRaw)).toLocaleString() : null;
-  const lastSyncTitle    = ls.str('ac_mal_last_sync_title') || '';
-  const malDesc = malTokenValid
-    ? 'Connected and ready. Episode changes, status and ratings sync automatically.'
-    : malConnected
-      ? 'Refresh token is saved but access token may be expired. Try syncing — it will auto-refresh. If it fails, reconnect.'
-      : 'Connect your MAL account to auto-sync anime status, episode progress and ratings to MyAnimeList.';
-  const malLabel  = malConnected ? 'Disconnect MAL Account' : 'Connect MAL Account';
-  const malAction = malConnected ? 'disconnectMALAccount()' : 'connectMALAccount()';
   el.innerHTML = `
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
       <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
@@ -480,50 +525,6 @@ function renderSettingsSecurity(el) {
           style="width:70px;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--tx);outline:none">
         <span style="font-size:13px;color:var(--tx2)">minutes</span>
         <button onclick="saveIdleTimeout()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
-      </div>
-    </div>
-    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-top:12px">
-      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap">
-          <div style="font-size:13px;font-weight:700;color:var(--tx)">MyAnimeList Sync</div>
-          <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;${
-            malConnected && malTokenValid
-              ? 'background:rgba(74,222,128,.1);color:#4ade80'
-              : malConnected
-                ? 'background:rgba(251,191,36,.1);color:#fbbf24'
-                : 'background:rgba(251,113,133,.1);color:#fb7185'
-          }">
-            ${malConnected && malTokenValid ? '● Connected' : malConnected ? '● Needs Refresh' : '○ Not Connected'}
-          </span>
-        </div>
-        <div style="font-size:12px;color:var(--mu)">
-          <span style="color:${malLinkedCount>0?'#4ade80':'var(--mu)'}">✓ ${malLinkedCount} linked</span>
-          ${malUnlinkedCount > 0 ? `<span style="color:var(--mu)"> · ${malUnlinkedCount} unlinked</span>` : ''}
-          <span style="color:var(--mu)"> · ${malTotalCount} total entries</span>
-        </div>
-        ${lastSyncTime ? `<div style="font-size:11px;color:#00e5ff;margin-top:3px">✓ Last sync: ${lastSyncTime}${lastSyncTitle ? ' · ' + lastSyncTitle : ''}</div>` : ''}
-      </div>
-      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
-        <div style="font-size:12px;color:var(--tx2);line-height:1.6">${malDesc}</div>
-        <div id="mal-bulk-progress" style="display:none;background:var(--surf2);border:1px solid var(--brd);border-radius:6px;padding:10px 12px"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <button onclick="${malAction}"
-            style="background:${malConnected?'rgba(251,113,133,.1)':'rgba(var(--ac-rgb),.12)'};color:${malConnected?'#fb7185':'var(--ac)'};border:1px solid ${malConnected?'rgba(251,113,133,.25)':'rgba(var(--ac-rgb),.3)'};border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
-            ${malLabel}
-          </button>
-          ${malConnected && malLinkedCount > 0 ? `
-            <button onclick="startMALBulkSync()"
-              style="background:rgba(0,229,255,.08);color:#00e5ff;border:1px solid rgba(0,229,255,.25);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
-              ↻ Sync ${malLinkedCount} Linked to MAL
-            </button>` : ''}
-          ${malConnected && malUnlinkedCount > 0 ? `
-            <button onclick="openMALBulkLinkModal()"
-              style="background:rgba(251,191,36,.08);color:#fbbf24;border:1px solid rgba(251,191,36,.25);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
-              🔗 Auto-Link ${malUnlinkedCount} Unlinked
-            </button>` : ''}
-          ${!malConnected ? `
-            <span style="font-size:12px;color:var(--mu)">Connect MAL account above to enable sync</span>` : ''}
-        </div>
       </div>
     </div>`;
 }
@@ -599,7 +600,7 @@ function renderSettingsDesktop(el) {
 async function saveDesktopShortcut(type) {
   if (!window.electronBridge) return;
   const key = document.getElementById(type === 'main' ? 'shortcut-main-key' : 'shortcut-mini-key')?.value?.trim().toUpperCase();
-  if (!key) { toast('Please enter a key (A–Z or 0–9)', 'var(--cr)'); return; }
+  if (!key) { toast('Please enter a key (A–Z or 0–9)', 'var(--err)'); return; }
   const result = await window.electronBridge.setShortcut(type, key);
   if (result.success) {
     toast(`✓ Shortcut set: Ctrl+Alt+${key}`, 'var(--cd)');
@@ -623,24 +624,24 @@ function openMALBulkLinkModal() {
   modal.id = 'mal-bulk-link-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9800;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(3px)';
   modal.innerHTML = `
-    <div style="background:#111118;border:1px solid #2a2a3a;border-radius:12px;width:100%;max-width:660px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
-      <div style="padding:16px 20px;border-bottom:1px solid #2a2a3a;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:10px;flex-wrap:wrap">
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:12px;width:100%;max-width:660px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:10px;flex-wrap:wrap">
         <div>
-          <div style="font-family:'Cinzel',serif;font-size:16px;font-weight:700;color:#00e5ff">🔗 Auto-Link to MAL</div>
+          <div style="font-family:var(--fd);font-size:16px;font-weight:700;color:var(--ac)">🔗 Auto-Link to MAL</div>
           <div style="font-size:12px;color:#8888aa;margin-top:2px">${unlinked.length} unlinked entries — searches MAL by title and proposes matches</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
           <button id="mal-link-start-btn" onclick="startMALAutoLink()"
-            style="background:rgba(0,229,255,.12);color:#00e5ff;border:1px solid rgba(0,229,255,.3);border-radius:6px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer">
+            style="background:rgba(var(--ac-rgb),.12);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3);border-radius:6px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer">
             ▶ Start Auto-Search
           </button>
           <button onclick="_malLinkAbort=true;document.getElementById('mal-bulk-link-modal').remove()"
-            style="width:28px;height:28px;border-radius:50%;background:#18181f;border:1px solid #2a2a3a;color:#8888aa;font-size:14px;cursor:pointer;flex-shrink:0">✕</button>
+            style="width:28px;height:28px;border-radius:50%;background:var(--surf2);border:1px solid var(--brd);color:var(--tx2);font-size:14px;cursor:pointer;flex-shrink:0">✕</button>
         </div>
       </div>
-      <div style="padding:10px 16px;border-bottom:1px solid #2a2a3a;flex-shrink:0;display:flex;align-items:center;gap:12px">
-        <div id="mal-link-progress-wrap" style="flex:1;height:4px;background:#2a2a3a;border-radius:2px;overflow:hidden;display:none">
-          <div id="mal-link-progress-bar" style="height:100%;width:0%;background:#00e5ff;transition:width .3s;border-radius:2px"></div>
+      <div style="padding:10px 16px;border-bottom:1px solid var(--brd);flex-shrink:0;display:flex;align-items:center;gap:12px">
+        <div id="mal-link-progress-wrap" style="flex:1;height:4px;background:var(--brd);border-radius:2px;overflow:hidden;display:none">
+          <div id="mal-link-progress-bar" style="height:100%;width:0%;background:var(--ac);transition:width .3s;border-radius:2px"></div>
         </div>
         <div id="mal-link-status" style="font-size:12px;color:#8888aa;flex-shrink:0">
           Click "Start Auto-Search" to begin. ✓ exact · ~ similar · ✗ not found
@@ -648,7 +649,7 @@ function openMALBulkLinkModal() {
       </div>
       <div id="mal-link-list" style="overflow-y:auto;flex:1;padding:10px 14px;display:flex;flex-direction:column;gap:5px">
         ${unlinked.map(e => `
-          <div id="mlr-${e.id}" style="display:flex;align-items:center;gap:10px;background:#18181f;border:1px solid #2a2a3a;border-radius:8px;padding:10px 12px;transition:border-color .2s">
+          <div id="mlr-${e.id}" style="display:flex;align-items:center;gap:10px;background:var(--surf2);border:1px solid var(--brd);border-radius:8px;padding:10px 12px;transition:border-color .2s">
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:600;color:#eeedf8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</div>
               <div style="font-size:10px;color:#8888aa;margin-top:2px">${esc(gbyid(e.genreId).name)} · ${e.status}</div>
@@ -656,13 +657,13 @@ function openMALBulkLinkModal() {
             <div id="mlr-result-${e.id}" style="font-size:12px;color:#8888aa;flex-shrink:0;text-align:right">—</div>
           </div>`).join('')}
       </div>
-      <div style="padding:12px 16px;border-top:1px solid #2a2a3a;display:flex;gap:8px;justify-content:space-between;align-items:center;flex-shrink:0;flex-wrap:wrap">
+      <div style="padding:12px 16px;border-top:1px solid var(--brd);display:flex;gap:8px;justify-content:space-between;align-items:center;flex-shrink:0;flex-wrap:wrap">
         <div id="mal-link-summary" style="font-size:12px;color:#8888aa"></div>
         <div style="display:flex;gap:8px">
           <button onclick="_malLinkAbort=true;document.getElementById('mal-bulk-link-modal').remove()"
-            style="background:#18181f;color:#8888aa;border:1px solid #2a2a3a;border-radius:6px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer">Close</button>
+            style="background:var(--surf2);color:var(--tx2);border:1px solid var(--brd);border-radius:6px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer">Close</button>
           <button id="mal-link-save-btn" onclick="saveMALBulkLinks()"
-            style="background:#00e5ff;color:#000;border:none;border-radius:6px;padding:7px 20px;font-size:12px;font-weight:700;cursor:pointer;display:none">
+            style="background:var(--ac);color:#000;border:none;border-radius:6px;padding:7px 20px;font-size:12px;font-weight:700;cursor:pointer;display:none">
             💾 Save Matches
           </button>
         </div>
@@ -692,7 +693,7 @@ async function startMALAutoLink() {
     if (_malLinkAbort) break;
     const rowEl = document.getElementById(`mlr-result-${entry.id}`);
     const rowCard = document.getElementById(`mlr-${entry.id}`);
-    if (rowEl) rowEl.innerHTML = '<span style="color:#fb923c;font-size:11px">Searching…</span>';
+    if (rowEl) rowEl.innerHTML = '<span style="color:var(--ac);font-size:11px">Searching…</span>';
 
     try {
       const res  = await fetch(
@@ -722,7 +723,7 @@ async function startMALAutoLink() {
             </div>
             <label style="display:flex;align-items:center;gap:4px;justify-content:flex-end;cursor:pointer;font-size:11px;color:#8888aa">
               <input type="checkbox" checked data-entry="${entry.id}" data-malid="${top.id}"
-                style="accent-color:#00e5ff;cursor:pointer;width:13px;height:13px" onchange="_malLinkToggle(this)">
+                style="accent-color:var(--ac);cursor:pointer;width:13px;height:13px" onchange="_malLinkToggle(this)">
               Link this
             </label>
           </div>`;
@@ -774,7 +775,7 @@ function saveMALBulkLinks() {
     saveData(DATA);
     toast(`✓ Linked ${saved} entries to MAL — now run "Sync Linked" to push to MAL`, '#4ade80');
     document.getElementById('mal-bulk-link-modal')?.remove();
-    renderSettingsSecurity(document.getElementById('settings-body'));
+    renderSettingsBody();
   } else {
     toast('No matches selected to save', '#fbbf24');
   }
@@ -791,11 +792,11 @@ async function startMALBulkSync() {
     progressEl.style.display = 'block';
     progressEl.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
-        <div style="width:14px;height:14px;border:2px solid var(--brd);border-top-color:#00e5ff;border-radius:50%;animation:_spin .6s linear infinite;flex-shrink:0"></div>
+        <div style="width:14px;height:14px;border:2px solid var(--brd);border-top-color:var(--ac);border-radius:50%;animation:_spin .6s linear infinite;flex-shrink:0"></div>
         <span style="font-size:12px;color:var(--tx2)">Starting sync of ${entries.length} entries…</span>
       </div>
       <div style="height:4px;background:var(--surf3);border-radius:2px;overflow:hidden">
-        <div id="mal-bulk-bar" style="height:100%;width:0%;background:#00e5ff;border-radius:2px;transition:width .4s"></div>
+        <div id="mal-bulk-bar" style="height:100%;width:0%;background:var(--ac);border-radius:2px;transition:width .4s"></div>
       </div>`;
   }
 
@@ -938,7 +939,7 @@ Object.assign(window, {
   applySettings, rebuildSidebar,
   renderSettingsSections, ssDragStart, ssDragOver, ssDrop,
   toggleSection, saveSectionOrder,
-  renderSettingsDrive, saveBackupDays,
+  renderSettingsSync, saveBackupDays,
   renderSettingsStorage,
   renderSettingsAI, saveAIKeySetting, clearAIKey,
   setFontSize, setDensity,

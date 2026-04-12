@@ -1430,7 +1430,7 @@ async function toolsDownloadZIP(username, files, btnId, progressId) {
     URL.revokeObjectURL(a.href);
     toast(`✓ ZIP ready — ${total} file${total !== 1 ? 's' : ''}`, 'var(--cd)');
   } catch(e) {
-    toast('ZIP creation failed: ' + e.message, 'var(--cr)');
+    toast('ZIP creation failed: ' + e.message, 'var(--err)');
   } finally {
     if (progressDiv) progressDiv.style.display = 'none';
     if (btn) { btn.disabled = false; btn.innerHTML = `📦 Download All as ZIP (${total})`; }

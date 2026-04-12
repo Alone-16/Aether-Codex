@@ -1,11 +1,11 @@
 // ═══════════════════════════════
-//  MEDIA SECTION — Obsidian / Cyan design
+//  MEDIA SECTION
 // ═══════════════════════════════
 
 /* ---------- visual helpers ---------- */
 function _mediaStatusBar(s) {
   const map = {
-    watching:'#00e5ff', completed:'#4ade80', plan:'#a78bfa',
+    watching:'#7dd3fc', completed:'#4ade80', plan:'#a78bfa',
     not_started:'rgba(255,255,255,.18)', on_hold:'#fbbf24', dropped:'#f87171', upcoming:'#fb923c',
   };
   return map[s] || 'rgba(255,255,255,.18)';
@@ -44,7 +44,7 @@ let _HOLD_FIRED   = false;
 function _renderFilterChips() {
   const chips = [
     { val:'',          lbl:'All',       col:'rgba(255,255,255,.45)' },
-    { val:'watching',  lbl:'Watching',  col:'#00e5ff' },
+    { val:'watching',  lbl:'Watching',  col:'#7dd3fc' },
     { val:'completed', lbl:'Completed', col:'#4ade80' },
     { val:'plan',      lbl:'Planned',   col:'#a78bfa' },
     { val:'on_hold',   lbl:'On Hold',   col:'#fbbf24' },
@@ -369,7 +369,7 @@ function rowHtml(e) {
         ${_mstag(e.status)}
         ${rewBadge}
         ${grpBadge}
-        ${e.malId ? `<span style="font-size:9px;font-weight:700;background:rgba(0,229,255,.08);color:rgba(0,229,255,.55);border:1px solid rgba(0,229,255,.15);border-radius:3px;padding:1px 4px">MAL</span>` : ''}
+        ${e.malId ? `<span style="font-size:9px;font-weight:700;background:rgba(var(--ac-rgb),.08);color:rgba(var(--ac-rgb),.55);border:1px solid rgba(var(--ac-rgb),.15);border-radius:3px;padding:1px 4px">MAL</span>` : ''}
         ${_airBadge(e)}
       </div>
     </div>
@@ -601,13 +601,13 @@ function renderDetailPanel(e) {
       ${e.startDate ? `<span>Started: <b>${fmtDate(e.startDate)}</b></span>` : ''}
       ${e.endDate   ? `<span>Finished: <b>${fmtDate(e.endDate)}</b></span>` : ''}
     </div>` : ''}
-    ${e.malId ? `<div style="padding:8px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:8px;background:rgba(0,229,255,.03)">
-      <span style="font-size:9px;font-weight:800;letter-spacing:.5px;background:rgba(0,229,255,.12);color:#00e5ff;border:1px solid rgba(0,229,255,.25);border-radius:3px;padding:1px 6px;flex-shrink:0">MAL</span>
+    ${e.malId ? `<div style="padding:8px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:8px;background:rgba(var(--ac-rgb),.03)">
+      <span style="font-size:9px;font-weight:800;letter-spacing:.5px;background:rgba(var(--ac-rgb),.12);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.25);border-radius:3px;padding:1px 6px;flex-shrink:0">MAL</span>
       <span style="font-size:11px;color:var(--tx2)">ID #${esc(String(e.malId))}</span>
       ${window.window.SETTINGS?.malRefreshToken
         ? `<span style="font-size:10px;color:#4ade80;margin-left:2px">● Connected</span>
            <button onclick="event.stopPropagation();_syncMALListEntry(DATA.find(x=>x.id==='${e.id}')).catch(()=>toast('MAL sync failed','#fb7185'))"
-             style="margin-left:auto;font-size:11px;color:#00e5ff;background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.2);border-radius:4px;padding:3px 9px;cursor:pointer;white-space:nowrap">↻ Sync Now</button>`
+             style="margin-left:auto;font-size:11px;color:var(--ac);background:rgba(var(--ac-rgb),.08);border:1px solid rgba(var(--ac-rgb),.2);border-radius:4px;padding:3px 9px;cursor:pointer;white-space:nowrap">↻ Sync Now</button>`
         : `<span style="margin-left:auto;font-size:11px;color:#fb7185">● Not connected</span>`
       }
     </div>` : ''}
@@ -718,7 +718,7 @@ function renderLinkedEntries(entry) {
           ${_mstag(le.status)}
           ${grpOrd}
           <span class="linked-progress">${st.cur}/${st.tot||'?'} eps</span>
-          ${le.malId ? `<span style="font-size:9px;background:rgba(0,229,255,.08);color:rgba(0,229,255,.55);border:1px solid rgba(0,229,255,.15);border-radius:3px;padding:1px 4px">MAL</span>` : ''}
+          ${le.malId ? `<span style="font-size:9px;background:rgba(var(--ac-rgb),.08);color:rgba(var(--ac-rgb),.55);border:1px solid rgba(var(--ac-rgb),.15);border-radius:3px;padding:1px 4px">MAL</span>` : ''}
         </div>
       </div>
       <div class="linked-controls" onclick="event.stopPropagation()">
@@ -950,7 +950,7 @@ function renderFormPanel(e) {
       <!-- ── MAL Search ── -->
       <div id="mal-search-wrap" style="position:relative;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--brd)">
         <label class="flbl" style="display:flex;align-items:center;gap:5px;margin-bottom:5px">
-          <span style="font-size:9px;background:rgba(0,229,255,.12);color:#00e5ff;border:1px solid rgba(0,229,255,.25);border-radius:3px;padding:1px 5px;font-weight:800;letter-spacing:.5px">MAL</span>
+          <span style="font-size:9px;background:rgba(var(--ac-rgb),.12);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.25);border-radius:3px;padding:1px 5px;font-weight:800;letter-spacing:.5px">MAL</span>
           Search MyAnimeList to autofill
         </label>
         <input class="fin" id="mal-search-inp" placeholder="Search anime title…"
@@ -1156,7 +1156,7 @@ async function _syncMALListEntry(entry, silent = false) {
   if (data.updated) {
     ls.setStr('ac_mal_last_sync', String(Date.now()));
     ls.setStr('ac_mal_last_sync_title', entry.title || '');
-    if (!silent) toast('✓ MAL synced: ' + (entry.title || 'entry updated'), '#00e5ff');
+    if (!silent) toast('✓ MAL synced: ' + (entry.title || 'entry updated'), 'var(--ac)');
   }
   return data.updated || false;
 }
@@ -1330,7 +1330,7 @@ function ctxPin(id) {
 }
 
 function renderSectionStub(id, c) {
-  const meta = { games:{icon:'◈',color:'#f59e0b',phase:5}, books:{icon:'◎',color:'#a78bfa',phase:6}, music:{icon:'♪',color:'#fb923c',phase:7}, settings:{icon:'⚙',color:'#8888aa',phase:8} };
+  const meta = { games:{icon:'◈',color:'var(--ac)',phase:5}, books:{icon:'◎',color:'var(--ac)',phase:6}, music:{icon:'♪',color:'var(--ac)',phase:7}, settings:{icon:'⚙',color:'var(--ac)',phase:8} };
   const m = meta[id]||{icon:'?',color:'var(--ac)',phase:'?'};
   c.innerHTML=`<div style="font-family:var(--fd);font-size:clamp(18px,3vw,30px);font-weight:700;margin-bottom:16px;letter-spacing:1px;text-transform:uppercase;color:${m.color}">${m.icon} ${id.charAt(0).toUpperCase()+id.slice(1)} Codex</div>
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);padding:40px 24px;text-align:center;color:var(--tx2)">

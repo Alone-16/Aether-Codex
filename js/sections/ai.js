@@ -279,7 +279,7 @@ Go to **Settings → AI Assistant** to paste it, or type it below:`);
 
 function saveAIKeyFromInput() {
   const val = document.getElementById('ai-key-inp')?.value?.trim();
-  if (!val) { toast('Please enter an API key', 'var(--cr)'); return; }
+  if (!val) { toast('Please enter an API key', 'var(--err)'); return; }
   setAIKey(val);
   AI_HISTORY = [];
   renderAIMessages();

@@ -35,9 +35,9 @@ export function nav(id, push = true) {
     document.documentElement.setAttribute('data-section', id);
 
     const sectionBg = {
-      home:'#070d0b', media:'#07000f', games:'#080600',
-      books:'#f5f0e8', music:'#080400', vault:'#f0eefa',
-      log:'#010c14', tools:'#080006', settings:'#0a0a12', notes:'#d0e8d0',
+      home:'#000000', media:'#000000', games:'#000000',
+      books:'#000000', music:'#000000', vault:'#000000',
+      log:'#000000', tools:'#000000', settings:'#000000', notes:'#000000',
     };
     document.documentElement.style.background      = sectionBg[id] || sectionBg.home;
     document.documentElement.style.backgroundColor = sectionBg[id] || sectionBg.home;

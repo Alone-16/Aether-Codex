@@ -84,7 +84,7 @@ const migration = await import('./shared/migration.js').catch(() => null);
         window.toast(
           `✓ Schema updated: ${result.entriesAfter} flat entries ` +
           `(${result.groups} group${result.groups !== 1 ? 's' : ''} expanded)`,
-          '#34d399'
+          'var(--ac)'
         );
       }
     } catch(e) {
