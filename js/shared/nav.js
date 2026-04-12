@@ -9,6 +9,8 @@ import {
 
 import { renderPage } from './routing.js';
 
+import './crypto.js'; // vault session state (VAULT_UNLOCKED, etc.) — load with nav
+
 // ── openMob / closeMob are defined in drive.js but used here.
 //    We import them lazily (patched in by drive.js) to avoid a hard
 //    circular dependency at parse time.
@@ -58,7 +60,7 @@ export function nav(id, push = true) {
       GAMES_UNLOCKED = false; clearTimeout(GAMES_IDLE_TIMER);
     }
     // Auto-lock vault when leaving
-    if (CURRENT !== 'vault' && typeof VAULT_UNLOCKED !== 'undefined') lockVaultOnNav();
+    if (CURRENT !== 'vault' && typeof lockVaultOnNav === 'function') lockVaultOnNav();
 
     // Section-specific search handlers
     if      (id === 'games') srch.oninput = e => { GSEARCH = e.target.value.toLowerCase(); renderGamesBody(); };

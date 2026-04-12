@@ -806,7 +806,7 @@ Object.assign(window, {
   // Panel
   openGameDetail, renderGameDetailPanel,
   openAddGame, openEditGame, openGameForm, renderGameFormPanel,
-  saveGame, askDelGame,
+  saveGame, saveGames, askDelGame,
 
   // Form helpers
   gamePartHtml, gamePtInnerHtml,

@@ -112,6 +112,16 @@ export function fmtDate(d)    { if (!d) return '—'; return new Date(d + 'T00:0
 export function h2r(hex, a)   { const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16); return `rgba(${r},${g},${b},${a})`; }
 export function gbyid(id)     { return GENRES.find(g => g.id === id) || GENRES[0]; }
 export function estTime(eps, dur) { if (!eps) return '—'; const tot=eps*((parseInt(dur)||24)/60); const h=Math.floor(tot),m=Math.round((tot-h)*60); return h ? `~${h}h${m>0?' '+m+'m':''}` : ` ~${m}m`; }
+
+/** Flat entries only (after V3 migration). */
+export function entryStats(e) {
+  const dur = parseInt(e.epDuration) || 24;
+  const cur = parseInt(e.epCur || 0);
+  const tot = parseInt(e.epTot || 0);
+  const pct = tot ? Math.round(cur / tot * 100) : (cur > 0 ? 100 : 0);
+  return { cur, tot, pct, time: estTime(tot || cur, dur) };
+}
+
 export function fmtMin(min)   { if (!min) return '—'; const d=Math.floor(min/1440),h=Math.floor((min%1440)/60),m=min%60; if(d>0) return `${d}d ${h}h`; if(h>0) return `${h}h${m>0?' '+m+'m':''}`; return `${m}m`; }
 
 export const SL  = { watching:'▶ Watching', completed:'✓ Done', on_hold:'⏸ On Hold', dropped:'✗ Dropped', plan:'◻ Planned', upcoming:'◉ Upcoming', not_started:'○ Not Started' };

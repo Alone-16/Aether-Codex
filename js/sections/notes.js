@@ -2,13 +2,22 @@
 //  NOTES SECTION — Google-Keep-style notes, lists & images
 // ═══════════════════════════════════════════════════════
 
+import {
+  VAULT_CRYPTO_KEY,
+  VAULT_CRYPTO_SALT,
+  VAULT_UNLOCKED,
+  _b64,
+  _unb64,
+} from '../shared/crypto.js';
+
 const NOTES_KEY     = 'ac_v4_notes';
 const NOTES_ENC_KEY = 'ac_v4_notes_enc';
 
 function loadNotes()  { return ls.get(NOTES_KEY) || []; }
-function saveNotes(d) { ls.set(NOTES_KEY, d); ls.setStr(K.SAVED, String(Date.now())); if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync(); }
+function saveNotes(d) { NDATA = d; window.NDATA = d; ls.set(NOTES_KEY, d); ls.setStr(K.SAVED, String(Date.now())); if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync(); }
 
 let NDATA          = loadNotes();
+window.NDATA = NDATA;
 let NSEARCH        = '';
 let NPANEL         = null;
 let NEDIT_ID       = null;
@@ -525,4 +534,5 @@ Object.assign(window, {
   changeNoteColor, toggleNotePin, quickNotePin, quickNoteDelete, toggleNoteLock,
   closeNotePanel,
   unlockPrivateNotes, lockPrivateNotes,
+  saveNotes,
 });

@@ -2,6 +2,8 @@
 //  MEDIA SECTION
 // ═══════════════════════════════
 
+import { toast, showConfirm, showAlert, closePanel } from '../shared/ui.js';
+
 /* ---------- visual helpers ---------- */
 function _mediaStatusBar(s) {
   const map = {
@@ -377,17 +379,6 @@ function toggleColl(s) {
   renderMediaBody();
 }
 
-/**
- * entryStats(e) — works with flat entries only (after V3 migration).
- */
-function entryStats(e) {
-  const dur = parseInt(e.epDuration) || 24;
-  const cur = parseInt(e.epCur || 0);
-  const tot = parseInt(e.epTot || 0);
-  const pct = tot ? Math.round(cur / tot * 100) : (cur > 0 ? 100 : 0);
-  return { cur, tot, pct, time: estTime(tot || cur, dur) };
-}
-
 /** True if this linked franchise "part" is finished (status or full episode count). */
 function linkedPartIsComplete(e) {
   if (!e) return false;
@@ -622,13 +613,6 @@ function openPanel(mode, id) {
   if (mode === 'detail') { const e = DATA.find(x=>x.id===id); if (e) renderDetailPanel(e); }
   else if (mode === 'add')  renderFormPanel(null);
   else if (mode === 'edit') { const e = DATA.find(x=>x.id===id); if (e) renderFormPanel(e); }
-}
-function closePanel() {
-  PANEL = null; PEDIT = null;
-  document.getElementById('rpanel').classList.remove('open');
-  document.getElementById('poverlay').classList.remove('show');
-  document.getElementById('content').classList.remove('pushed');
-  render();
 }
 function openDetail(id) { openPanel('detail', id); }
 function openEdit(id)   { openPanel('edit',   id); }
@@ -1587,7 +1571,7 @@ Object.assign(window, {
 
   // List / grid
   renderList, expandRows, filteredData,
-  toggleColl, entryStats, activeSeason, rowHtml,
+  toggleColl, activeSeason, rowHtml,
 
   // Quick actions
   quickEp, quickTlEp,
@@ -1596,7 +1580,7 @@ Object.assign(window, {
   renderDash, renderUpcoming, renderIncomplete,
 
   // Panel
-  openPanel, closePanel, openDetail, openEdit, openAdd, openAddLinkedEntry,
+  openPanel, openDetail, openEdit, openAdd, openAddLinkedEntry,
   renderDetailPanel, renderFormPanel, saveEntry,
 
   // Linking

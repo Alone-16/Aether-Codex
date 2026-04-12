@@ -1,3 +1,15 @@
+import {
+  _deriveKey,
+  _b64,
+  _unb64,
+  VAULT_CRYPTO_KEY,
+  VAULT_CRYPTO_SALT,
+  VAULT_UNLOCKED,
+  setVaultCryptoKey,
+  setVaultCryptoSalt,
+  setVaultUnlocked,
+  lockVaultCrypto,
+} from '../shared/crypto.js';
 
 // ═══════════════════════════════════════════════════════
 //  VAULT ENCRYPTION — Web Crypto API (AES-GCM + PBKDF2)
@@ -6,21 +18,6 @@
 // ═══════════════════════════════════════════════════════
 const VAULT_ENC_KEY  = 'ac_v4_vault_enc';  // encrypted store — private links only
 const VAULT_SALT_KEY = 'ac_v4_vault_salt'; // (legacy — kept for compat)
-let   VAULT_CRYPTO_KEY  = null;            // in-memory CryptoKey, cleared on lock
-let   VAULT_CRYPTO_SALT = null;            // Uint8Array salt for current key
-
-// ── Helpers ──
-function _b64(buf)  { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
-function _unb64(s)  { return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
-
-async function _deriveKey(password, salt) {
-  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey(
-    { name:'PBKDF2', salt, iterations:310000, hash:'SHA-256' },
-    km,
-    { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']
-  );
-}
 
 async function vaultEncrypt(data, password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -84,15 +81,15 @@ async function handleVaultPasswordSetup(btn) {
   btn.textContent = 'Encrypting...'; btn.disabled = true;
   try {
     const salt = crypto.getRandomValues(new Uint8Array(16));
-    VAULT_CRYPTO_KEY  = await _deriveKey(pw1, salt);
-    VAULT_CRYPTO_SALT = salt;
+    setVaultCryptoKey(await _deriveKey(pw1, salt));
+    setVaultCryptoSalt(salt);
     // Encrypt whatever is already in VDATA_PRIVATE (may include a pending link)
     await saveVaultEncrypted(VDATA_PRIVATE);
     ls.setStr('ac_vault_pw_set', '1');
     localStorage.removeItem('ac_v4_vault');
     localStorage.removeItem(VAULT_KEY);
     overlay.remove();
-    VAULT_UNLOCKED = true;
+    setVaultUnlocked(true);
     startVaultIdleTimer();
     toast('🔐 Vault password created — private section unlocked', 'var(--cd)');
     if (typeof renderVaultBody === 'function') renderVaultBody();
@@ -100,7 +97,7 @@ async function handleVaultPasswordSetup(btn) {
   } catch(e) {
     errEl.textContent = 'Error: ' + e.message;
     btn.textContent = 'Create'; btn.disabled = false;
-    VAULT_CRYPTO_KEY = null; VAULT_CRYPTO_SALT = null;
+    lockVaultCrypto();
   }
 }
 
@@ -143,8 +140,8 @@ async function handleVaultUnlock(btn) {
     const toPublic  = decrypted.filter(l => l.locked !== true);
     const toPrivate = decrypted.filter(l => l.locked === true);
 
-    VAULT_CRYPTO_KEY  = key;
-    VAULT_CRYPTO_SALT = salt;
+    setVaultCryptoKey(key);
+    setVaultCryptoSalt(salt);
 
     if (toPublic.length > 0) {
       const existingIds = new Set(VDATA_PUBLIC.map(l => l.id));
@@ -158,7 +155,7 @@ async function handleVaultUnlock(btn) {
     }
 
     VDATA_PRIVATE  = toPrivate;
-    VAULT_UNLOCKED = true;
+    setVaultUnlocked(true);
     ls.del(VAULT_KEY);
     ls.del('ac_v4_vault');
     startVaultIdleTimer();
@@ -168,16 +165,14 @@ async function handleVaultUnlock(btn) {
   } catch(e) {
     errEl.textContent = '✗ Wrong password or corrupted data';
     btn.textContent = 'Unlock'; btn.disabled = false;
-    VAULT_CRYPTO_KEY = null; VAULT_CRYPTO_SALT = null;
+    lockVaultCrypto();
   }
 }
 
-// ── Lock private section only — public links stay visible ──
-function lockVaultCrypto() {
-  VAULT_UNLOCKED    = false;
-  VAULT_CRYPTO_KEY  = null;
-  VAULT_CRYPTO_SALT = null;
-  VDATA_PRIVATE     = [];      // wipe private data from memory
+// ── Full lock: crypto session + private link data in memory ──
+function lockVault() {
+  lockVaultCrypto();
+  VDATA_PRIVATE = [];
   clearTimeout(VAULT_IDLE_TIMER);
   if (typeof renderVaultBody === 'function') renderVaultBody();
 }
@@ -191,6 +186,7 @@ const VAULT_PUBLIC_KEY = 'ac_v4_vault_public';  // non-private links (plain, alw
 
 function loadVaultPublic()  { return ls.get(VAULT_PUBLIC_KEY) || []; }
 function saveVaultPublic(d) { ls.set(VAULT_PUBLIC_KEY, d); ls.setStr(K.SAVED, String(Date.now())); if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync(); }
+function reloadVaultPublicFromStorage() { VDATA_PUBLIC = loadVaultPublic(); }
 function loadVault()  { return []; }   // kept for call-site compat
 function saveVault(d) { /* disabled — use saveVaultPublic or saveVaultEncrypted */ }
 
@@ -209,23 +205,21 @@ function saveVault(d) { /* disabled — use saveVaultPublic or saveVaultEncrypte
 let VDATA_PUBLIC   = loadVaultPublic(); // always accessible, no password needed
 let VDATA_PRIVATE  = [];                // decrypted private links (password required)
 let VSEARCH        = '';
-let VAULT_UNLOCKED = false;
 let VAULT_IDLE_TIMER = null;
 let VEDIT_ID       = null;
 
 // ── Auto-lock private section when navigating away ──
 function lockVaultOnNav() {
-  if (VAULT_UNLOCKED) lockVaultCrypto();
+  if (VAULT_UNLOCKED) lockVault();
 }
 
 function startVaultIdleTimer() {
   clearTimeout(VAULT_IDLE_TIMER);
   const mins = window.SETTINGS?.idleTimeout || 5;
   VAULT_IDLE_TIMER = setTimeout(() => {
-    VAULT_UNLOCKED    = false;
-    VAULT_CRYPTO_KEY  = null;
-    VAULT_CRYPTO_SALT = null;
-    VDATA_PRIVATE     = [];
+    if (!VAULT_UNLOCKED) return;
+    lockVaultCrypto();
+    VDATA_PRIVATE = [];
     if (CURRENT === 'vault') renderVaultBody();
   }, mins * 60 * 1000);
 }
@@ -237,7 +231,6 @@ function unlockVault() {
   else showVaultPasswordSetup(() => {});
 }
 
-function lockVault() { lockVaultCrypto(); }
 
 // ── Favicon helper ──
 function faviconUrl(url) {
@@ -578,9 +571,7 @@ function resetVaultEncryption() {
     () => {
       ls.del(VAULT_ENC_KEY);
       ls.del('ac_vault_pw_set');
-      VAULT_CRYPTO_KEY  = null;
-      VAULT_CRYPTO_SALT = null;
-      VAULT_UNLOCKED    = false;
+      lockVaultCrypto();
       // Re-open setup (VDATA_PRIVATE still in memory, will be re-encrypted)
       showVaultPasswordSetup(() => {});
     },
@@ -593,11 +584,12 @@ function resetVaultEncryption() {
 Object.assign(window, {
   renderVault, renderVaultBody,
   vaultCardHtml, copyVaultLink, openPrivateTab,
-  openAddLink, openEditLink, renderVaultForm, saveVaultLink,
+  openAddLink, openEditLink, renderVaultForm, saveVaultLink, saveVaultPublic,
   askDelLink,
   unlockVault, lockVault, lockVaultOnNav, startVaultIdleTimer,
   showVaultPasswordSetup, handleVaultPasswordSetup,
   showVaultPasswordUnlock, handleVaultUnlock,
   forceReEncryptVault, resetVaultEncryption,
   checkVaultMigration, faviconUrl,
+  reloadVaultPublicFromStorage,
 });

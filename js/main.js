@@ -5,7 +5,7 @@
 // ── Shared infrastructure (must come first) ──────────────────────
 import {
   DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K,
-  uid, esc, today, fmtDate, h2r, gbyid, estTime, fmtMin,
+  uid, esc, today, fmtDate, h2r, gbyid, estTime, entryStats, fmtMin,
   saveData, saveGenres,
   setDATA, setGENRES, setGACTIVE, setCURRENT, setSEARCH, setMEDIA_PAGE,
   PANEL, PEDIT, FORM_TL, COLLAPSED, DDRG, FDRG,
@@ -16,6 +16,8 @@ import {
   SECTION_META, render,
 } from './shared/utils.js';
 
+import { toast, showConfirm, showAlert, closePanel } from './shared/ui.js';
+
 import { renderPage } from './shared/routing.js';
 import { nav }        from './shared/nav.js';
 import {
@@ -25,9 +27,10 @@ import {
 // ── Expose globals IMMEDIATELY so inline onclick="" handlers work ──
 Object.assign(window, {
   nav, render, renderPage,
+  toast, showConfirm, showAlert, closePanel,
   openMob, closeMob, driveAction,
   DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K,
-  uid, esc, today, fmtDate, h2r, gbyid, estTime, fmtMin,
+  uid, esc, today, fmtDate, h2r, gbyid, estTime, entryStats, fmtMin,
   saveData, saveGenres,
   setDATA, setGENRES, setGACTIVE, setCURRENT, setSEARCH, setMEDIA_PAGE,
   PANEL, PEDIT, FORM_TL, COLLAPSED, DDRG, FDRG,

@@ -1,0 +1,2 @@
+# Cloudflare Pages: OAuth return path serves the SPA (must match drive.js OAUTH_CALLBACK_PATH)
+/auth/callback /index.html 200

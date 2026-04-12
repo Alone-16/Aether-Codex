@@ -8,11 +8,12 @@ const YT_SCOPE      = 'https://www.googleapis.com/auth/youtube.readonly';
 function loadMusic()      { return ls.get(MUSIC_KEY) || []; }
 function saveMusic(d) { MDATA = d; window.MDATA = d; ls.set(MUSIC_KEY, d); ls.setStr(K.SAVED, String(Date.now())); window.scheduleDriveSync(); }
 function loadPlaylists()  { return ls.get(MUSIC_PL_KEY) || []; }
-function savePlaylists(p) { ls.set(MUSIC_PL_KEY, p); }
+function savePlaylists(p) { MPLAYLISTS = p; window.MPLAYLISTS = p; ls.set(MUSIC_PL_KEY, p); }
 
 let MDATA      = loadMusic();
 window.MDATA = MDATA;
 let MPLAYLISTS = loadPlaylists();
+window.MPLAYLISTS = MPLAYLISTS;
 let MUSIC_PAGE = 'library';
 let MSEARCH    = '';
 let YT_TOKEN_CLIENT = null;
@@ -476,6 +477,7 @@ function renderMusicDash(c) {
 // ── Register all music functions as globals ───────────────────────────────
 Object.assign(window, {
   renderMusic, renderMusicBody, setMusicPage,
+  saveMusic, savePlaylists,
   handleMusicSync, syncYouTubePlaylists,
   renderMusicLibrary, songRowHtml, fmtTotalDuration,
   openSongDetail, delSong,

@@ -1,6 +1,6 @@
 import {
   DATA, GENRES, DATA_VERSION,
-  saveData, saveGenres, setDATA,
+  saveData, saveGenres, setDATA, setGACTIVE,
   ls, K,
   render,
 } from '../shared/utils.js';
@@ -903,94 +903,188 @@ function saveIdleTimeout() {
 function onSearch(v){SEARCH=v.toLowerCase();if(CURRENT==='media')renderMediaBody();}
 
 // ═══════════════════════════════
-//  EXPORT / IMPORT
+//  EXPORT / IMPORT  (same shape as Google Drive sync + local prefs)
 // ═══════════════════════════════
-function exportData(){
-  const payload={version:DATA_VERSION,exported:new Date().toISOString(),data:DATA,genres:GENRES};
-  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download='AetherCodex_backup_'+new Date().toISOString().slice(0,10)+'.json';
-  a.style.display='none';
+const _BK_VAULT_ENC = 'ac_v4_vault_enc';
+const _BK_VAULT_PUB = 'ac_v4_vault_public';
+const _BK_NOTES_ENC = 'ac_v4_notes_enc';
+const _BK_LOG = 'ac_v4_log';
+const _BK_NOTES = 'ac_v4_notes';
+const _BK_GAMES = 'ac_v4_games';
+const _BK_BOOKS = 'ac_v4_books';
+const _BK_MUSIC = 'ac_v4_music';
+const _BK_PLAYLISTS = 'ac_v4_music_playlists';
+const _BK_SHARE = 'ac_v4_share';
+const _BK_AI = 'ac_claude_key';
+const _BK_PIN = 'ac_vault_pin';
+
+function _bkArr(mem, key) {
+  return Array.isArray(mem) ? mem : (ls.get(key) || []);
+}
+
+function _mergeByUpdatedAt(local, remote) {
+  const map = new Map();
+  (local || []).forEach(e => { if (e && e.id != null) map.set(e.id, e); });
+  (remote || []).forEach(e => {
+    if (!e || e.id == null) return;
+    const l = map.get(e.id);
+    if (!l || (e.updatedAt || 0) > (l.updatedAt || 0)) map.set(e.id, e);
+  });
+  return Array.from(map.values()).sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')));
+}
+
+function _mergeLogByTs(local, remote) {
+  const map = new Map();
+  (local || []).forEach(e => { if (e && e.id != null) map.set(e.id, e); });
+  (remote || []).forEach(e => {
+    if (!e || e.id == null) return;
+    const l = map.get(e.id);
+    if (!l || (e.ts || 0) > (l.ts || 0)) map.set(e.id, e);
+  });
+  return Array.from(map.values()).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+}
+
+function _applyBackupImport(p) {
+  const mergedMedia = _mergeByUpdatedAt(DATA, p.data);
+  setDATA(mergedMedia);
+  saveData(mergedMedia);
+
+  if (p.genres && Array.isArray(p.genres)) {
+    const gids = new Set(GENRES.map(g => g.id));
+    p.genres.filter(g => g && g.id && !gids.has(g.id)).forEach(g => GENRES.push(g));
+    saveGenres(GENRES);
+  }
+
+  if (p.games && Array.isArray(p.games) && typeof window.saveGames === 'function') {
+    window.saveGames(_mergeByUpdatedAt(_bkArr(window.GDATA, _BK_GAMES), p.games));
+  }
+  if (p.music && Array.isArray(p.music) && typeof window.saveMusic === 'function') {
+    window.saveMusic(_mergeByUpdatedAt(_bkArr(window.MDATA, _BK_MUSIC), p.music));
+  }
+  if (p.books && Array.isArray(p.books) && typeof window.saveBooks === 'function') {
+    window.saveBooks(_mergeByUpdatedAt(_bkArr(window.BDATA, _BK_BOOKS), p.books));
+  }
+  if (p.playlists && Array.isArray(p.playlists) && typeof window.savePlaylists === 'function') {
+    window.savePlaylists(p.playlists);
+  }
+  if (p.notes && Array.isArray(p.notes) && typeof window.saveNotes === 'function') {
+    window.saveNotes(_mergeByUpdatedAt(_bkArr(window.NDATA, _BK_NOTES), p.notes));
+  }
+  if (p.log && Array.isArray(p.log) && typeof window.saveLog === 'function') {
+    window.saveLog(_mergeLogByTs(_bkArr(window.LDATA, _BK_LOG), p.log));
+  }
+
+  if (p.vault_enc != null) {
+    ls.set(_BK_VAULT_ENC, p.vault_enc);
+    if (p.vaultPwSet != null && String(p.vaultPwSet) !== '') {
+      ls.setStr('ac_vault_pw_set', String(p.vaultPwSet));
+    } else if (!ls.str('ac_vault_pw_set')) {
+      ls.setStr('ac_vault_pw_set', '1');
+    }
+  }
+  if (p.vault_public && Array.isArray(p.vault_public)) {
+    const local = ls.get(_BK_VAULT_PUB) || [];
+    const remIds = new Set(local.map(l => l.id));
+    const merged = [...local, ...p.vault_public.filter(l => l && !remIds.has(l.id))];
+    if (typeof window.saveVaultPublic === 'function') {
+      window.saveVaultPublic(merged);
+      if (typeof window.reloadVaultPublicFromStorage === 'function') window.reloadVaultPublicFromStorage();
+    } else {
+      ls.set(_BK_VAULT_PUB, merged);
+    }
+  }
+  if (p.notes_enc != null) {
+    ls.set(_BK_NOTES_ENC, p.notes_enc);
+  }
+
+  if (p.settings && typeof p.settings === 'object' && !Array.isArray(p.settings)) {
+    saveSettings(p.settings);
+  }
+  if (p.genreActive && typeof p.genreActive === 'string') {
+    setGACTIVE(p.genreActive);
+    ls.setStr(K.GENRE, p.genreActive);
+  }
+  if (p.lastSection && typeof p.lastSection === 'string') {
+    try { localStorage.setItem('ac_last_section', p.lastSection); } catch (e) {}
+  }
+  if (p.share && typeof p.share === 'object' && !Array.isArray(p.share)) {
+    ls.set(_BK_SHARE, p.share);
+  }
+  if (p.pin != null && String(p.pin) !== '') {
+    ls.setStr(_BK_PIN, String(p.pin));
+  }
+  if (p.aiApiKey != null && String(p.aiApiKey) !== '' && typeof window.setAIKey === 'function') {
+    window.setAIKey(String(p.aiApiKey));
+  }
+}
+
+function exportData() {
+  const savedAt = parseInt(ls.str(K.SAVED) || '0', 10) || Date.now();
+  const payload = {
+    version: DATA_VERSION,
+    exported: new Date().toISOString(),
+    savedAt,
+    data: DATA,
+    genres: GENRES,
+    games: _bkArr(window.GDATA, _BK_GAMES),
+    music: _bkArr(window.MDATA, _BK_MUSIC),
+    playlists: _bkArr(window.MPLAYLISTS, _BK_PLAYLISTS),
+    books: _bkArr(window.BDATA, _BK_BOOKS),
+    vault_enc: ls.get(_BK_VAULT_ENC) ?? null,
+    vault_public: ls.get(_BK_VAULT_PUB) || [],
+    log: _bkArr(window.LDATA, _BK_LOG),
+    notes: _bkArr(window.NDATA, _BK_NOTES),
+    notes_enc: ls.get(_BK_NOTES_ENC) ?? null,
+    settings: loadSettings(),
+    genreActive: ls.str(K.GENRE) || null,
+    lastSection: (() => { try { return localStorage.getItem('ac_last_section'); } catch (e) { return null; } })(),
+    share: ls.get(_BK_SHARE) || null,
+    vaultPwSet: ls.str('ac_vault_pw_set') || null,
+    pin: ls.str(_BK_PIN) || null,
+    aiApiKey: ls.str(_BK_AI) || null,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'AetherCodex_backup_' + new Date().toISOString().slice(0, 10) + '.json';
+  a.style.display = 'none';
   document.body.appendChild(a);
   a.click();
-  setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},0);
-  toast('✓ Backup exported');
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 0);
+  toast('✓ Full backup exported');
 }
 
-function importFile(){
-  const inp=document.createElement('input');inp.type='file';inp.accept='.json';
-  inp.onchange=e=>{const file=e.target.files[0];if(!file)return;
-    const r=new FileReader();
-    r.onload=ev=>{try{
-      const p=JSON.parse(ev.target.result);
-      if(!p.data||!Array.isArray(p.data))throw new Error('Invalid file');
-      showConfirm(`Import ${p.data.length} entries? This will merge with your current data.`,()=>{
-        const ids=new Set(DATA.map(x=>x.id));
-        const fresh=p.data.filter(x=>!ids.has(x.id));
-        const merged=DATA.concat(fresh);
-        setDATA(merged);
-        saveData(merged);
-        if(p.genres){const gids=new Set(GENRES.map(g=>g.id));p.genres.filter(g=>!gids.has(g.id)).forEach(g=>GENRES.push(g));saveGenres(GENRES);}
-        render();toast(`✓ Imported ${fresh.length} new entries`);
-      },{title:'Import Data?',okLabel:'Import',danger:false});
-    }catch(err){toast('✗ '+err.message);}};
+function importFile() {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = '.json';
+  inp.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      try {
+        const p = JSON.parse(ev.target.result);
+        if (!p.data || !Array.isArray(p.data)) throw new Error('Invalid file');
+        const hasExtra = !!(p.games || p.music || p.books || p.playlists || p.log || p.notes || p.vault_enc || p.vault_public || p.notes_enc || p.settings);
+        const msg = hasExtra
+          ? `Merge this backup (${p.data.length} media rows${p.savedAt ? ', dated ' + new Date(p.savedAt).toLocaleString() : ''}) with your device? Newer copies of each item win.`
+          : `Import ${p.data.length} media entries? This will merge with your current data.`;
+        showConfirm(msg, () => {
+          _applyBackupImport(p);
+          if (typeof window.applySettings === 'function') window.applySettings();
+          render();
+          toast('✓ Import complete');
+        }, { title: hasExtra ? 'Import full backup?' : 'Import Data?', okLabel: 'Import', danger: false });
+      } catch (err) {
+        toast('✗ ' + err.message);
+      }
+    };
     r.readAsText(file);
-  };inp.click();
+  };
+  inp.click();
 }
-
-// ═══════════════════════════════
-//  TOAST
-// ═══════════════════════════════
-// ═══ CUSTOM MODALS ═══
-function showConfirm(msg, onOk, opts={}) {
-  const isDanger = opts.danger !== false;
-  const title    = opts.title || (isDanger ? '⚠ Confirm' : 'Confirm');
-  const okLabel  = opts.okLabel || (isDanger ? 'Delete' : 'OK');
-  const el = document.createElement('div');
-  el.className = 'modal-overlay';
-  el.innerHTML = `
-    <div class="modal-box">
-      <div class="modal-title">${title}</div>
-      <div class="modal-msg">${msg}</div>
-      <div class="modal-btns">
-        <button class="modal-btn cancel" id="modal-cancel">Cancel</button>
-        <button class="modal-btn ${isDanger?'danger':'confirm'}" id="modal-ok">${okLabel}</button>
-      </div>
-    </div>`;
-  document.body.appendChild(el);
-  el.querySelector('#modal-cancel').onclick = () => el.remove();
-  el.querySelector('#modal-ok').onclick     = () => { el.remove(); onOk(); };
-  el.addEventListener('click', e => { if(e.target===el) el.remove(); });
-  setTimeout(() => el.querySelector('#modal-ok').focus(), 50);
-}
-
-function showAlert(msg, opts={}) {
-  const title = opts.title || 'Notice';
-  const el = document.createElement('div');
-  el.className = 'modal-overlay';
-  el.innerHTML = `
-    <div class="modal-box">
-      <div class="modal-title">${title}</div>
-      <div class="modal-msg">${msg}</div>
-      <div class="modal-btns">
-        <button class="modal-btn confirm" id="modal-ok">OK</button>
-      </div>
-    </div>`;
-  document.body.appendChild(el);
-  el.querySelector('#modal-ok').onclick = () => el.remove();
-  el.addEventListener('click', e => { if(e.target===el) el.remove(); });
-  setTimeout(() => el.querySelector('#modal-ok').focus(), 50);
-}
-
-function toast(msg,col){
-  const el=document.createElement('div');el.className='toast-el';
-  if(col)el.style.borderLeftColor=col;el.textContent=msg;
-  document.body.appendChild(el);
-  setTimeout(()=>{el.style.opacity='0';setTimeout(()=>el.remove(),300)},2200);
-}
-
 
 // ── Register all functions as globals so inline onclick="" handlers work ──
 // ── Register all settings functions as globals ────────────────────────────
@@ -1009,6 +1103,5 @@ Object.assign(window, {
   connectMALAccount, startMALBulkSync, disconnectMALAccount,
   clearPin, saveIdleTimeout,
   onSearch, exportData, importFile,
-  showConfirm, showAlert, toast,
   saveSettings,
 });

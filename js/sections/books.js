@@ -491,7 +491,7 @@ Object.assign(window, {
   openBookDetail, renderBookDetailPanel,
   openAddBook, openEditBook, openBookForm, renderBookFormPanel,
   bookVolHtml, addBookVol, removeBookVol, refreshBFtl, collectBookVols,
-  saveBook, askDelBook,
+  saveBook, saveBooks, askDelBook,
   renderBooksDash, renderBooksUpcoming,
   bstag,
 });

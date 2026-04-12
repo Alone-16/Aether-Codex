@@ -5,9 +5,10 @@ const LOG_KEY = 'ac_v4_log';
 const LOG_MAX_DAYS = 30;
 
 function loadLog()  { return ls.get(LOG_KEY) || []; }
-function saveLog(l) { ls.set(LOG_KEY, l); }
+function saveLog(l) { LDATA = l; window.LDATA = l; ls.set(LOG_KEY, l); }
 
 let LDATA   = loadLog();
+window.LDATA = LDATA;
 let LFILTER = 'all';
 let LSEARCH = '';
 
@@ -117,6 +118,6 @@ function clearOldLogs() {
 // ── Register all log functions as globals ─────────────────────────────────
 Object.assign(window, {
   renderLog, renderLogBody,
-  setLogFilter, clearOldLogs, addLog,
+  setLogFilter, clearOldLogs, addLog, saveLog,
   fmtLogTime,
 });

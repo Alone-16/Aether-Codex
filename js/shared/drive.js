@@ -39,8 +39,8 @@ patchScheduleDriveSync(_scheduleDriveSyncImpl);
 patchCloseMob(closeMob);   // nav.js needs closeMob; avoid circular import at parse time
 
 // ── Safe toast wrapper ────────────────────────────────────────────────────
-// _toast() is defined in settings.js which loads after drive.js.
-// Use this instead of calling _toast() directly.
+// window.toast is assigned from shared/ui.js in main.js before sections load.
+// Use this instead of calling window.toast directly at module top level.
 function _toast(msg, col) {
   if (typeof window.toast === 'function') window.toast(msg, col);
   else console.info('[Drive]', msg);
@@ -213,11 +213,18 @@ function _startOAuthFlow() {
   }
 }
 
+/** Must match Google Cloud OAuth "Authorized redirect URIs" (e.g. https://aether-codex.pages.dev/auth/callback). */
+const OAUTH_CALLBACK_PATH = '/auth/callback';
+
 function _getRedirectUri() {
-  let path = location.pathname;
-  if (path.endsWith('/index.html')) path = path.slice(0, -'index.html'.length);
-  if (!path) path = '/';
-  return location.origin + path;
+  return location.origin + OAUTH_CALLBACK_PATH;
+}
+
+function _replaceOAuthUrlWithHash(section) {
+  const s = section || 'home';
+  try {
+    history.replaceState({}, '', '/#/' + s);
+  } catch (e) {}
 }
 
 function _showRedirectingOverlay(service = 'Google') {
@@ -300,7 +307,7 @@ async function _handleOAuthRedirect() {
   const redirectUri = _getRedirectUri();
   try {
     const section = (state || '').split(':')[1] || 'home';
-    history.replaceState({}, '', location.pathname + '#/' + section);
+    _replaceOAuthUrlWithHash(section);
   } catch(e){}
 
   const ov = document.getElementById('_oauth_overlay');
@@ -484,7 +491,7 @@ async function _handleMALRedirect() {
   try {
     const parts   = (state || '').split(':');
     const section = parts.slice(2).join(':') || 'settings';
-    history.replaceState({}, '', location.pathname + '#/' + section);
+    _replaceOAuthUrlWithHash(section);
   } catch(e) {}
 
   const ov = document.getElementById('_oauth_overlay');
