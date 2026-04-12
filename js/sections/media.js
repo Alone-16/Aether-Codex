@@ -1395,7 +1395,8 @@ function _malRenderDropdown(results) {
     return `<div style="display:flex;align-items:center;gap:9px;padding:8px 11px;cursor:pointer;border-bottom:1px solid var(--brd);transition:background .1s"
       onmouseenter="this.style.background='var(--surf3)'"
       onmouseleave="this.style.background='transparent'"
-      onclick="_malSelect('${payload}')">
+      data-payload="${payload}"
+      onclick="_malSelect(this.dataset.payload)">
       ${thumb}
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(displayTitle)}</div>
@@ -1499,7 +1500,7 @@ Object.assign(window, {
 
   // MAL
   malBulkSyncAll, malSearchInput, _syncMALListEntry,
-  runLinkedMigrationV3,
+  runLinkedMigrationV3, _malSelect,
 
   // Filter chips
   _renderFilterChips,
