@@ -58,6 +58,24 @@ function loadSettings() {
   return merged;
 }
 
+/** Strip OAuth tokens from exported settings (MAL reconnect after restore). */
+function sanitizeSettingsForExport(s) {
+  if (!s || typeof s !== 'object') return loadSettings();
+  return {
+    ...s,
+    malAccessToken: null,
+    malRefreshToken: null,
+    malTokenExpiry: null,
+  };
+}
+
+/** Remove token fields from imported settings so old backups cannot re-inject secrets. */
+function sanitizeSettingsForImport(s) {
+  if (!s || typeof s !== 'object' || Array.isArray(s)) return {};
+  const { malAccessToken, malRefreshToken, malTokenExpiry, ...rest } = s;
+  return rest;
+}
+
 /** Always persist a full, JSON-safe snapshot so partial merges never drop section prefs. */
 function saveSettings(s) {
   const base = loadSettings();
@@ -489,45 +507,34 @@ function renderSettingsStorage(el) {
 
 // ── APPEARANCE TAB ──
 function renderSettingsAI(el) {
-  const hasKey = !!getAIKey();
+  const legacyKey = ls.str('ac_claude_key');
   el.innerHTML = `
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
       <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
-        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">✦ Gemini API Key</div>
-        <div style="font-size:12px;color:var(--mu)">Your key is stored locally on this device only — never sent to GitHub</div>
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">✦ AI Assistant</div>
+        <div style="font-size:12px;color:var(--mu)">Gemini is called through your Cloudflare Worker; the API key is stored as a Worker secret, not in backups.</div>
       </div>
       <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
-        <div style="font-size:13px;color:${hasKey?'#4ade80':'var(--tx2)'}">
-          ${hasKey?'✓ API key is set on this device':'No API key set'}
-        </div>
-        <div style="display:flex;gap:8px">
-          <input type="password" id="ai-key-setting" placeholder="AIzaSy..." value="${hasKey?'••••••••••••••••':''}"
-            style="flex:1;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:8px 10px;font-size:13px;color:var(--tx);outline:none"
-            onfocus="if(this.value==='••••••••••••••••')this.value=''">
-          <button onclick="saveAIKeySetting()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">Save</button>
-        </div>
-        ${hasKey?`<button onclick="clearAIKey()" style="background:rgba(251,113,133,.08);color:#fb7185;border:1px solid rgba(251,113,133,.2);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;align-self:flex-start">Remove Key</button>`:''}
+        <div style="font-size:13px;color:#4ade80">✓ Server-side key (Worker env)</div>
         <div style="font-size:12px;color:var(--mu);line-height:1.6">
-          Get a free API key at <a href="https://aistudio.google.com" target="_blank" style="color:var(--ac)">aistudio.google.com</a> → Get API Key → Create API key.<br>
-          You'll need to paste it once per device.
+          Set <code style="font-size:11px;background:var(--surf2);padding:2px 6px;border-radius:4px">GEMINI_API_KEY</code> (or your Worker’s variable name) in Cloudflare → Workers → your worker → Settings → Variables and secrets.
         </div>
+        ${legacyKey ? `<button onclick="clearAIKey()" style="background:rgba(251,113,133,.08);color:#fb7185;border:1px solid rgba(251,113,133,.2);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;align-self:flex-start">Remove legacy browser API key</button>` : ''}
       </div>
     </div>`;
 }
 
 function saveAIKeySetting() {
-  const val = document.getElementById('ai-key-setting')?.value?.trim();
-  if (!val) { toast('Please enter an API key', 'var(--err)'); return; }
-  setAIKey(val); toast('✓ API key saved', 'var(--cd)');
-  renderSettingsAI(document.getElementById('settings-body'));
+  toast('API keys are configured in Cloudflare Worker secrets, not here.', 'var(--mu)');
 }
 
 function clearAIKey() {
-  showConfirm('Remove your Gemini API key from this device?', () => {
-    ls.del(AI_KEY_STORAGE); AI_HISTORY = [];
+  showConfirm('Remove the old browser-stored API key (if any)? This does not change Worker secrets.', () => {
+    ls.del('ac_claude_key');
+    if (typeof window.AI_HISTORY !== 'undefined') window.AI_HISTORY = [];
     renderSettingsAI(document.getElementById('settings-body'));
-    toast('API key removed');
-  }, { title:'Remove API Key?', okLabel:'Remove', danger:false });
+    toast('Legacy key removed');
+  }, { title:'Remove legacy key?', okLabel:'Remove', danger:false });
 }
 
 function setFontSize(v) {
@@ -915,8 +922,6 @@ const _BK_BOOKS = 'ac_v4_books';
 const _BK_MUSIC = 'ac_v4_music';
 const _BK_PLAYLISTS = 'ac_v4_music_playlists';
 const _BK_SHARE = 'ac_v4_share';
-const _BK_AI = 'ac_claude_key';
-const _BK_PIN = 'ac_vault_pin';
 
 function _bkArr(mem, key) {
   return Array.isArray(mem) ? mem : (ls.get(key) || []);
@@ -998,7 +1003,7 @@ function _applyBackupImport(p) {
   }
 
   if (p.settings && typeof p.settings === 'object' && !Array.isArray(p.settings)) {
-    saveSettings(p.settings);
+    saveSettings({ ...loadSettings(), ...sanitizeSettingsForImport(p.settings) });
   }
   if (p.genreActive && typeof p.genreActive === 'string') {
     setGACTIVE(p.genreActive);
@@ -1010,12 +1015,6 @@ function _applyBackupImport(p) {
   if (p.share && typeof p.share === 'object' && !Array.isArray(p.share)) {
     ls.set(_BK_SHARE, p.share);
   }
-  if (p.pin != null && String(p.pin) !== '') {
-    ls.setStr(_BK_PIN, String(p.pin));
-  }
-  if (p.aiApiKey != null && String(p.aiApiKey) !== '' && typeof window.setAIKey === 'function') {
-    window.setAIKey(String(p.aiApiKey));
-  }
 }
 
 function exportData() {
@@ -1024,6 +1023,8 @@ function exportData() {
     version: DATA_VERSION,
     exported: new Date().toISOString(),
     savedAt,
+    secretsExcluded: true,
+    backupNote: 'PIN, API keys, and OAuth tokens are not included. Re-enter secrets and reconnect accounts after restore.',
     data: DATA,
     genres: GENRES,
     games: _bkArr(window.GDATA, _BK_GAMES),
@@ -1035,13 +1036,10 @@ function exportData() {
     log: _bkArr(window.LDATA, _BK_LOG),
     notes: _bkArr(window.NDATA, _BK_NOTES),
     notes_enc: ls.get(_BK_NOTES_ENC) ?? null,
-    settings: loadSettings(),
+    settings: sanitizeSettingsForExport(loadSettings()),
     genreActive: ls.str(K.GENRE) || null,
     lastSection: (() => { try { return localStorage.getItem('ac_last_section'); } catch (e) { return null; } })(),
     share: ls.get(_BK_SHARE) || null,
-    vaultPwSet: ls.str('ac_vault_pw_set') || null,
-    pin: ls.str(_BK_PIN) || null,
-    aiApiKey: ls.str(_BK_AI) || null,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);

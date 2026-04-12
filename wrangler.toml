@@ -1,0 +1,4 @@
+# Cloudflare Pages — static site at repo root (no build). Match project name in dashboard if needed.
+name = "aether-codex"
+compatibility_date = "2025-04-01"
+pages_build_output_dir = "."

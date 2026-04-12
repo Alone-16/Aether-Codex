@@ -9,6 +9,11 @@ let AI_TYPING = false;
 function getAIKey() { return ls.str(AI_KEY_STORAGE) || null; }
 function setAIKey(k) { ls.setStr(AI_KEY_STORAGE, k); }
 
+function aiWorkerUrl() {
+  const w = typeof window !== 'undefined' && window._WORKER;
+  return (w && String(w).replace(/\/$/, '')) || 'https://aether-codex-ai.nadeempubgmobile2-0.workers.dev';
+}
+
 // ── Build context for Claude ──
 function buildAIContext() {
   const now = new Date();
@@ -98,23 +103,17 @@ async function sendAIMessage(userMsg) {
       ...AI_HISTORY
     ];
 
-    const res = await fetch(
-      'https://aether-codex-ai.nadeempubgmobile2-0.workers.dev',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(getAIKey() ? { 'X-User-Key': getAIKey() } : {})
-        },
-        body: JSON.stringify({ contents: withContext })
-      }
-    );
+    const res = await fetch(aiWorkerUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: withContext }),
+    });
 
     const data = await res.json();
 
     if (res.status === 401 || data?.error === 'no_key') {
       setAITyping(false);
-      appendAIMessage('assistant', '⚠️ Please set your **Gemini API key** in Settings → AI Assistant to use the AI.');
+      appendAIMessage('assistant', '⚠️ AI is not available: add **GEMINI_API_KEY** (or your Worker’s secret) in Cloudflare → Workers → your worker → Variables and secrets.');
       return;
     }
 
@@ -254,37 +253,15 @@ function toggleAI() {
   if(isMobile) panel.style.right='0';
   panel.style.transform = AI_OPEN ? 'translateY(0)' : 'translateY(100%)';
   panel.style.opacity = AI_OPEN ? '1' : '0';
-  if (AI_OPEN && !getAIKey()) showAIKeyPrompt();
-  else if (AI_OPEN) document.getElementById('ai-input')?.focus();
+  if (AI_OPEN) document.getElementById('ai-input')?.focus();
 }
 
 function showAIKeyPrompt() {
-  appendAIMessage('assistant', `👋 Hi! To use me, paste your **Gemini API key**.
-
-Get one free at [aistudio.google.com](https://aistudio.google.com) → Get API Key → Create API key in new project.
-
-Go to **Settings → AI Assistant** to paste it, or type it below:`);
-  // Show key input inline
-  const msgs = document.getElementById('ai-messages');
-  if (!msgs) return;
-  const inp = document.createElement('div');
-  inp.style.cssText = 'padding:8px 12px';
-  inp.innerHTML = `<div style="display:flex;gap:6px">
-    <input id="ai-key-inp" type="password" placeholder="AIzaSy..." style="flex:1;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:8px 10px;font-size:12px;color:var(--tx);outline:none">
-    <button onclick="saveAIKeyFromInput()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
-  </div>`;
-  msgs.appendChild(inp);
-  msgs.scrollTop = msgs.scrollHeight;
+  appendAIMessage('assistant', '👋 Ask about your lists or tell me to update entries. The API key is configured on your **Cloudflare Worker**, not in the browser.');
 }
 
 function saveAIKeyFromInput() {
-  const val = document.getElementById('ai-key-inp')?.value?.trim();
-  if (!val) { toast('Please enter an API key', 'var(--err)'); return; }
-  setAIKey(val);
-  AI_HISTORY = [];
-  renderAIMessages();
-  toast('✓ API key saved', 'var(--cd)');
-  appendAIMessage('assistant', "✓ Key saved! I'm ready. Ask me anything about your media collection — or tell me to make changes!");
+  toast('Configure Gemini in Cloudflare Worker secrets (Settings → AI tab).', 'var(--mu)');
 }
 
 function renderAIMessages() {

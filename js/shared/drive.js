@@ -693,7 +693,11 @@ function _mergeData(local, remote) {
 async function _driveInit() {
   _updateDriveBtn('syncing');
   const remote = await _pullFromDrive();
-  if (!remote) { await _pushToDrive(); return; }
+  // New or empty Drive file parses as {} — truthy but has no version; must upload or first sync never runs.
+  if (!remote || remote.version == null) {
+    await _pushToDrive();
+    return;
+  }
   const localSaved  = parseInt(ls.str(K.SAVED) || '0');
   const remoteSaved = remote.savedAt || 0;
   if (remoteSaved > localSaved) {
