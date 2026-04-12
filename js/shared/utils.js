@@ -127,7 +127,7 @@ export function pcol(s)         { return SC[s] || 'var(--ac)'; }
 //  GENRE THEME (Media)
 // ═══════════════════════════════
 export function applyGenre(id) {
-  GACTIVE = id; ls.setStr(K.GENRE, id);
+  setGACTIVE(id); ls.setStr(K.GENRE, id);
   const g = gbyid(id); const c = g.color;
   const el = document.documentElement;
   if (CURRENT === 'media') {
@@ -164,18 +164,30 @@ document.addEventListener('click', e => {
 });
 
 export function selectGenre(id) {
-  GACTIVE = id; ls.setStr(K.GENRE, id);
+  setGACTIVE(id); ls.setStr(K.GENRE, id);
   const nbSec = document.getElementById('nb-sec');
   if (nbSec && CURRENT === 'media') nbSec.textContent = gbyid(id).name;
   const g = gbyid(id); const c = g.color;
   document.documentElement.style.setProperty('--ac', c);
   const [r, gg, b] = [parseInt(c.slice(1,3),16), parseInt(c.slice(3,5),16), parseInt(c.slice(5,7),16)];
   document.documentElement.style.setProperty('--ac-rgb', `${r},${gg},${b}`);
-  document.getElementById('gdrop-lbl').textContent = g.name;
-  const _gdot = document.getElementById('gdot'); if (_gdot) _gdot.style.background = c;
-  document.getElementById('gdrop-menu').classList.remove('open');
-  SEARCH = ''; document.getElementById('srch').value = '';
-  document.getElementById('fstatus').value = '';
+  
+  const glbl = document.getElementById('gdrop-lbl');
+  if (glbl) glbl.textContent = g.name;
+  
+  const _gdot = document.getElementById('gdot'); 
+  if (_gdot) _gdot.style.background = c;
+  
+  const gmenu = document.getElementById('gdrop-menu');
+  if (gmenu) gmenu.classList.remove('open');
+  
+  setSEARCH(''); 
+  const srch = document.getElementById('srch');
+  if (srch) srch.value = '';
+  
+  const fstatus = document.getElementById('fstatus');
+  if (fstatus) fstatus.value = '';
+  
   render();  // render() is patched in below — see patchRender()
 }
 
