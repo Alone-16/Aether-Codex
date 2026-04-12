@@ -1,7 +1,7 @@
-const CACHE = 'aether-codex-v1';
+const CACHE = 'ac-v5-cache';
 const ASSETS = [
-  '/Aether-Codex/',
-  '/Aether-Codex/index.html',
+  './',
+  './index.html',
   'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Bangers&family=Comic+Neue:wght@400;700&display=swap',
   'https://accounts.google.com/gsi/client',
 ];
@@ -34,12 +34,12 @@ self.addEventListener('fetch', e => {
     fetch(e.request)
       .then(res => {
         // Cache successful responses for app shell
-        if (res.ok && (url.includes('/Aether-Codex/') || url.includes('fonts.g'))) {
+        if (res.ok && (url.includes(self.location.origin) || url.includes('fonts.g'))) {
           const clone = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, clone));
         }
         return res;
       })
-      .catch(() => caches.match(e.request).then(r => r || caches.match('/Aether-Codex/index.html')))
+      .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
   );
 });
