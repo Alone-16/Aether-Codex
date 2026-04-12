@@ -57,6 +57,7 @@ let _syncTimer     = null;
 let _driveFolderId = null;
 let _gisInitDone   = false;
 let _driveInitPromise = null;
+let _lastDriveInitTime = 0; // Cooldown tracker
 
 // ═══════════════════════════════════════════════════════════════════
 //  SECURE TOKEN STORAGE
@@ -788,6 +789,16 @@ function _mergeRemoteIntoLocal(remote, localSavedBefore) {
  */
 async function _driveInit(opts = {}) {
   const force = opts.force === true;
+
+  // Rate-limit consecutive runs to prevent XHR request loops (GET/PATCH storms)
+  // unless explicitly forced by a user action like 'Sync Now'.
+  const now = Date.now();
+  if (!force && now - _lastDriveInitTime < 5000) {
+    console.log('[Drive] Debounced _driveInit auto-call (too soon).');
+    return _driveInitPromise || Promise.resolve();
+  }
+  _lastDriveInitTime = now;
+
   if (_driveInitPromise) {
     if (force) {
       try { await _driveInitPromise; } catch (e) { /* ignore; fresh run below */ }
@@ -819,7 +830,11 @@ async function _runDriveInit() {
     // local edit bumps K.SAVED and would skip pulling rows that exist only on Drive.
     _mergeRemoteIntoLocal(remote, localSavedBefore);
     saveData(DATA);
-    render();
+    try {
+      render(); // Wrap in try-catch to prevent external extensions (e.g. index.js: cssRules) from crashing the promise
+    } catch (renderErr) {
+      console.warn('[Drive] UI Render encountered an error after merging:', renderErr);
+    }
     await _pushToDrive({ silentToast: true });
     _toast('✓ Synced with Google Drive', '#4ade80');
   } finally {
