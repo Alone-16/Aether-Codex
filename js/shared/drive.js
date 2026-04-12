@@ -213,7 +213,7 @@ function _startOAuthFlow() {
   }
 }
 
-/** Must match Google Cloud OAuth "Authorized redirect URIs" (e.g. https://aether-codex.pages.dev/auth/callback). */
+/** Must match Google Cloud OAuth "Authorized redirect URIs" (e.g. https://YOUR-HOST/auth/callback — same origin as the app). */
 const OAUTH_CALLBACK_PATH = '/auth/callback';
 
 function _getRedirectUri() {

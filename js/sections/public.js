@@ -217,7 +217,7 @@ async function generatePublicLink(sections) {
     shareSettings.enabled = true;
     saveShareSettings(shareSettings);
 
-    const publicUrl = `https://alone-16.github.io/Aether-Codex/?share=${fileId}`;
+    const publicUrl = `${location.origin}/?share=${fileId}`;
     return publicUrl;
   } catch(e) {
     throw new Error('Failed to generate link: ' + e.message);
@@ -239,7 +239,7 @@ async function revokePublicLink() {
 // ── Settings UI for public share ──
 function renderSettingsPublicShare(el) {
   const s = loadShareSettings();
-  const publicUrl = s.fileId ? `https://alone-16.github.io/Aether-Codex/?share=${s.fileId}` : null;
+  const publicUrl = s.fileId ? `${location.origin}/?share=${s.fileId}` : null;
   const sectionOpts = [
     {id:'media', label:'Media', color:'#e879a0'},
     {id:'games', label:'Games', color:'#38bdf8'},
