@@ -1456,6 +1456,38 @@ function _malSelect(rJson) {
     if (map[r.status]) statusEl.value = map[r.status];
   }
 
+  if (r.status === 'currently_airing' && r.broadcast && r.broadcast.day_of_the_week && r.broadcast.start_time) {
+    const dayMap = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+    let jstDay = dayMap[r.broadcast.day_of_the_week.toLowerCase()];
+    if (jstDay !== undefined) {
+      const parts = r.broadcast.start_time.split(':');
+      let jstHour = parseInt(parts[0], 10);
+      let jstMin = parseInt(parts[1], 10);
+
+      let istMin = jstMin - 30;
+      let istHour = jstHour - 3;
+      let istDay = jstDay;
+
+      if (istMin < 0) {
+        istMin += 60;
+        istHour -= 1;
+      }
+      if (istHour < 0) {
+        istHour += 24;
+        istDay = (istDay - 1 + 7) % 7;
+      }
+
+      const formattedHour = String(istHour).padStart(2, '0');
+      const formattedMin = String(istMin).padStart(2, '0');
+
+      const airingDayEl = document.getElementById('f-airingday');
+      if (airingDayEl) airingDayEl.value = String(istDay);
+
+      const airingTimeEl = document.getElementById('f-airingtime');
+      if (airingTimeEl) airingTimeEl.value = `${formattedHour}:${formattedMin}`;
+    }
+  }
+
   toast(`✓ Autofilled: ${displayTitle}`);
 }
 
