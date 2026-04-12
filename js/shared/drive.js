@@ -6,6 +6,7 @@ import {
   CURRENT,
   saveData, saveGenres,
   patchScheduleDriveSync,
+  pauseDriveSyncScheduling, resumeDriveSyncScheduling,
 } from './utils.js';
 
 import { render } from './routing.js';
@@ -781,6 +782,7 @@ function _mergeRemoteIntoLocal(remote, localSavedBefore) {
 }
 
 async function _driveInit() {
+  pauseDriveSyncScheduling();
   _updateDriveBtn('syncing');
   const localSavedBefore = parseInt(ls.str(K.SAVED) || '0', 10) || 0;
   try {
@@ -798,6 +800,7 @@ async function _driveInit() {
     await _pushToDrive({ silentToast: true });
     _toast('✓ Synced with Google Drive', '#4ade80');
   } finally {
+    resumeDriveSyncScheduling();
     if (typeof window.refreshDriveSyncIfVisible === 'function') window.refreshDriveSyncIfVisible();
   }
 }

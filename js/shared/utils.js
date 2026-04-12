@@ -87,7 +87,18 @@ export function saveGenres(g) {
 // Lazy reference patched in by drive.js after module graph settles.
 // This avoids a hard circular import while keeping saveData/saveGenres here.
 let _scheduleDriveSync = () => {};
-export function scheduleDriveSync() { _scheduleDriveSync(); }
+/** >0 while drive.js is running a full pull/merge/push — avoids re-scheduling sync from those writes. */
+let _driveSyncSchedulePauseDepth = 0;
+
+export function pauseDriveSyncScheduling() { _driveSyncSchedulePauseDepth++; }
+export function resumeDriveSyncScheduling() {
+  _driveSyncSchedulePauseDepth = Math.max(0, _driveSyncSchedulePauseDepth - 1);
+}
+
+export function scheduleDriveSync() {
+  if (_driveSyncSchedulePauseDepth > 0) return;
+  _scheduleDriveSync();
+}
 export function patchScheduleDriveSync(fn) { _scheduleDriveSync = fn; }
 
 // ── Post-load schema normalisation ───────────────────────────────────────────
