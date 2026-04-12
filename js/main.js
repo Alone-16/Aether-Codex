@@ -6,7 +6,7 @@
 import {
   DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K,
   uid, esc, today, fmtDate, h2r, gbyid, estTime, entryStats, fmtMin,
-  saveData, saveGenres,
+  saveData, saveGenres, scheduleDriveSync,
   setDATA, setGENRES, setGACTIVE, setCURRENT, setSEARCH, setMEDIA_PAGE,
   PANEL, PEDIT, FORM_TL, COLLAPSED, DDRG, FDRG,
   setPANEL, setPEDIT, setFORM_TL, setCOLLAPSED, setDDRG, setFDRG,
@@ -31,7 +31,7 @@ Object.assign(window, {
   openMob, closeMob, driveAction, syncDrive,
   DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K,
   uid, esc, today, fmtDate, h2r, gbyid, estTime, entryStats, fmtMin,
-  saveData, saveGenres,
+  saveData, saveGenres, scheduleDriveSync,
   setDATA, setGENRES, setGACTIVE, setCURRENT, setSEARCH, setMEDIA_PAGE,
   PANEL, PEDIT, FORM_TL, COLLAPSED, DDRG, FDRG,
   setPANEL, setPEDIT, setFORM_TL, setCOLLAPSED, setDDRG, setFDRG,
