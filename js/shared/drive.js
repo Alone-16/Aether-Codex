@@ -791,7 +791,10 @@ export async function driveBootstrap() {
 // Expose internals needed by settings.js and other sections
 window._isConnected = _isConnected;
 window._pushToDrive = _pushToDrive;
-/** Full bidirectional sync (pull if remote newer, push if local newer). Prefer this over _pushToDrive alone. */
-window.syncDrive = () => _driveInit();
 window._startMALAuth = _startMALAuth;
 window._WORKER = _WORKER;
+
+/** Full bidirectional sync — also assigned on window from main.js for inline onclick. */
+export async function syncDrive() {
+  return _driveInit();
+}

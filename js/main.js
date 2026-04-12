@@ -21,14 +21,14 @@ import { toast, showConfirm, showAlert, closePanel } from './shared/ui.js';
 import { renderPage } from './shared/routing.js';
 import { nav }        from './shared/nav.js';
 import {
-  driveBootstrap, openMob, closeMob, driveAction,
+  driveBootstrap, openMob, closeMob, driveAction, syncDrive,
 } from './shared/drive.js';
 
 // ── Expose globals IMMEDIATELY so inline onclick="" handlers work ──
 Object.assign(window, {
   nav, render, renderPage,
   toast, showConfirm, showAlert, closePanel,
-  openMob, closeMob, driveAction,
+  openMob, closeMob, driveAction, syncDrive,
   DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K,
   uid, esc, today, fmtDate, h2r, gbyid, estTime, entryStats, fmtMin,
   saveData, saveGenres,
