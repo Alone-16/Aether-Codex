@@ -1335,7 +1335,7 @@ function renderSectionStub(id, c) {
   c.innerHTML=`<div style="font-family:var(--fd);font-size:clamp(18px,3vw,30px);font-weight:700;margin-bottom:16px;letter-spacing:1px;text-transform:uppercase;color:${m.color}">${m.icon} ${id.charAt(0).toUpperCase()+id.slice(1)} Codex</div>
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);padding:40px 24px;text-align:center;color:var(--tx2)">
       <div style="font-size:36px;opacity:.3;margin-bottom:12px">${m.icon}</div>
-      <p style="font-size:14px">Full section coming in Phase ${m.phase}</p>
+      <p style="font-size:14px">Unable to load.</p>
     </div>`;
 }
 
