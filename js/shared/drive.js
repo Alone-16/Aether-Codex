@@ -668,6 +668,8 @@ async function _pushToDrive() {
     if (!r || !r.ok) throw new Error('Upload failed');
     ls.setStr(K.DSYNC, String(Date.now()));
     _updateDriveBtn('connected');
+    _toast('✓ Saved to Google Drive', '#4ade80');
+    if (typeof window.refreshDriveSyncIfVisible === 'function') window.refreshDriveSyncIfVisible();
   } catch(e) { _updateDriveBtn('error'); _toast('Drive sync failed: ' + e.message, '#fb7185'); }
 }
 
