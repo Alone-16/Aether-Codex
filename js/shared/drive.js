@@ -694,44 +694,48 @@ function _mergeData(local, remote) {
 
 async function _driveInit() {
   _updateDriveBtn('syncing');
-  const remote = await _pullFromDrive();
-  // New or empty Drive file parses as {} — truthy but has no version; must upload or first sync never runs.
-  if (!remote || remote.version == null) {
-    await _pushToDrive();
-    return;
-  }
-  const localSaved  = parseInt(ls.str(K.SAVED) || '0');
-  const remoteSaved = remote.savedAt || 0;
-  if (remoteSaved > localSaved) {
-    setDATA(_mergeData(DATA, remote.data || []));
-    if (remote.genres) {
-      const gids = new Set(GENRES.map(g => g.id));
-      (remote.genres || []).filter(g => !gids.has(g.id)).forEach(g => GENRES.push(g));
-      saveGenres(GENRES);
+  try {
+    const remote = await _pullFromDrive();
+    // New or empty Drive file parses as {} — truthy but has no version; must upload or first sync never runs.
+    if (!remote || remote.version == null) {
+      await _pushToDrive();
+      return;
     }
-    if (remote.games     && Array.isArray(remote.games))     { const d = _mergeData(_GDATA(), remote.games);  window.GDATA = d; _saveGames(d); }
-    if (remote.music     && Array.isArray(remote.music))     { const d = _mergeData(_MDATA(), remote.music);  window.MDATA = d; _saveMusic(d); }
-    if (remote.playlists && Array.isArray(remote.playlists)) { window.MPLAYLISTS = remote.playlists;             _savePlaylists(remote.playlists); }
-    if (remote.books     && Array.isArray(remote.books))     { const d = _mergeData(_BDATA(), remote.books);  window.BDATA = d; _saveBooks(d); }
-    if (remote.vault_enc)    ls.set(VAULT_ENC_KEY, remote.vault_enc);
-    if (remote.vault_public) {
-      const local  = ls.get(VAULT_PUBLIC_KEY) || [];
-      const remIds = new Set(local.map(l => l.id));
-      const merged = [...local, ...(remote.vault_public || []).filter(l => !remIds.has(l.id))];
-      ls.set(VAULT_PUBLIC_KEY, merged);
-      if (typeof window.VDATA_PUBLIC !== 'undefined') window.VDATA_PUBLIC = merged;
+    const localSaved  = parseInt(ls.str(K.SAVED) || '0');
+    const remoteSaved = remote.savedAt || 0;
+    if (remoteSaved > localSaved) {
+      setDATA(_mergeData(DATA, remote.data || []));
+      if (remote.genres) {
+        const gids = new Set(GENRES.map(g => g.id));
+        (remote.genres || []).filter(g => !gids.has(g.id)).forEach(g => GENRES.push(g));
+        saveGenres(GENRES);
+      }
+      if (remote.games     && Array.isArray(remote.games))     { const d = _mergeData(_GDATA(), remote.games);  window.GDATA = d; _saveGames(d); }
+      if (remote.music     && Array.isArray(remote.music))     { const d = _mergeData(_MDATA(), remote.music);  window.MDATA = d; _saveMusic(d); }
+      if (remote.playlists && Array.isArray(remote.playlists)) { window.MPLAYLISTS = remote.playlists;             _savePlaylists(remote.playlists); }
+      if (remote.books     && Array.isArray(remote.books))     { const d = _mergeData(_BDATA(), remote.books);  window.BDATA = d; _saveBooks(d); }
+      if (remote.vault_enc)    ls.set(VAULT_ENC_KEY, remote.vault_enc);
+      if (remote.vault_public) {
+        const local  = ls.get(VAULT_PUBLIC_KEY) || [];
+        const remIds = new Set(local.map(l => l.id));
+        const merged = [...local, ...(remote.vault_public || []).filter(l => !remIds.has(l.id))];
+        ls.set(VAULT_PUBLIC_KEY, merged);
+        if (typeof window.VDATA_PUBLIC !== 'undefined') window.VDATA_PUBLIC = merged;
+      }
+      if (remote.log   && Array.isArray(remote.log))   { window.LDATA = remote.log; _saveLog(remote.log); }
+      if (remote.notes && Array.isArray(remote.notes)) {
+        const d = _mergeData(_NDATA(), remote.notes); window.NDATA = d; _saveNotes(d);
+      }
+      if (remote.notes_enc) ls.set(NOTES_ENC_KEY, remote.notes_enc);
+      saveData(DATA); render();
+      _toast('✓ Synced from Drive', '#4ade80');
+    } else if (localSaved > remoteSaved) {
+      await _pushToDrive();
+    } else {
+      _updateDriveBtn('connected');
     }
-    if (remote.log   && Array.isArray(remote.log))   { window.LDATA = remote.log; _saveLog(remote.log); }
-    if (remote.notes && Array.isArray(remote.notes)) {
-      const d = _mergeData(_NDATA(), remote.notes); window.NDATA = d; _saveNotes(d);
-    }
-    if (remote.notes_enc) ls.set(NOTES_ENC_KEY, remote.notes_enc);
-    saveData(DATA); render();
-    _toast('✓ Synced from Drive', '#4ade80');
-  } else if (localSaved > remoteSaved) {
-    await _pushToDrive();
-  } else {
-    _updateDriveBtn('connected');
+  } finally {
+    if (typeof window.refreshDriveSyncIfVisible === 'function') window.refreshDriveSyncIfVisible();
   }
 }
 
@@ -739,7 +743,14 @@ function _scheduleDriveSyncImpl() {
   if (!_isConnected()) return;
   clearTimeout(_syncTimer);
   _updateDriveBtn('pending');
-  _syncTimer = setTimeout(_pushToDrive, 3000);
+  // Full reconcile: pull from Drive when remote is newer (other device / older backup), else push when local is newer.
+  _syncTimer = setTimeout(() => {
+    _driveInit().catch(e => {
+      console.error('[Drive] sync:', e);
+      _updateDriveBtn('error');
+      _toast('Drive sync failed: ' + (e && e.message ? e.message : String(e)), '#fb7185');
+    });
+  }, 3000);
 }
 
 // Exported so utils.js can wire it up via patchScheduleDriveSync().
@@ -780,5 +791,7 @@ export async function driveBootstrap() {
 // Expose internals needed by settings.js and other sections
 window._isConnected = _isConnected;
 window._pushToDrive = _pushToDrive;
+/** Full bidirectional sync (pull if remote newer, push if local newer). Prefer this over _pushToDrive alone. */
+window.syncDrive = () => _driveInit();
 window._startMALAuth = _startMALAuth;
 window._WORKER = _WORKER;
