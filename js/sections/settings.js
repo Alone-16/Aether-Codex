@@ -258,17 +258,17 @@ function renderSettingsSync(el) {
 
   const malConnected     = !!SETTINGS.malRefreshToken;
   const malTokenValid    = malConnected && SETTINGS.malAccessToken && Date.now() < (parseInt(SETTINGS.malTokenExpiry) || 0);
-  const malTotalCount    = (typeof DATA !== 'undefined') ? DATA.length : 0;
-  const malLinkedCount   = (typeof DATA !== 'undefined') ? DATA.filter(e => e.malId).length : 0;
+  const malTotalCount    = (typeof DATA !== 'undefined') ? DATA.filter(e => e.genreId === 'anime' || e.genreId === 'manga').length : 0;
+  const malLinkedCount   = (typeof DATA !== 'undefined') ? DATA.filter(e => e.malId && (e.genreId === 'anime' || e.genreId === 'manga')).length : 0;
   const malUnlinkedCount = malTotalCount - malLinkedCount;
   const lastSyncRaw      = ls.str('ac_mal_last_sync');
   const lastSyncTime     = lastSyncRaw ? new Date(parseInt(lastSyncRaw)).toLocaleString() : null;
   const lastSyncTitle    = ls.str('ac_mal_last_sync_title') || '';
   const malDesc = malTokenValid
-    ? 'Connected and ready. Episode changes, status and ratings sync automatically.'
+    ? 'Connected and ready. Anime and manga episode changes, status and ratings sync automatically.'
     : malConnected
       ? 'Refresh token is saved but access token may be expired. Try syncing — it will auto-refresh. If it fails, reconnect.'
-      : 'Connect your MAL account to auto-sync anime status, episode progress and ratings to MyAnimeList.';
+      : 'Connect your MAL account to auto-sync anime and manga status, progress and ratings to MyAnimeList.';
   const malLabel  = malConnected ? 'Disconnect MAL Account' : 'Connect MAL Account';
   const malAction = malConnected ? 'disconnectMALAccount()' : 'connectMALAccount()';
 
@@ -617,7 +617,7 @@ let _malLinkResults = {}; // { entryId: { malId, title, image, confirmed } }
 let _malLinkAbort   = false;
 
 function openMALBulkLinkModal() {
-  const unlinked = (typeof DATA !== 'undefined') ? DATA.filter(e => !e.malId) : [];
+  const unlinked = (typeof DATA !== 'undefined') ? DATA.filter(e => !e.malId && (e.genreId === 'anime' || e.genreId === 'manga')) : [];
   if (!unlinked.length) { toast('All entries already linked to MAL', '#4ade80'); return; }
 
   const modal = document.createElement('div');
@@ -680,7 +680,7 @@ async function startMALAutoLink() {
   _malLinkAbort   = false;
   _malLinkResults = {};
 
-  const unlinked   = (typeof DATA !== 'undefined') ? DATA.filter(e => !e.malId) : [];
+  const unlinked   = (typeof DATA !== 'undefined') ? DATA.filter(e => !e.malId && (e.genreId === 'anime' || e.genreId === 'manga')) : [];
   const progressBar  = document.getElementById('mal-link-progress-bar');
   const progressWrap = document.getElementById('mal-link-progress-wrap');
   const statusEl     = document.getElementById('mal-link-status');
@@ -784,7 +784,7 @@ function saveMALBulkLinks() {
 // ── MAL Bulk Sync ──
 async function startMALBulkSync() {
   if (!SETTINGS?.malRefreshToken) { toast('MAL not connected', '#fb7185'); return; }
-  const entries = (typeof DATA !== 'undefined') ? DATA.filter(e => e.malId) : [];
+  const entries = (typeof DATA !== 'undefined') ? DATA.filter(e => e.malId && (e.genreId === 'anime' || e.genreId === 'manga')) : [];
   if (!entries.length) { toast('No entries linked to MAL', '#fb7185'); return; }
 
   const progressEl = document.getElementById('mal-bulk-progress');

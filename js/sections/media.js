@@ -1111,6 +1111,7 @@ function saveEntry(eid) {
 
 async function _syncMALListEntry(entry, silent = false) {
   if (!entry?.malId) return false;
+  if (entry.genreId !== 'anime' && entry.genreId !== 'manga') return false;
   if (!window.window.SETTINGS?.malRefreshToken) {
     if (!silent) toast('MAL not connected — go to Settings → Security to connect', '#fbbf24');
     return false;
@@ -1163,11 +1164,12 @@ async function _syncMALListEntry(entry, silent = false) {
 
 function _malSyncQuiet(e) {
   if (!e?.malId || !window.window.SETTINGS?.malRefreshToken) return;
+  if (e.genreId !== 'anime' && e.genreId !== 'manga') return;
   _syncMALListEntry(e, true).catch(err => console.warn('[MAL] background sync failed:', err));
 }
 
 async function malBulkSyncAll(onProgress) {
-  const entries = DATA.filter(e => e.malId);
+  const entries = DATA.filter(e => e.malId && (e.genreId === 'anime' || e.genreId === 'manga'));
   if (!entries.length) return { total: 0, success: 0, failed: 0 };
   if (!window.window.SETTINGS?.malRefreshToken) return { error: 'not_connected' };
   let success = 0, failed = 0;
