@@ -33,13 +33,24 @@ function _mstag(s) {
   return `<span class="m-stag ${cls}">${labels[s] || s}</span>`;
 }
 
-/* ---------- filter chip state ---------- */
-let _M_STATUS_CHIP = '';
+/* ---------- filter chip state ----------
+   null  = follow hidden #fstatus (legacy / initial)
+   ''    = explicit "All statuses"
+   other = that status id
+   (Never use _M_STATUS_CHIP || fstatus — '' is falsy and would wrongly fall through.) */
+let _M_STATUS_CHIP = null;
 
 /* ---------- hold / context-menu state ---------- */
 let _HOLD_TIMER   = null;
 let _CTX_ENTRY_ID = null;
 let _HOLD_FIRED   = false;
+
+function _mediaListStatusFilter() {
+  if (_M_STATUS_CHIP === null || _M_STATUS_CHIP === undefined) {
+    return document.getElementById('fstatus')?.value || '';
+  }
+  return _M_STATUS_CHIP;
+}
 
 function _renderFilterChips() {
   const chips = [
@@ -51,19 +62,21 @@ function _renderFilterChips() {
     { val:'dropped',   lbl:'Dropped',   col:'#f87171' },
     { val:'upcoming',  lbl:'Upcoming',  col:'#fb923c' },
   ];
-  return chips.map(c => {
-    const active = _M_STATUS_CHIP === c.val;
-    const aStyle = active ? `border-color:${c.col}55;color:${c.col};background:${c.col}14` : '';
-    return `<button class="m-chip${active ? ' active' : ''}" style="${aStyle}" onclick="setMediaChip('${c.val}')">
-      <span class="m-chip-dot" style="background:${c.col}"></span>${c.lbl}
+  const fstEff = _mediaListStatusFilter();
+  return chips.map((c) => {
+    const active = c.val === fstEff;
+    const onClick = c.val === '' ? `setMediaChip('all')` : `setMediaChip('${c.val}')`;
+    return `<button type="button" class="m-chip${active ? ' active' : ''}" style="--chip-c:${c.col}" onclick="${onClick}">
+      <span class="m-chip-dot" aria-hidden="true"></span>${c.lbl}
     </button>`;
   }).join('');
 }
 
 function setMediaChip(val) {
-  _M_STATUS_CHIP = val;
+  const v = val === 'all' ? '' : val;
+  _M_STATUS_CHIP = v;
   const fstEl = document.getElementById('fstatus');
-  if (fstEl) fstEl.value = val;
+  if (fstEl) fstEl.value = v;
   renderMediaBody();
 }
 
@@ -174,35 +187,65 @@ function runLinkedMigrationV3() {
 /* ═══════════════════════════════
    MAIN RENDER
 ═══════════════════════════════ */
+function _initMediaDropdownClose() {
+  if (window._acMddClose) return;
+  window._acMddClose = true;
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.m-sort-dd')) return;
+    document.querySelectorAll('.m-sort-dd .m-dd-menu.open').forEach((menu) => {
+      menu.classList.remove('open');
+      menu.closest('.m-sort-dd')?.querySelector('.m-dd-btn')?.setAttribute('aria-expanded', 'false');
+    });
+  });
+}
+
+function toggleMediaSortDd(e) {
+  e.stopPropagation();
+  const dd = e.currentTarget.closest('.m-sort-dd');
+  const menu = dd?.querySelector('.m-dd-menu');
+  const btn = dd?.querySelector('.m-dd-btn');
+  if (!menu || !btn) return;
+  const wasOpen = menu.classList.contains('open');
+  document.querySelectorAll('.m-sort-dd .m-dd-menu').forEach((m) => m.classList.remove('open'));
+  document.querySelectorAll('.m-sort-dd .m-dd-btn').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+  if (!wasOpen) {
+    menu.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+  }
+}
+
+function setMediaSort(val) {
+  const sel = document.getElementById('fsort');
+  if (sel) sel.value = val;
+  renderMediaBody();
+}
+
 function renderMedia(c) {
   runLinkedMigrationV3();
   _injectPinStyles();
+  _initMediaDropdownClose();
   const tabs = ['List', 'Dashboard', 'Upcoming', 'Incomplete'];
   const g    = gbyid(GACTIVE);
 
   c.innerHTML = `
     <div class="m-topbar">
-      <div class="m-page-title">
-        <span class="m-pt-genre" id="gdrop-lbl">${esc(g.name)}</span>
-        <span class="m-pt-sep">//</span>
-        <span class="m-pt-view">${MEDIA_PAGE}</span>
+      <div class="m-topbar-start">
+        <div id="gdrop" class="m-gdrop-wrap">
+          <button type="button" class="m-genre-btn" onclick="toggleGdrop(event)" aria-haspopup="listbox" aria-expanded="false">
+            <span class="m-genre-dot" id="gdot" style="background:${g.color}"></span>
+            <span id="gdrop-lbl">${esc(g.name)}</span>
+            <span class="m-genre-chev" aria-hidden="true"></span>
+          </button>
+          <div id="gdrop-menu" class="m-gdrop-menu" role="listbox" aria-label="Media lists"></div>
+        </div>
+
+        <nav class="m-tabs" aria-label="Media views">
+          ${tabs.map((t,i) => `<button type="button" class="m-tab${MEDIA_PAGE === ['list','dashboard','upcoming','incomplete'][i] ? ' active' : ''}"
+            onclick="setMediaPage('${['list','dashboard','upcoming','incomplete'][i]}')">${t}</button>`).join('')}
+        </nav>
       </div>
 
-      <div id="gdrop" style="position:relative;flex-shrink:0;z-index:200">
-        <button class="m-genre-btn" onclick="toggleGdrop(event)">
-          <span class="m-genre-dot" id="gdot" style="background:${g.color}"></span>
-          <span>${esc(g.name)}</span>
-          <span style="opacity:.35;font-size:9px;margin-left:2px">▾</span>
-        </button>
-        <div id="gdrop-menu" style="position:absolute;top:calc(100% + 6px);left:0;background:#131318;border:1px solid rgba(255,255,255,.1);border-radius:8px;min-width:200px;z-index:9000;box-shadow:0 12px 40px rgba(0,0,0,.7);max-height:60vh;overflow-y:auto;display:none"></div>
-      </div>
-
-      <div class="m-tabs">
-        ${tabs.map((t,i) => `<button class="m-tab${MEDIA_PAGE === ['list','dashboard','upcoming','incomplete'][i] ? ' active' : ''}"
-          onclick="setMediaPage('${['list','dashboard','upcoming','incomplete'][i]}')">${t}</button>`).join('')}
-      </div>
-
-      <button class="m-add-btn" onclick="openAdd()">+ Add Title</button>
+      <button type="button" class="m-add-btn" onclick="openAdd()"><span class="m-add-plus" aria-hidden="true">+</span> Add title</button>
     </div>
 
     <div id="media-body"></div>`;
@@ -210,7 +253,8 @@ function renderMedia(c) {
   buildGenreMenu();
   const dot = document.getElementById('gdot');
   if (dot) dot.style.background = g.color;
-  document.getElementById('gdrop-lbl').textContent = g.name;
+  const glbl = document.getElementById('gdrop-lbl');
+  if (glbl) glbl.textContent = g.name;
 
   renderMediaBody();
 }
@@ -218,7 +262,7 @@ function renderMedia(c) {
 function setMediaPage(p) {
   MEDIA_PAGE     = p;
   SEARCH         = '';
-  _M_STATUS_CHIP = '';
+  _M_STATUS_CHIP = null;
   const srch  = document.getElementById('srch');
   if (srch)  srch.value  = '';
   const fstEl = document.getElementById('fstatus');
@@ -239,7 +283,7 @@ function renderMediaBody() {
 ═══════════════════════════════ */
 function filteredData() {
   let d = DATA.filter(e => e.genreId === GACTIVE);
-  const fst = _M_STATUS_CHIP || document.getElementById('fstatus')?.value || '';
+  const fst = _mediaListStatusFilter();
   const fs  = document.getElementById('fsort')?.value || 'title';
 
   if (SEARCH) {
@@ -268,22 +312,29 @@ function renderList(c) {
   const flat    = expandRows(data, fst);
   const pCount  = flat.length;
   const sortVal = document.getElementById('fsort')?.value || 'title';
+  const sortLbl = sortVal === 'added' ? 'Recently added' : 'A → Z';
 
   let html = `
     <div class="m-filter-row">
-      ${_renderFilterChips()}
+      <div class="m-filter-chips">${_renderFilterChips()}</div>
       <div class="m-sort-wrap">
-        <span class="m-sort-ico">⇅</span>
-        <select class="m-sort-sel" onchange="document.getElementById('fsort').value=this.value;renderMediaBody()">
-          <option value="title" ${sortVal==='title'?'selected':''}>A → Z</option>
-          <option value="added" ${sortVal==='added'?'selected':''}>Recently Added</option>
-        </select>
+        <span class="m-sort-hint">Sort</span>
+        <div class="m-sort-dd m-dd">
+          <button type="button" class="m-dd-btn" onclick="toggleMediaSortDd(event)" aria-haspopup="listbox" aria-expanded="false" aria-label="Sort list">
+            <span class="m-dd-lbl">${sortLbl}</span>
+            <span class="m-dd-chev" aria-hidden="true"></span>
+          </button>
+          <div class="m-dd-menu" id="m-sort-menu" role="listbox">
+            <button type="button" class="m-dd-opt${sortVal === 'title' ? ' active' : ''}" role="option" aria-selected="${sortVal === 'title' ? 'true' : 'false'}" onclick="event.stopPropagation();setMediaSort('title')">A → Z</button>
+            <button type="button" class="m-dd-opt${sortVal === 'added' ? ' active' : ''}" role="option" aria-selected="${sortVal === 'added' ? 'true' : 'false'}" onclick="event.stopPropagation();setMediaSort('added')">Recently added</button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="m-cnt-lbl">${pCount} title${pCount!==1?'s':''}</div>`;
 
   if (!flat.length) {
-    html += `<div class="m-empty"><div class="m-empty-ico">◌</div><p>No titles here yet</p></div>`;
+    html += `<div class="m-empty"><div class="m-empty-ring" aria-hidden="true"></div><p class="m-empty-title">No titles yet</p><p class="m-empty-sub">Add one with the button above</p></div>`;
     c.innerHTML = html; return;
   }
 
@@ -335,6 +386,15 @@ function entryStats(e) {
   const tot = parseInt(e.epTot || 0);
   const pct = tot ? Math.round(cur / tot * 100) : (cur > 0 ? 100 : 0);
   return { cur, tot, pct, time: estTime(tot || cur, dur) };
+}
+
+/** True if this linked franchise "part" is finished (status or full episode count). */
+function linkedPartIsComplete(e) {
+  if (!e) return false;
+  if (e.status === 'completed' || e.status === 'dropped') return true;
+  const tot = parseInt(e.epTot || 0, 10);
+  const cur = parseInt(e.epCur || 0, 10);
+  return tot > 0 && cur >= tot;
 }
 
 // Keep for backward compat — returns null for flat entries
@@ -397,8 +457,11 @@ function rowHtml(e) {
 function quickEp(id, delta) {
   const e = DATA.find(x => x.id === id); if (!e) return;
   e.epCur = Math.max(0, (parseInt(e.epCur) || 0) + delta);
-  if (e.epTot && e.epCur >= parseInt(e.epTot) && e.status === 'watching') {
-    e.status = 'completed'; e.endDate = today();
+  if (e.epTot && e.epCur >= parseInt(e.epTot) && e.status !== 'dropped' && e.status !== 'upcoming') {
+    if (['watching', 'plan', 'not_started', 'on_hold'].includes(e.status)) {
+      e.status = 'completed';
+      if (!e.endDate) e.endDate = today();
+    }
   }
   e.updatedAt = Date.now(); saveData(DATA); renderMediaBody();
   if (PANEL === 'detail' && PEDIT === id) renderDetailPanel(DATA.find(x => x.id === id));
@@ -502,32 +565,38 @@ function renderUpcoming(c) {
 
   c.innerHTML = `
     <div class="m-dash-title">🗓 Upcoming <span>// ${esc(gbyid(GACTIVE).name)}</span></div>
-    ${rows || `<div class="m-empty"><div class="m-empty-ico">📅</div><p>No upcoming items</p></div>`}`;
+    ${rows || `<div class="m-empty"><p class="m-empty-title">Nothing scheduled</p><p class="m-empty-sub">Upcoming releases you add will show here</p></div>`}`;
 }
 
 /* ═══════════════════════════════
    INCOMPLETE
 ═══════════════════════════════ */
 function renderIncomplete(c) {
-  // Show entries in a linked group where some are completed and some are not
-  const groups = {};
+  // Linked groups touching this genre: use every entry with the same linkedGroupId so
+  // counts match the detail panel (and stale plan/not_started + full eps still count as done).
+  const groupsById = {};
   DATA.filter(e => e.genreId === GACTIVE && e.linkedGroupId).forEach(e => {
-    if (!groups[e.linkedGroupId]) groups[e.linkedGroupId] = [];
-    groups[e.linkedGroupId].push(e);
+    const gid = e.linkedGroupId;
+    if (!groupsById[gid]) groupsById[gid] = DATA.filter(x => x.linkedGroupId === gid);
   });
 
-  const incompleteGroups = Object.values(groups).filter(members =>
-    members.some(e => e.status === 'completed') && members.some(e => ['not_started','plan','watching'].includes(e.status))
-  );
+  const incompleteGroups = Object.values(groupsById).filter(members => {
+    const someDone = members.some(linkedPartIsComplete);
+    const someLeft = members.some(e => !linkedPartIsComplete(e));
+    return someDone && someLeft;
+  });
 
   const rows = incompleteGroups.map(members => {
-    const first = members.sort((a,b) => (a.linkedGroupOrder??0)-(b.linkedGroupOrder??0))[0];
-    const done  = members.filter(e => e.status === 'completed').length;
+    const sorted = [...members].sort((a, b) => (a.linkedGroupOrder ?? 0) - (b.linkedGroupOrder ?? 0));
+    const firstIncomplete = sorted.find(e => !linkedPartIsComplete(e));
+    const lead = firstIncomplete || sorted[0];
+    const first = sorted[0];
+    const done = members.filter(linkedPartIsComplete).length;
     return `<div class="m-card" onclick="openDetail('${first.id}')">
-      <div class="m-card-bar" style="background:${_mediaStatusBar(first.status)}"></div>
+      <div class="m-card-bar" style="background:${_mediaStatusBar(lead.status)}"></div>
       <div class="m-card-info">
         <div class="m-card-title">${esc(first.title.replace(/ S\d+$| Season \d+$/,''))}</div>
-        <div class="m-card-meta">${_mstag(first.status)}<span class="m-card-seasons">${done}/${members.length} parts done</span></div>
+        <div class="m-card-meta">${_mstag(lead.status)}<span class="m-card-seasons">${done}/${members.length} parts done</span></div>
       </div>
       <div class="m-card-r">
         <div class="m-card-actions" onclick="event.stopPropagation()">
@@ -539,7 +608,7 @@ function renderIncomplete(c) {
 
   c.innerHTML = `
     <div class="m-dash-title">⚠ Incomplete Series <span>// ${esc(gbyid(GACTIVE).name)}</span></div>
-    ${rows || `<div class="m-empty"><div class="m-empty-ico">🎉</div><p>All caught up!</p></div>`}`;
+    ${rows || `<div class="m-empty"><p class="m-empty-title">All caught up</p><p class="m-empty-sub">No incomplete linked series in this list</p></div>`}`;
 }
 
 /* ═══════════════════════════════
@@ -754,9 +823,11 @@ function linkedEpDelta(parentId, linkedId, delta) {
   const newCur = Math.max(0, cur + delta);
   linked.epCur = tot ? String(Math.min(newCur, tot)) : String(newCur);
 
-  if (tot && parseInt(linked.epCur) >= tot && linked.status === 'watching') {
-    linked.status = 'completed';
-    if (!linked.endDate) linked.endDate = today();
+  if (tot && parseInt(linked.epCur) >= tot && linked.status !== 'dropped' && linked.status !== 'upcoming') {
+    if (['watching', 'plan', 'not_started', 'on_hold'].includes(linked.status)) {
+      linked.status = 'completed';
+      if (!linked.endDate) linked.endDate = today();
+    }
   }
 
   linked.updatedAt = Date.now();
@@ -1091,6 +1162,14 @@ function saveEntry(eid) {
     linkedGroupOrder,
     addedAt:existing?existing.addedAt:Date.now(), updatedAt:Date.now(),
   };
+  const epC = parseInt(entry.epCur || 0, 10);
+  const epT = parseInt(entry.epTot || 0, 10);
+  if (epT > 0 && epC >= epT && entry.status !== 'dropped' && entry.status !== 'upcoming') {
+    if (['watching', 'plan', 'not_started', 'on_hold'].includes(entry.status)) {
+      entry.status = 'completed';
+      if (!entry.endDate) entry.endDate = today();
+    }
+  }
   if (entry.status==='completed'&&!entry.endDate) entry.endDate=today();
   if (eid) { const i=DATA.findIndex(x=>x.id===eid); DATA[i]=entry; } else DATA.unshift(entry);
   saveData(DATA); closePanel(); render(); toast('✓ Saved');
@@ -1504,7 +1583,7 @@ function _malUpdateCoverPreview(url) {
 Object.assign(window, {
   // Core render
   renderMedia, renderMediaBody, renderSectionStub,
-  setMediaPage, setMediaChip,
+  setMediaPage, setMediaChip, toggleMediaSortDd, setMediaSort,
 
   // List / grid
   renderList, expandRows, filteredData,

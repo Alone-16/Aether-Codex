@@ -139,28 +139,47 @@ export function applyGenre(id) {
 
 export function buildGenreMenu() {
   const m = document.getElementById('gdrop-menu'); if (!m) return;
-  m.innerHTML = GENRES.map(g => `
-    <div class="gm-item${g.id === GACTIVE ? ' gm-active' : ''}" onclick="selectGenre('${g.id}')">
-      <span style="width:7px;height:7px;border-radius:50%;background:${g.color};flex-shrink:0;display:inline-block"></span>
-      <span style="flex:1">${esc(g.name)}</span>
-      <input type="color" value="${g.color}" onclick="event.stopPropagation()" onchange="changeGenreColor('${g.id}',this.value)" style="width:16px;height:16px;border-radius:3px;border:1px solid var(--brd);padding:0;cursor:pointer;background:none">
-    </div>`).join('') + `
-    <div style="height:1px;background:var(--brd);margin:3px 0"></div>
-    <div style="padding:7px 9px;display:flex;gap:5px;align-items:center">
-      <input id="new-genre-inp" class="fin" placeholder="New genre..." style="flex:1;font-size:12px;padding:4px 7px" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')addGenre()">
-      <button onclick="event.stopPropagation();addGenre()" style="background:var(--ac);color:#000;border:none;border-radius:4px;padding:4px 9px;font-size:12px;font-weight:700;cursor:pointer">+</button>
+  m.innerHTML = GENRES.map(g => {
+    const active = g.id === GACTIVE;
+    return `
+    <div class="gm-item${active ? ' gm-active' : ''}" role="option" aria-selected="${active}" onclick="selectGenre('${g.id}')">
+      <span class="gm-dot" style="background:${g.color}"></span>
+      <span class="gm-name">${esc(g.name)}</span>
+      ${active ? '<span class="gm-check" aria-hidden="true">✓</span>' : '<span class="gm-check gm-check--ph" aria-hidden="true"></span>'}
+      <input type="color" class="gm-color" value="${g.color}" title="Genre color" aria-label="Color for ${esc(g.name)}"
+        onclick="event.stopPropagation()" onchange="changeGenreColor('${g.id}',this.value)">
+    </div>`;
+  }).join('') + `
+    <div class="gm-divider"></div>
+    <div class="gm-footer">
+      <input id="new-genre-inp" class="fin gm-new-inp" placeholder="New list…" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter')addGenre()">
+      <button type="button" class="gm-add" onclick="event.stopPropagation();addGenre()">Add</button>
     </div>`;
 }
 
+function _syncGdropAria(open) {
+  const btn = document.querySelector('#gdrop .m-genre-btn');
+  if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
 export function toggleGdrop(e) {
   e.stopPropagation();
   const m = document.getElementById('gdrop-menu');
-  if (m) m.classList.toggle('open');
+  const wrap = document.getElementById('gdrop');
+  if (m) {
+    m.classList.toggle('open');
+    const open = m.classList.contains('open');
+    if (wrap) wrap.classList.toggle('open', open);
+    _syncGdropAria(open);
+  }
 }
 document.addEventListener('click', e => {
   const m = document.getElementById('gdrop-menu');
   const d = document.getElementById('gdrop');
-  if (m && d && !d.contains(e.target)) m.classList.remove('open');
+  if (m && d && !d.contains(e.target)) {
+    m.classList.remove('open');
+    d.classList.remove('open');
+    _syncGdropAria(false);
+  }
 });
 
 export function selectGenre(id) {
@@ -179,7 +198,12 @@ export function selectGenre(id) {
   if (_gdot) _gdot.style.background = c;
   
   const gmenu = document.getElementById('gdrop-menu');
-  if (gmenu) gmenu.classList.remove('open');
+  const gwrap = document.getElementById('gdrop');
+  if (gmenu) {
+    gmenu.classList.remove('open');
+    _syncGdropAria(false);
+  }
+  if (gwrap) gwrap.classList.remove('open');
   
   setSEARCH(''); 
   const srch = document.getElementById('srch');

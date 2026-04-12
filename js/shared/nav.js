@@ -53,8 +53,6 @@ export function nav(id, push = true) {
     const srch = document.getElementById('srch');
     srch.placeholder = id === 'home' ? 'Search everything...' : `Search ${m.label}...`;
 
-    document.getElementById('filterbar').style.display = id === 'media' ? 'flex' : 'none';
-
     // Auto-lock games when leaving
     if (CURRENT !== 'games' && typeof GAMES_UNLOCKED !== 'undefined') {
       GAMES_UNLOCKED = false; clearTimeout(GAMES_IDLE_TIMER);

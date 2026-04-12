@@ -110,45 +110,19 @@
         <button class="nb-ico" onclick="toggleAI()" id="ai-btn" title="AI Assistant" style="font-size:16px">✦</button>
       </div>
     </nav>
-    <div id="filterbar" style="display:none">
-      <div class="cdd" id="fstatus-cdd">
-        <button class="cdd-btn fsel" id="fstatus-btn" onclick="openCDD('fstatus')">
-          <span class="cdd-label">All Status</span>
-        </button>
-        <div class="cdd-menu" id="fstatus-menu">
-          <div class="cdd-item selected" data-val="" onclick="setCDD('fstatus','','All Status');document.getElementById('fstatus').value='';render()">All Status</div>
-          <div class="cdd-item" data-val="watching" onclick="setCDD('fstatus','watching','Watching');document.getElementById('fstatus').value='watching';render()">Watching</div>
-          <div class="cdd-item" data-val="plan" onclick="setCDD('fstatus','plan','Plan to Watch');document.getElementById('fstatus').value='plan';render()">Plan to Watch</div>
-          <div class="cdd-item" data-val="completed" onclick="setCDD('fstatus','completed','Completed');document.getElementById('fstatus').value='completed';render()">Completed</div>
-          <div class="cdd-item" data-val="on_hold" onclick="setCDD('fstatus','on_hold','On Hold');document.getElementById('fstatus').value='on_hold';render()">On Hold</div>
-          <div class="cdd-item" data-val="dropped" onclick="setCDD('fstatus','dropped','Dropped');document.getElementById('fstatus').value='dropped';render()">Dropped</div>
-          <div class="cdd-item" data-val="upcoming" onclick="setCDD('fstatus','upcoming','Upcoming');document.getElementById('fstatus').value='upcoming';render()">Upcoming</div>
-        </div>
-      </div>
-      <select class="fsel" id="fstatus" onchange="render()" style="display:none">
-        <option value=""></option>
-        <option value="watching">Watching</option>
-        <option value="plan">Plan to Watch</option>
-        <option value="completed">Completed</option>
-        <option value="on_hold">On Hold</option>
-        <option value="dropped">Dropped</option>
-        <option value="upcoming">Upcoming</option>
-      </select>
-      <div class="cdd" id="fsort-cdd">
-        <button class="cdd-btn fsel" id="fsort-btn" onclick="openCDD('fsort')">
-          <span class="cdd-label">A → Z</span>
-        </button>
-        <div class="cdd-menu" id="fsort-menu">
-          <div class="cdd-item selected" data-val="title" onclick="setCDD('fsort','title','A → Z');document.getElementById('fsort').value='title';render()">A → Z</div>
-          <div class="cdd-item" data-val="added" onclick="setCDD('fsort','added','Recently Added');document.getElementById('fsort').value='added';render()">Recently Added</div>
-        </div>
-      </div>
-      <select class="fsel" id="fsort" style="display:none">
-        <option value="title">A → Z</option>
-        <option value="added">Recently Added</option>
-      </select>
-      <span class="cnt-lbl" id="cnt-lbl"></span>
-    </div>
+    <select class="fsel" id="fstatus" onchange="render()" style="display:none">
+      <option value=""></option>
+      <option value="watching">Watching</option>
+      <option value="plan">Plan to Watch</option>
+      <option value="completed">Completed</option>
+      <option value="on_hold">On Hold</option>
+      <option value="dropped">Dropped</option>
+      <option value="upcoming">Upcoming</option>
+    </select>
+    <select class="fsel" id="fsort" style="display:none">
+      <option value="title">A → Z</option>
+      <option value="added">Recently Added</option>
+    </select>
     <div id="content"></div>
   </div>
 </div>

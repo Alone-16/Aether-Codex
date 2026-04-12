@@ -1,12 +1,25 @@
+import {
+  DATA, GENRES, DATA_VERSION,
+  saveData, saveGenres, setDATA,
+  ls, K,
+  render,
+} from '../shared/utils.js';
+
 // ═══════════════════════════════════════════════════════
 //  SETTINGS STATE
 // ═══════════════════════════════════════════════════════
 const SETTINGS_KEY = 'ac_v4_settings';
 
+const ALL_SECTION_IDS = ['home','media','games','books','music','vault','log','tools','notes'];
+
+function _defaultSectionEnabled() {
+  return { home:true, media:true, games:true, books:true, music:true, vault:true, log:true, tools:true, notes:true };
+}
+
 function loadSettings() {
   const defaults = {
-    sectionOrder: ['home','media','games','books','music','vault','log','tools','notes'],
-    sectionEnabled: { home:true, media:true, games:true, books:true, music:true, vault:true, log:true, tools:true, notes:true },
+    sectionOrder: [...ALL_SECTION_IDS],
+    sectionEnabled: _defaultSectionEnabled(),
     density: 'comfortable',
     fontSize: 'medium',
     autoBackupDays: 10,
@@ -16,20 +29,58 @@ function loadSettings() {
     malRefreshToken: null,
     malTokenExpiry: null,
   };
-  const saved = ls.get(SETTINGS_KEY);
-  if (!saved) return defaults;
-  // Ensure new sections are always added if missing
-  const allSections = ['home','media','games','books','music','vault','log','tools','notes'];
-  allSections.forEach(s => {
-    if (!saved.sectionOrder.includes(s)) saved.sectionOrder.push(s);
-    if (saved.sectionEnabled[s] === undefined) saved.sectionEnabled[s] = true;
+  const raw = ls.get(SETTINGS_KEY);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...defaults };
+
+  const merged = { ...defaults, ...raw };
+
+  // Normalize section order (missing / corrupt localStorage must not throw or wipe prefs)
+  let order = Array.isArray(merged.sectionOrder) ? merged.sectionOrder.filter(id => typeof id === 'string') : [];
+  const seen = new Set();
+  order = order.filter(id => {
+    if (!ALL_SECTION_IDS.includes(id) || seen.has(id)) return false;
+    seen.add(id);
+    return true;
   });
-  if (saved.malAccessToken === undefined) saved.malAccessToken = null;
-  if (saved.malRefreshToken === undefined) saved.malRefreshToken = null;
-  if (saved.malTokenExpiry === undefined) saved.malTokenExpiry = null;
-  return { ...defaults, ...saved };
+  ALL_SECTION_IDS.forEach(id => { if (!seen.has(id)) order.push(id); });
+  merged.sectionOrder = order;
+
+  const se = merged.sectionEnabled && typeof merged.sectionEnabled === 'object' && !Array.isArray(merged.sectionEnabled)
+    ? merged.sectionEnabled : {};
+  merged.sectionEnabled = { ..._defaultSectionEnabled(), ...se };
+  ALL_SECTION_IDS.forEach(id => {
+    if (merged.sectionEnabled[id] === undefined) merged.sectionEnabled[id] = true;
+  });
+
+  if (merged.malAccessToken === undefined) merged.malAccessToken = null;
+  if (merged.malRefreshToken === undefined) merged.malRefreshToken = null;
+  if (merged.malTokenExpiry === undefined) merged.malTokenExpiry = null;
+  return merged;
 }
-function saveSettings(s) { ls.set(SETTINGS_KEY, s); SETTINGS = s; window.SETTINGS = s; }
+
+/** Always persist a full, JSON-safe snapshot so partial merges never drop section prefs. */
+function saveSettings(s) {
+  const base = loadSettings();
+  const next = {
+    ...base,
+    ...s,
+    sectionOrder: Array.isArray(s.sectionOrder)
+      ? [...s.sectionOrder]
+      : Array.isArray(base.sectionOrder)
+        ? [...base.sectionOrder]
+        : [...ALL_SECTION_IDS],
+    sectionEnabled: { ..._defaultSectionEnabled(), ...(s.sectionEnabled && typeof s.sectionEnabled === 'object' ? s.sectionEnabled : base.sectionEnabled) },
+  };
+  try {
+    ls.set(SETTINGS_KEY, next);
+  } catch (e) {
+    console.error('[Settings] localStorage save failed:', e);
+    if (typeof toast === 'function') toast('Could not save settings (storage full or blocked)', '#fb7185');
+    return;
+  }
+  SETTINGS = next;
+  window.SETTINGS = next;
+}
 
 var SETTINGS = loadSettings();
 window.SETTINGS = SETTINGS;
@@ -160,6 +211,7 @@ function renderSettingsSections(el) {
     books: { icon:'◎', color:'var(--ac)', desc:'Novels, Audiobooks & Manga' },
     music: { icon:'♪', color:'var(--ac)', desc:'Music library & YouTube sync' },
     vault: { icon:'🔗', color:'var(--ac)', desc:'Save and manage links privately' },
+    log:   { icon:'◎', color:'var(--ac)', desc:'Activity timeline and recent changes' },
     tools: { icon:'⬇', color:'var(--ac)', desc:'Instagram downloader & utilities' },
     notes: { icon:'✎', color:'var(--ac)', desc:'Personal notes, checklists & ideas' },
   };
@@ -855,10 +907,16 @@ function onSearch(v){SEARCH=v.toLowerCase();if(CURRENT==='media')renderMediaBody
 // ═══════════════════════════════
 function exportData(){
   const payload={version:DATA_VERSION,exported:new Date().toISOString(),data:DATA,genres:GENRES};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+  a.href=url;
   a.download='AetherCodex_backup_'+new Date().toISOString().slice(0,10)+'.json';
-  a.click();URL.revokeObjectURL(a.href);toast('✓ Backup exported');
+  a.style.display='none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},0);
+  toast('✓ Backup exported');
 }
 
 function importFile(){
@@ -871,7 +929,9 @@ function importFile(){
       showConfirm(`Import ${p.data.length} entries? This will merge with your current data.`,()=>{
         const ids=new Set(DATA.map(x=>x.id));
         const fresh=p.data.filter(x=>!ids.has(x.id));
-        DATA=DATA.concat(fresh);saveData(DATA);
+        const merged=DATA.concat(fresh);
+        setDATA(merged);
+        saveData(merged);
         if(p.genres){const gids=new Set(GENRES.map(g=>g.id));p.genres.filter(g=>!gids.has(g.id)).forEach(g=>GENRES.push(g));saveGenres(GENRES);}
         render();toast(`✓ Imported ${fresh.length} new entries`);
       },{title:'Import Data?',okLabel:'Import',danger:false});

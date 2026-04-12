@@ -65,6 +65,10 @@ await Promise.all(
   )
 );
 
+// Apply saved layout (section order, visibility, font/density) — static index.html sidebars
+// are defaults only until this runs.
+if (typeof window.applySettings === 'function') window.applySettings();
+
 // ── Shared extras ─────────────────────────────────────────────────
 await import('./shared/extras.js').catch(e =>
   console.warn('[main] extras.js failed to load:', e.message)
