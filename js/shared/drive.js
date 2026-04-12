@@ -56,6 +56,11 @@ let _tokenClient   = null;
 let _syncTimer     = null;
 let _driveFolderId = null;
 let _gisInitDone   = false;
+/** When a debounced auto-sync last finished (pull/merge/push or push-only). Limits runaway reschedule loops. */
+let _lastDriveReconcileEnd = 0;
+/** Min time between *automatic* debounced reconciles. Manual `syncDrive()` bypasses this via _fireScheduledDriveReconcile only. */
+const MIN_AUTO_RECONCILE_GAP_MS = 12000;
+let _driveInitPromise = null;
 
 // ═══════════════════════════════════════════════════════════════════
 //  SECURE TOKEN STORAGE
@@ -781,7 +786,27 @@ function _mergeRemoteIntoLocal(remote, localSavedBefore) {
   }
 }
 
-async function _driveInit() {
+/**
+ * Pull / merge / push. Use `force: true` for “Sync Now” so it never joins a stale in-flight run as a no-op.
+ * Concurrent auto-sync calls share one in-flight promise instead of overlapping GET/PATCH storms.
+ */
+async function _driveInit(opts = {}) {
+  const force = opts.force === true;
+  if (_driveInitPromise) {
+    if (force) {
+      try { await _driveInitPromise; } catch (e) { /* ignore; fresh run below */ }
+    } else {
+      return _driveInitPromise;
+    }
+  }
+  const p = _runDriveInit();
+  _driveInitPromise = p.finally(() => {
+    if (_driveInitPromise === p) _driveInitPromise = null;
+  });
+  return p;
+}
+
+async function _runDriveInit() {
   pauseDriveSyncScheduling();
   _updateDriveBtn('syncing');
   const localSavedBefore = parseInt(ls.str(K.SAVED) || '0', 10) || 0;
@@ -801,22 +826,32 @@ async function _driveInit() {
     _toast('✓ Synced with Google Drive', '#4ade80');
   } finally {
     resumeDriveSyncScheduling();
+    _lastDriveReconcileEnd = Date.now();
     if (typeof window.refreshDriveSyncIfVisible === 'function') window.refreshDriveSyncIfVisible();
   }
+}
+
+function _fireScheduledDriveReconcile() {
+  if (!_isConnected()) return;
+  const now = Date.now();
+  const since = _lastDriveReconcileEnd > 0 ? now - _lastDriveReconcileEnd : MIN_AUTO_RECONCILE_GAP_MS;
+  if (since < MIN_AUTO_RECONCILE_GAP_MS) {
+    _syncTimer = setTimeout(_fireScheduledDriveReconcile, MIN_AUTO_RECONCILE_GAP_MS - since);
+    return;
+  }
+  _driveInit({ force: false }).catch(e => {
+    console.error('[Drive] sync:', e);
+    _updateDriveBtn('error');
+    _toast('Drive sync failed: ' + (e && e.message ? e.message : String(e)), '#fb7185');
+  });
 }
 
 function _scheduleDriveSyncImpl() {
   if (!_isConnected()) return;
   clearTimeout(_syncTimer);
   _updateDriveBtn('pending');
-  // Full reconcile: pull, merge per-entry with local, then push merged snapshot.
-  _syncTimer = setTimeout(() => {
-    _driveInit().catch(e => {
-      console.error('[Drive] sync:', e);
-      _updateDriveBtn('error');
-      _toast('Drive sync failed: ' + (e && e.message ? e.message : String(e)), '#fb7185');
-    });
-  }, 3000);
+  // Debounce local writes, then respect MIN_AUTO_RECONCILE_GAP_MS so nothing can tight-loop GET+PATCH.
+  _syncTimer = setTimeout(_fireScheduledDriveReconcile, 3000);
 }
 
 // Exported so utils.js can wire it up via patchScheduleDriveSync().
@@ -863,7 +898,7 @@ window._WORKER = _WORKER;
 /** Full bidirectional sync — also assigned on window from main.js for inline onclick. */
 export async function syncDrive() {
   try {
-    await _driveInit();
+    await _driveInit({ force: true });
   } catch (e) {
     console.error('[Drive] syncDrive', e);
   }
