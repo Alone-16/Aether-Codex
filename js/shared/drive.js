@@ -215,20 +215,8 @@ function _startOAuthFlow() {
   });
   const oauthUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString();
 
-  if (window.electronBridge) {
-    _updateDriveBtn('syncing');
-    window.electronBridge.openOAuth(oauthUrl).then(async result => {
-      if (result.error) {
-        if (result.error !== 'popup_closed') _toast('Drive auth failed: ' + result.error, '#fb7185');
-        _updateDriveBtn('off');
-        return;
-      }
-      await _exchangeCode(result.code, redirectUri, result.state || stateParam, true);
-    });
-  } else {
     _showRedirectingOverlay();
     setTimeout(() => { location.href = oauthUrl; }, 80);
-  }
 }
 
 /** Must match Google Cloud OAuth "Authorized redirect URIs" (e.g. https://YOUR-HOST/auth/callback — same origin as the app). */
@@ -315,7 +303,7 @@ function _clearStoredNonce() {
 }
 
 async function _handleOAuthRedirect() {
-  if (window.electronBridge) return false;
+
   const params = new URLSearchParams(location.search);
   const code   = params.get('code');
   const state  = params.get('state');
@@ -420,19 +408,8 @@ async function _startMALAuth() {
   const oauthUrl  = data.url;
 
   console.log('[MAL OAuth] authorize URL', oauthUrl);
-  if (window.electronBridge) {
-    _showRedirectingOverlay('MyAnimeList');
-    window.electronBridge.openOAuth(oauthUrl).then(async result => {
-      if (result.error) {
-        if (result.error !== 'popup_closed') _toast('MAL auth failed: ' + result.error, '#fb7185');
-        return;
-      }
-      await _exchangeMALCode(result.code, redirectUri, result.state || state, true);
-    });
-  } else {
     _showRedirectingOverlay('MyAnimeList');
     setTimeout(() => { location.href = oauthUrl; }, 80);
-  }
 }
 
 async function _exchangeMALCode(code, redirectUri, stateParam, skipNonceCheck = false) {
@@ -497,7 +474,7 @@ async function _refreshMALAccessToken() {
 }
 
 async function _handleMALRedirect() {
-  if (window.electronBridge) return false;
+
   const params = new URLSearchParams(location.search);
   const code   = params.get('code');
   const state  = params.get('state');
