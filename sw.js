@@ -1,9 +1,8 @@
-const CACHE = 'ac-v5-cache';
+const CACHE = 'ac-v6-cache';
 const ASSETS = [
   './',
   './index.html',
   'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Bangers&family=Comic+Neue:wght@400;700&display=swap',
-  'https://accounts.google.com/gsi/client',
 ];
 
 // Install — cache core assets
@@ -28,7 +27,7 @@ self.addEventListener('fetch', e => {
   // Skip non-GET, Drive API, and Gemini API calls (always need network)
   if (e.request.method !== 'GET') return;
   const url = e.request.url;
-  if (url.includes('googleapis.com') || url.includes('workers.dev') || url.includes('generativelanguage')) return;
+  if (url.includes('googleapis.com') || url.includes('accounts.google.com') || url.includes('workers.dev') || url.includes('generativelanguage')) return;
 
   e.respondWith(
     fetch(e.request)
