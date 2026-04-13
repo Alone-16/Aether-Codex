@@ -46,18 +46,7 @@ Object.assign(window, {
 //    down the whole app.
 const sections = [
   './sections/home.js',
-  './sections/media.js',
-  './sections/games.js',
-  './sections/music.js',
-  './sections/books.js',
-  './sections/vault.js',
-  './sections/notes.js',
-  './sections/log.js',
-  './sections/tools.js',
   './sections/settings.js',
-  './sections/ai.js',
-  './sections/wrapped.js',
-  './sections/public.js',
 ];
 
 await Promise.all(
