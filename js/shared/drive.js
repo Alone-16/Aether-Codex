@@ -584,28 +584,41 @@ export function driveAction() {
 //  AUTHENTICATED FETCH WRAPPER
 // ═══════════════════════════════════════════════════════════════════
 async function _req(url, opts = {}) {
+  if (!navigator.onLine) throw new Error('Network offline');
   let token = _getToken();
   if (!token) {
     if (_hasRefreshToken()) {
       const ok = await _refreshAccessToken();
       if (ok) token = _getToken();
     }
-    if (!token) { _updateDriveBtn('off'); return null; }
+    if (!token) { _updateDriveBtn('off'); throw new Error('No token available'); }
   }
+  let r;
   try {
-    const r = await fetch(url, { ...opts, headers:{ Authorization:`Bearer ${token}`, ...(opts.headers||{}) } });
+    r = await fetch(url, { ...opts, headers:{ Authorization:`Bearer ${token}`, ...(opts.headers||{}) } });
+  } catch(e) {
+    throw new Error('Network offline');
+  }
+
+  if (!r.ok) {
     if (r.status === 401) {
       if (_hasRefreshToken()) {
         const ok = await _refreshAccessToken();
         if (ok) {
           const t2 = _getToken();
-          if (t2) return fetch(url, { ...opts, headers:{ Authorization:`Bearer ${t2}`, ...(opts.headers||{}) } });
+          if (t2) {
+            try { r = await fetch(url, { ...opts, headers:{ Authorization:`Bearer ${t2}`, ...(opts.headers||{}) } }); } catch(e){}
+            if (r && r.ok) return r;
+          }
         }
       }
-      _clearAccessToken(); _clearRefreshToken(); _updateDriveBtn('off'); return null;
+      _clearAccessToken(); _clearRefreshToken(); _updateDriveBtn('off'); throw new Error('401 Token expired');
     }
-    return r;
-  } catch { return null; }
+    if (r.status === 403) throw new Error('403 Permission denied');
+    if (r.status >= 500) throw new Error(`500 Server error (${r.status})`);
+    throw new Error(`HTTP Error (${r.status})`);
+  }
+  return r;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -717,24 +730,34 @@ async function _pushToDrive(opts = {}) {
   const silentToast = !!opts.silentToast;
   const sections = opts.sections || ALL_SECTIONS;
   _updateDriveBtn('syncing');
-  try {
-    const results = await Promise.all(sections.map(async section => {
-      const fileId = await _getOrCreateSectionFile(section); if (!fileId) throw new Error(`No file for ${section}`);
-      const payload = _buildSectionPayload(section);
-      if (!payload) return;
-      const r = await _req(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-        method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload),
-      });
-      if (!r || !r.ok) throw new Error(`Upload failed for ${section}`);
-    }));
-    ls.setStr(K.DSYNC, String(Date.now()));
-    _updateDriveBtn('connected');
-    if (!silentToast) _toast('✓ Saved to Google Drive', '#4ade80');
-    if (typeof window.refreshDriveSyncIfVisible === 'function') window.refreshDriveSyncIfVisible();
-  } catch(e) {
-    _updateDriveBtn('error');
-    _toast('Drive sync failed: ' + e.message, '#fb7185');
-    throw e;
+
+  let attempts = 0;
+  while (true) {
+    try {
+      const results = await Promise.all(sections.map(async section => {
+        const fileId = await _getOrCreateSectionFile(section); if (!fileId) throw new Error(`No file for ${section}`);
+        const payload = _buildSectionPayload(section);
+        if (!payload) return;
+        await _req(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+          method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload),
+        });
+      }));
+      ls.setStr(K.DSYNC, String(Date.now()));
+      _updateDriveBtn('connected');
+      if (!silentToast) _toast('✓ Saved to Google Drive', '#4ade80');
+      if (typeof window.refreshDriveSyncIfVisible === 'function') window.refreshDriveSyncIfVisible();
+      return;
+    } catch(e) {
+      if (attempts >= 2 || e.message.includes('403') || e.message.includes('401') || e.message.includes('No token')) {
+        _updateDriveBtn('error');
+        _toast('Drive sync failed: ' + e.message, '#fb7185');
+        throw e;
+      }
+      attempts++;
+      const delay = Math.pow(2, attempts) * 1000 + Math.random() * 500;
+      console.warn(`[Drive] push failed, retrying in ${Math.round(delay)}ms...`, e.message);
+      await new Promise(r => setTimeout(r, delay));
+    }
   }
 }
 
@@ -743,12 +766,13 @@ async function _pushToDrive(opts = {}) {
  * Also handles backward-compat migration from the old single-file format.
  */
 async function _pullFromDrive() {
-  try {
-    // ── Check for legacy single-file & migrate if present ──
-    const legacyId = await _getLegacySingleFile();
-    if (legacyId) {
-      const lr = await _req(`https://www.googleapis.com/drive/v3/files/${legacyId}?alt=media`);
-      if (lr && lr.ok) {
+  let attempts = 0;
+  while (true) {
+    try {
+      // ── Check for legacy single-file & migrate if present ──
+      const legacyId = await _getLegacySingleFile();
+      if (legacyId) {
+        const lr = await _req(`https://www.googleapis.com/drive/v3/files/${legacyId}?alt=media`);
         const legacyData = await lr.json();
         if (legacyData && legacyData.version != null) {
           console.info('[Drive] Found legacy single-file format — migrating to split files…');
@@ -764,28 +788,35 @@ async function _pullFromDrive() {
           return legacyData; // Return the legacy data for the current merge cycle
         }
       }
+
+      // ── Fetch all section files in parallel ──
+      const remoteChunks = await Promise.all(ALL_SECTIONS.map(async section => {
+        const fileId = await _getOrCreateSectionFile(section); if (!fileId) return null;
+        const r = await _req(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+        try { return await r.json(); } catch { return null; }
+      }));
+
+      // Merge into a single "remote" object the same shape as the old single-file
+      const remote = {};
+      ALL_SECTIONS.forEach((section, i) => {
+        const chunk = remoteChunks[i];
+        if (!chunk || chunk.version == null) return;
+        Object.assign(remote, chunk);
+      });
+      // Only return if we got at least one valid section
+      if (Object.keys(remote).length === 0) return null;
+      if (!remote.version) remote.version = DATA_VERSION;
+      return remote;
+    } catch (e) {
+      if (attempts >= 2 || e.message.includes('403') || e.message.includes('401') || e.message.includes('No token')) {
+        throw e;
+      }
+      attempts++;
+      const delay = Math.pow(2, attempts) * 1000 + Math.random() * 500;
+      console.warn(`[Drive] pull failed, retrying in ${Math.round(delay)}ms...`, e.message);
+      await new Promise(r => setTimeout(r, delay));
     }
-
-    // ── Fetch all section files in parallel ──
-    const remoteChunks = await Promise.all(ALL_SECTIONS.map(async section => {
-      const fileId = await _getOrCreateSectionFile(section); if (!fileId) return null;
-      const r = await _req(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
-      if (!r || !r.ok) return null;
-      try { return await r.json(); } catch { return null; }
-    }));
-
-    // Merge into a single "remote" object the same shape as the old single-file
-    const remote = {};
-    ALL_SECTIONS.forEach((section, i) => {
-      const chunk = remoteChunks[i];
-      if (!chunk || chunk.version == null) return;
-      Object.assign(remote, chunk);
-    });
-    // Only return if we got at least one valid section
-    if (Object.keys(remote).length === 0) return null;
-    if (!remote.version) remote.version = DATA_VERSION;
-    return remote;
-  } catch { return null; }
+  }
 }
 
 /**

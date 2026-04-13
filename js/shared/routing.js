@@ -52,7 +52,16 @@ export async function renderPage(id) {
   if (seq !== renderSeq) return;
 
   if (typeof window[fnName] === 'function') {
-    window[fnName](c);
+    try {
+      window[fnName](c);
+    } catch (err) {
+      console.error(`[routing] render error in ${id}:`, err);
+      c.innerHTML = `<div style="padding:40px;text-align:center;color:#fb7185;font-family:var(--fd)">
+        <div style="font-size:32px;margin-bottom:16px">⚠️</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:8px">Error rendering ${id} section</div>
+        <div style="font-size:12px;opacity:.8;max-width:400px;margin:0 auto;white-space:pre-wrap;word-break:break-word">${err && err.message ? err.message : String(err)}</div>
+      </div>`;
+    }
   } else if (typeof window.renderSectionStub === 'function') {
     window.renderSectionStub(id, c);
   } else {

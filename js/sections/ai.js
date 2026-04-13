@@ -121,7 +121,9 @@ async function sendAIMessage(userMsg) {
     }
 
     if (!res.ok) {
-      throw new Error(data.error?.message || `API error ${res.status}`);
+      setAITyping(false);
+      appendAIMessage('assistant', `⚠️ AI Error: ${data.error?.message || 'API error ' + res.status}`);
+      return;
     }
 
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';

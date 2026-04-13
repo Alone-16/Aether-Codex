@@ -62,6 +62,19 @@ await Promise.all(
 // are defaults only until this runs.
 if (typeof window.applySettings === 'function') window.applySettings();
 
+// ── Error Handling ────────────────────────────────────────────────
+window.onerror = function(msg, url, line, col, error) {
+  if (window.SETTINGS && window.SETTINGS.devMode) {
+    if (typeof window.toast === 'function') window.toast(`[Dev Error] ${msg}`, '#fb7185');
+  }
+};
+window.onunhandledrejection = function(e) {
+  if (window.SETTINGS && window.SETTINGS.devMode) {
+    const msg = e.reason && e.reason.message ? e.reason.message : String(e.reason);
+    if (typeof window.toast === 'function') window.toast(`[Dev Promise] ${msg}`, '#fb7185');
+  }
+};
+
 // ── Service Worker & PWA Install ──────────────────────────────────
 window.deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
