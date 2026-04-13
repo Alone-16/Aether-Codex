@@ -128,8 +128,8 @@ function rebuildSidebar() {
     music: { icon:'♪', label:'Music' },
     vault: { icon:'◈', label:'Vault' },
     tools: { icon:'⬇', label:'Tools' },
-    log:   { icon:'◎', label:'Log' },
     notes: { icon:'✎', label:'Notes' },
+    log:   { icon:'◎', label:'Log' },
   };
   // Desktop sidebar
   const sb = document.getElementById('sidebar');

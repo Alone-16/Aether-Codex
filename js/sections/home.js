@@ -59,89 +59,171 @@ function renderHome(c){
       </div>
     </div>`;
   }).join('');
-  const qlHtml=`<div class="dash-card">
-    <div class="dash-card-hd">
-      <div class="dash-card-title">⚡ Currently Active</div>
-      <div class="dash-card-action" onclick="nav('media')">See all →</div>
+  const qlHtml=`<div class="dash-card" style="background:linear-gradient(160deg, var(--surf2), var(--surf)); border-radius:12px; border:1px solid rgba(255,255,255,0.06); box-shadow:0 4px 15px rgba(0,0,0,0.1)">
+    <div class="dash-card-hd" style="border-bottom:1px solid rgba(255,255,255,0.04); padding: 14px 18px 12px; display:flex; justify-content:space-between; align-items:center">
+      <div class="dash-card-title" style="color:var(--tx); font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px">⚡ Currently Active</div>
+      <div class="dash-card-action" onclick="nav('media')" style="padding:4px 8px;background:rgba(var(--ac-rgb),0.1);border-radius:6px;transition:all 0.2s;color:var(--ac);font-size:11px;font-weight:600;cursor:pointer" onmouseover="this.style.background='rgba(var(--ac-rgb),0.2)'" onmouseout="this.style.background='rgba(var(--ac-rgb),0.1)'">See all →</div>
     </div>
-    <div class="dash-card-body">
+    <div class="dash-card-body" style="padding:16px 18px">
       <div class="quick-links">${qlItems||'<div style="color:var(--mu);font-size:13px;text-align:center;padding:14px">No active entries</div>'}</div>
     </div>
   </div>`;
 
   c.innerHTML=`
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:20px">
-      <div>
-        <div style="font-family:var(--fd);font-size:clamp(18px,3vw,26px);font-weight:700;line-height:1.2">Welcome to <em style="color:var(--ac);font-style:normal;text-shadow:var(--glow)">The Aether Codex</em></div>
-        <div style="font-size:13px;color:var(--tx2);margin-top:4px">Your personal universe of everything you track</div>
+    <canvas id="page-interactive-bg" style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:-1; pointer-events:none;"></canvas>
+    <style>
+      .hero-wrap .hero-title, .hero-wrap .hero-sub, .hero-wrap .hero-date-box { text-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+      .dc-icon-bg { position: absolute; top: -15px; right: -15px; font-size: 80px; opacity: 0.04; pointer-events: none; transition: all 0.3s cubic-bezier(0.2,0.8,0.2,1); font-family: var(--fb); line-height: 1; }
+      .dc:hover .dc-icon-bg { transform: scale(1.1) rotate(-10deg); opacity: 0.08; color: var(--ac); }
+      .home-two-col { animation: fadeUp 0.4s ease-out; }
+      @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      .hc-icon-ring { width: 32px; height: 32px; border-radius: 50%; background: rgba(var(--ac-rgb), 0.1); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: var(--ac); border: 1px solid rgba(var(--ac-rgb), 0.3); box-shadow: 0 0 10px rgba(var(--ac-rgb), 0.2); transition: all 0.3s ease; }
+      .hc-card:hover .hc-icon-ring { transform: rotate(15deg) scale(1.1); background: var(--ac); color: #000; box-shadow: 0 0 15px rgba(var(--ac-rgb), 0.5); }
+    </style>
+    <div class="hero-wrap">
+      <div style="display:flex; flex-direction:column; gap:6px; position:relative; z-index:1;">
+        <div class="hero-title">Welcome to <em>The Aether Codex</em></div>
+        <div class="hero-sub" style="color:#e2e8f0; font-size:15px; font-weight:500; letter-spacing:0.3px;">Your personal universe of everything you track</div>
       </div>
-      <div style="text-align:right">
-        <div style="font-size:12px;color:var(--mu)"><strong style="display:block;font-size:13px;color:var(--tx2)">${now.toLocaleString('default',{weekday:'long'})}</strong>${now.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div>
-        <button onclick="openWrapped()" style="margin-top:6px;background:rgba(var(--ac-rgb),.1);border:1px solid rgba(var(--ac-rgb),.25);color:var(--ac);border-radius:5px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">✦ Wrapped</button>
+      <div style="text-align:right; display:flex; gap:20px; align-items:center; position:relative; z-index:1;">
+        <div class="hero-date-box" style="border-right-color:rgba(255,255,255,0.15); padding-right:20px;">
+          <strong class="hero-date-day" style="font-size:16px;">${now.toLocaleString('default',{weekday:'long'})}</strong>
+          <span class="hero-date-full" style="color:rgba(255,255,255,0.6); font-size:11px;">${now.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</span>
+        </div>
+        <button onclick="openWrapped()" style="height:44px;background:rgba(var(--ac-rgb),0.1);color:var(--tx);border:1px solid rgba(var(--ac-rgb),0.3);border-radius:12px;padding:0 24px;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.3s cubic-bezier(0.2,0.8,0.2,1);display:flex;align-items:center;gap:8px;box-shadow:0 4px 14px rgba(0,0,0,0.2); backdrop-filter:blur(5px)" onmouseover="this.style.background='var(--ac)';this.style.color='#000';this.style.transform='translateY(-2px) scale(1.02)';this.style.boxShadow='0 8px 20px rgba(var(--ac-rgb),0.3)'" onmouseout="this.style.background='rgba(var(--ac-rgb),0.1)';this.style.color='var(--tx)';this.style.transform='translateY(0) scale(1)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.2)'">✦ Wrapped</button>
       </div>
     </div>
-    <div class="dash-grid" style="margin-bottom:20px">
-      <div class="dc"><div class="dc-v">${mediaEntries.length}</div><div class="dc-l">Media Entries</div></div>
-      <div class="dc"><div class="dc-v">${watching}</div><div class="dc-l">Watching</div></div>
-      <div class="dc"><div class="dc-v">${completed}</div><div class="dc-l">Completed</div></div>
-      <div class="dc"><div class="dc-v">${totalEps.toLocaleString()}</div><div class="dc-l">Eps Watched</div></div>
-      <div class="dc"><div class="dc-v">${fmtMin(totalMin)}</div><div class="dc-l">Time Watched</div></div>
-      <div class="dc"><div class="dc-v">${Math.floor(totalMin/1440)}</div><div class="dc-l">Days Watched</div></div>
+    <div class="dash-grid" style="margin-bottom:24px">
+      <div class="dc"><div class="dc-icon-bg">◉</div><div class="dc-v">${mediaEntries.length}</div><div class="dc-l">Media Entries</div></div>
+      <div class="dc"><div class="dc-icon-bg">▶</div><div class="dc-v">${watching}</div><div class="dc-l">Watching</div></div>
+      <div class="dc"><div class="dc-icon-bg">✓</div><div class="dc-v">${completed}</div><div class="dc-l">Completed</div></div>
+      <div class="dc"><div class="dc-icon-bg">⊞</div><div class="dc-v">${totalEps.toLocaleString()}</div><div class="dc-l">Eps Watched</div></div>
+      <div class="dc"><div class="dc-icon-bg">⏱</div><div class="dc-v">${fmtMin(totalMin)}</div><div class="dc-l">Time Watched</div></div>
+      <div class="dc"><div class="dc-icon-bg">🗓</div><div class="dc-v">${Math.floor(totalMin/1440)}</div><div class="dc-l">Days Watched</div></div>
     </div>
-    <div id="drive-hint-inner" style="display:none;align-items:center;gap:14px;background:rgba(var(--ac-rgb),.06);border:1px solid rgba(var(--ac-rgb),.2);border-radius:var(--cr);padding:16px 20px;margin-bottom:16px">
+    <div id="drive-hint-inner" style="display:none;align-items:center;gap:14px;background:rgba(var(--ac-rgb),.06);border:1px solid rgba(var(--ac-rgb),.2);border-radius:12px;padding:16px 20px;margin-bottom:20px">
       <div style="font-size:24px">☁</div>
       <div style="flex:1">
         <div style="font-size:14px;font-weight:600;color:var(--tx)">Connect Google Drive to load your data</div>
         <div style="font-size:12px;color:var(--tx2);margin-top:2px">Your data is stored privately in your Drive. Connect to sync across all devices.</div>
       </div>
-      <button onclick="driveAction()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Connect Drive</button>
+      <button onclick="driveAction()" style="background:var(--ac);color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:opacity 0.2s" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Connect Drive</button>
     </div>
-    <div class="home-two-col" style="display:grid;grid-template-columns:1fr 320px;gap:14px;align-items:start">
+    <div class="home-two-col" style="display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start">
       <div>
         ${renderAiringWidget()}
-        <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-top:14px">
-          <div style="padding:12px 14px 8px;border-bottom:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu)">📊 Section Overview</div>
+        <div style="margin-top:24px">
+          <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--tx);margin-bottom:16px;display:flex;align-items:center;gap:8px">
+            <span style="color:var(--ac);text-shadow:var(--glow)">✦</span> Database Overview
           </div>
-          <div class="section-ov-grid" style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:9px">
-            <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('media')">
-              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>◉</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ac)">Media</span></div>
-              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--ac)">${mediaEntries.length}</div>
-              <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${watching} watching · ${completed} done</div>
-              <div style="height:2px;background:rgba(var(--ac-rgb),.15);border-radius:1px"><div style="height:100%;width:${Math.round(completed/mediaEntries.length*100)}%;background:var(--ac);border-radius:1px"></div></div>
+          <div class="section-ov-grid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:12px">
+            <div class="hc-card hover-scale" onclick="nav('media')" style="--ac-rgb:125,211,252; --ac:#7dd3fc;">
+              <div class="hc-head">
+                <div class="hc-badge"><span>◉</span> Media</div>
+                <div class="hc-icon-ring">M</div>
+              </div>
+              <div class="hc-val">${mediaEntries.length}</div>
+              <div class="hc-lbl">${watching} watching · ${completed} done</div>
+              <div class="hc-bar-bg"><div class="hc-bar-fg" style="width:0" data-w="${mediaEntries.length?Math.round(completed/mediaEntries.length*100):0}%"></div></div>
             </div>
-            <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('games')">
-              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>◈</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ac)">Games</span></div>
-              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--ac)">${(window.GDATA||[]).length||'—'}</div>
-              <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${(window.GDATA||[]).filter(g=>g.status==='playing').length} playing · ${(window.GDATA||[]).filter(g=>g.status==='completed').length} done</div>
-              <div style="height:2px;background:rgba(var(--ac-rgb),.15);border-radius:1px;overflow:hidden"><div style="height:100%;width:${(window.GDATA||[]).length?Math.round((window.GDATA||[]).filter(g=>g.status==='completed').length/(window.GDATA||[]).length*100):0}%;background:var(--ac);border-radius:1px"></div></div>
+
+            <div class="hc-card hover-scale" onclick="nav('games')" style="--ac-rgb:245,158,11; --ac:#f59e0b;">
+              <div class="hc-head">
+                <div class="hc-badge"><span>◈</span> Games</div>
+                <div class="hc-icon-ring">G</div>
+              </div>
+              <div class="hc-val">${(window.GDATA||[]).length||'—'}</div>
+              <div class="hc-lbl">${(window.GDATA||[]).filter(g=>g.status==='playing').length} playing · ${(window.GDATA||[]).filter(g=>g.status==='completed').length} done</div>
+              <div class="hc-bar-bg"><div class="hc-bar-fg" style="width:0" data-w="${(window.GDATA||[]).length?Math.round((window.GDATA||[]).filter(g=>g.status==='completed').length/(window.GDATA||[]).length*100):0}%"></div></div>
             </div>
-            <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('books')">
-              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>◎</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ac)">Books</span></div>
-              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--ac)">${(window.BDATA||[]).length||'—'}</div>
-              <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${(window.BDATA||[]).filter(b=>b.status==='reading').length} reading · ${(window.BDATA||[]).filter(b=>b.status==='completed').length} done</div>
-              <div style="height:2px;background:rgba(var(--ac-rgb),.15);border-radius:1px;overflow:hidden"><div style="height:100%;width:${(window.BDATA||[]).length?Math.round((window.BDATA||[]).filter(b=>b.status==='completed').length/(window.BDATA||[]).length*100):0}%;background:var(--ac);border-radius:1px"></div></div>
+
+            <div class="hc-card hover-scale" onclick="nav('books')" style="--ac-rgb:167,139,250; --ac:#a78bfa;">
+              <div class="hc-head">
+                <div class="hc-badge"><span>◎</span> Books</div>
+                <div class="hc-icon-ring">B</div>
+              </div>
+              <div class="hc-val">${(window.BDATA||[]).length||'—'}</div>
+              <div class="hc-lbl">${(window.BDATA||[]).filter(b=>b.status==='reading').length} reading · ${(window.BDATA||[]).filter(b=>b.status==='completed').length} done</div>
+              <div class="hc-bar-bg"><div class="hc-bar-fg" style="width:0" data-w="${(window.BDATA||[]).length?Math.round((window.BDATA||[]).filter(b=>b.status==='completed').length/(window.BDATA||[]).length*100):0}%"></div></div>
             </div>
-            <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('music')">
-              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>♪</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ac)">Music</span></div>
-              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--ac)">${(window.MDATA||[]).filter(s=>!s.removedFromPlaylist).length||'—'}</div>
-              <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${(window.MPLAYLISTS||[]).filter(p=>p.synced).length} playlist${(window.MPLAYLISTS||[]).filter(p=>p.synced).length!==1?'s':''} synced</div>
-              <div style="height:2px;background:rgba(var(--ac-rgb),.15);border-radius:1px"></div>
+
+            <div class="hc-card hover-scale" onclick="nav('music')" style="--ac-rgb:251,146,60; --ac:#fb923c;">
+              <div class="hc-head">
+                <div class="hc-badge"><span>♪</span> Music</div>
+                <div class="hc-icon-ring">♫</div>
+              </div>
+              <div class="hc-val">${(window.MDATA||[]).filter(s=>!s.removedFromPlaylist).length||'—'}</div>
+              <div class="hc-lbl">${(window.MPLAYLISTS||[]).filter(p=>p.synced).length} playlist${(window.MPLAYLISTS||[]).filter(p=>p.synced).length!==1?'s':''} synced</div>
+              <div class="hc-bar-bg"><div class="hc-bar-fg" style="width:100%" data-w="100%"></div></div>
             </div>
-            <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:7px;padding:12px;cursor:pointer;overflow:hidden" onclick="nav('notes')">
-              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px"><span>✎</span><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ac)">Notes</span></div>
-              <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--ac)">${(window.NDATA||[]).length||'—'}</div>
-              <div style="font-size:11px;color:var(--tx2);margin-top:3px;margin-bottom:8px">${(window.NDATA||[]).filter(n=>n.pinned).length} pinned</div>
-              <div style="height:2px;background:rgba(var(--ac-rgb),.15);border-radius:1px"></div>
+
+            <div class="hc-card hover-scale" onclick="nav('notes')" style="--ac-rgb:74,222,128; --ac:#4ade80;">
+              <div class="hc-head">
+                <div class="hc-badge"><span>✎</span> Notes</div>
+                <div class="hc-icon-ring">N</div>
+              </div>
+              <div class="hc-val">${(window.NDATA||[]).length||'—'}</div>
+              <div class="hc-lbl">${(window.NDATA||[]).filter(n=>n.pinned).length} pinned</div>
+              <div class="hc-bar-bg"><div class="hc-bar-fg" style="width:100%" data-w="100%"></div></div>
             </div>
           </div>
         </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;flex-direction:column;gap:20px">
         ${qlHtml}
         ${renderUpcomingWidget()}
       </div>
     </div>`;
+  
+  setTimeout(()=>{
+    c.querySelectorAll('.hc-bar-fg').forEach(el=>{
+      if(el.dataset.w) el.style.width=el.dataset.w;
+    });
+
+    const cvs = document.getElementById('page-interactive-bg');
+    if (!cvs) return;
+    const ctx = cvs.getContext('2d');
+    let w = window.innerWidth, h = window.innerHeight;
+    cvs.width = w; cvs.height = h;
+    let p = [];
+    let num = w < 768 ? 40 : 90;
+    let style = getComputedStyle(document.documentElement);
+    let acRgb = style.getPropertyValue('--ac-rgb').trim() || '56,189,248';
+    for(let i=0; i<num; i++){
+      p.push({ x:Math.random()*w, y:Math.random()*h, vx:(Math.random()-0.5)*0.6, vy:(Math.random()-0.5)*0.6, r:Math.random()*1.5+0.8 });
+    }
+    let mx=-999, my=-999;
+    if(window._homeBgListener) window.removeEventListener('mousemove', window._homeBgListener);
+    window._homeBgListener = e => { mx=e.clientX; my=e.clientY; };
+    window.addEventListener('mousemove', window._homeBgListener);
+    if(window._homeBgResize) window.removeEventListener('resize', window._homeBgResize);
+    window._homeBgResize = () => { if(cvs){ w=cvs.width=window.innerWidth; h=cvs.height=window.innerHeight; } };
+    window.addEventListener('resize', window._homeBgResize);
+
+    function draw() {
+      if (!document.getElementById('page-interactive-bg')) {
+        window.removeEventListener('mousemove', window._homeBgListener);
+        window.removeEventListener('resize', window._homeBgResize);
+        return;
+      }
+      ctx.clearRect(0,0,w,h);
+      for(let i=0; i<p.length; i++){
+        let a=p[i]; a.x+=a.vx; a.y+=a.vy;
+        if(a.x<0||a.x>w) a.vx*=-1; if(a.y<0||a.y>h) a.vy*=-1;
+        let dx=a.x-mx, dy=a.y-my, dist=dx*dx+dy*dy;
+        if(dist<25000) { a.x+=dx*0.005; a.y+=dy*0.005; }
+        ctx.beginPath(); ctx.arc(a.x,a.y,a.r,0,Math.PI*2);
+        ctx.fillStyle=`rgba(${acRgb}, 0.6)`; ctx.fill();
+        for(let j=i+1; j<p.length; j++){
+          let b=p[j], d=(a.x-b.x)**2+(a.y-b.y)**2;
+          if(d<12000){ ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.strokeStyle=`rgba(${acRgb}, ${0.15-d/12000*0.15})`; ctx.stroke(); }
+        }
+        if(dist<25000){ ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(mx,my); ctx.strokeStyle=`rgba(${acRgb}, ${0.2-dist/25000*0.2})`; ctx.stroke(); }
+      }
+      requestAnimationFrame(draw);
+    }
+    draw();
+  }, 50);
 }
 
 let AIRING_DAY = new Date().getDay(); // defaults to today
@@ -171,7 +253,7 @@ function renderAiringWidget(){
 
   const showList = sel.length
     ? sel.map(e=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--brd);cursor:pointer" onclick="nav('media')">
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer" onclick="nav('media')">
           <div style="width:6px;height:6px;border-radius:50%;background:var(--ac);flex-shrink:0"></div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;color:var(--tx)">${esc(e.title)}</div>
@@ -181,15 +263,15 @@ function renderAiringWidget(){
         </div>`).join('')
     : `<div style="font-size:13px;color:var(--mu);text-align:center;padding:16px 0">Nothing airing</div>`;
 
-  return`<div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden">
-    <div style="padding:12px 14px 10px;border-bottom:1px solid var(--brd);display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu)">📺 Airing This Week</div>
-      <div style="font-size:11px;color:var(--ac);cursor:pointer" onclick="nav('media')">Manage →</div>
+  return`<div style="background:linear-gradient(to bottom right, var(--surf2), var(--surf)); border-radius:12px; border:1px solid rgba(255,255,255,0.06); box-shadow:0 4px 15px rgba(0,0,0,0.1); overflow:hidden">
+    <div style="padding:14px 18px 12px; border-bottom:1px solid rgba(255,255,255,0.04); display:flex; justify-content:space-between; align-items:center">
+      <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:var(--tx)">📺 Airing This Week</div>
+      <div style="font-size:11px;color:var(--ac);cursor:pointer;padding:4px 8px;background:rgba(var(--ac-rgb),0.1);border-radius:6px;transition:all 0.2s;font-weight:600" onmouseover="this.style.background='rgba(var(--ac-rgb),0.2)'" onmouseout="this.style.background='rgba(var(--ac-rgb),0.1)'" onclick="nav('media')">Manage →</div>
     </div>
-    <div style="padding:10px 14px 8px;display:grid;grid-template-columns:repeat(7,1fr);gap:5px" id="airing-pills">
+    <div style="padding:12px 18px 8px; display:grid; grid-template-columns:repeat(7,1fr); gap:6px" id="airing-pills">
       ${pills}
     </div>
-    <div style="padding:0 14px 8px" id="airing-shows">
+    <div style="padding:4px 18px 14px" id="airing-shows">
       ${showList}
     </div>
   </div>`;
@@ -224,17 +306,27 @@ function selectAiringDay(d) {
   const lblCol = diff===0?'#4ade80':diff===1?'#fbbf24':'var(--mu)';
   const showsEl = document.getElementById('airing-shows');
   if (showsEl) {
-    showsEl.innerHTML = sel.length
-      ? sel.map(e=>`
-          <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--brd);cursor:pointer" onclick="nav('media')">
-            <div style="width:6px;height:6px;border-radius:50%;background:var(--ac);flex-shrink:0"></div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:600;color:var(--tx)">${esc(e.title)}</div>
-              ${e.airingTime?`<div style="font-size:11px;color:var(--mu);margin-top:1px">${e.airingTime}</div>`:''}
-            </div>
-            <span style="font-size:11px;font-weight:700;color:${lblCol};white-space:nowrap">${dayLbl}</span>
-          </div>`).join('')
-      : `<div style="font-size:13px;color:var(--mu);text-align:center;padding:16px 0">Nothing airing</div>`;
+    showsEl.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+    showsEl.style.opacity = '0';
+    showsEl.style.transform = 'translateY(5px)';
+    
+    setTimeout(() => {
+      showsEl.innerHTML = sel.length
+        ? sel.map(e=>`
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer" onclick="nav('media')">
+              <div style="width:6px;height:6px;border-radius:50%;background:var(--ac);flex-shrink:0"></div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:600;color:var(--tx)">${esc(e.title)}</div>
+                ${e.airingTime?`<div style="font-size:11px;color:var(--mu);margin-top:1px">${e.airingTime}</div>`:''}
+              </div>
+              <span style="font-size:11px;font-weight:700;color:${lblCol};white-space:nowrap">${dayLbl}</span>
+            </div>`).join('')
+        : `<div style="font-size:13px;color:var(--mu);text-align:center;padding:16px 0">Nothing airing</div>`;
+      
+      void showsEl.offsetWidth; // flush css layout to ensure transition works
+      showsEl.style.opacity = '1';
+      showsEl.style.transform = 'translateY(0)';
+    }, 200);
   }
 }
 
@@ -263,11 +355,11 @@ function renderUpcomingWidget(){
       <div class="up-pill ${cls}">${lbl}</div>
     </div>`;
   }).join('');
-  return`<div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden">
-    <div style="padding:12px 14px 8px;border-bottom:1px solid var(--brd)">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu)">🗓 Upcoming</div>
+  return`<div style="background:linear-gradient(to bottom right, var(--surf2), var(--surf)); border-radius:12px; border:1px solid rgba(255,255,255,0.06); box-shadow:0 4px 15px rgba(0,0,0,0.1); overflow:hidden">
+    <div style="padding:14px 18px 12px; border-bottom:1px solid rgba(255,255,255,0.04)">
+      <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:var(--tx)">🗓 Upcoming</div>
     </div>
-    <div style="padding:10px">${rows||`<div style="color:var(--mu);font-size:13px;text-align:center;padding:14px">No upcoming items</div>`}</div>
+    <div style="padding:12px 18px 14px">${rows||`<div style="color:var(--mu);font-size:13px;text-align:center;padding:14px">No upcoming items</div>`}</div>
   </div>`;
 }
 
