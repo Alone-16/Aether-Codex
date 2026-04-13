@@ -865,37 +865,41 @@ textarea.fin{resize:vertical;min-height:60px}
   flex-wrap:nowrap;
   gap:4px;
   padding:4px;
-  background:rgba(0,0,0,0.2);
+  background:rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border:1px solid rgba(255,255,255,0.06);
-  border-radius:12px;
+  border-radius:14px;
   overflow-x:auto;
   -webkit-overflow-scrolling:touch;
   scrollbar-width:none;
-  box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.2), 0 4px 15px rgba(0,0,0,0.1);
 }
 .m-tabs::-webkit-scrollbar { display:none; }
 .m-tab {
   position:relative;
-  padding:8px 16px;
+  padding:8px 18px;
   margin:0;
   font-size:12px;
   font-weight:600;
   background:none;
   border:none;
-  border-radius:8px;
+  border-radius:10px;
   color:var(--tx2);
   cursor:pointer;
-  transition:all .3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   white-space:nowrap;
   font-family:var(--fb);
+  transform: scale(0.98);
 }
-.m-tab:hover { color:var(--tx); background: rgba(255,255,255,0.05); }
+.m-tab:hover { color:var(--tx); background: rgba(255,255,255,0.05); transform: scale(1); }
 .m-tab.active {
   color:var(--tx);
   font-weight:700;
-  background:linear-gradient(135deg, rgba(var(--ac-rgb),.2), rgba(var(--ac-rgb),.05));
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.1);
-  border: 1px solid rgba(var(--ac-rgb),.3);
+  background:linear-gradient(135deg, rgba(var(--ac-rgb),.25), rgba(var(--ac-rgb),.1));
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1);
+  border: 1px solid rgba(var(--ac-rgb),.4);
+  transform: scale(1);
 }
 .m-tab:focus-visible {
   outline:2px solid rgba(var(--ac-rgb),.45);

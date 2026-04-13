@@ -76,15 +76,30 @@ function _renderFilterChips() {
 
 function fadeRenderMediaBody() {
   const el = document.getElementById('media-body'); if (!el) return;
-  el.style.transition = 'none';
+  
+  // 1. Trigger Fade Out
+  el.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
   el.style.opacity = '0';
-  el.style.transform = 'translateY(10px)';
+  el.style.transform = 'translateY(-8px)';
+  el.style.pointerEvents = 'none';
+
+  // 2. Wait for fade out, then swap and fade in
   setTimeout(() => {
     renderMediaBody();
-    el.style.transition = 'opacity 0.3s cubic-bezier(0.16,1,0.3,1), transform 0.3s cubic-bezier(0.16,1,0.3,1)';
+    
+    // Reset state for entry animation
+    el.style.transition = 'none';
+    el.style.transform = 'translateY(12px)';
+    
+    // Force browser reflow to register the "none" transition state
+    el.offsetHeight; 
+
+    // Trigger Fade In
+    el.style.transition = 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
     el.style.opacity = '1';
     el.style.transform = 'translateY(0)';
-  }, 10);
+    el.style.pointerEvents = 'all';
+  }, 150);
 }
 
 function setMediaChip(val) {
@@ -237,7 +252,7 @@ function setMediaSort(val) {
 
 function renderMedia(c) {
   runLinkedMigrationV3();
-  _injectPinStyles();
+  _injectPremiumStyles();
   _initMediaDropdownClose();
   const tabs = ['List', 'Dashboard', 'Upcoming', 'Incomplete'];
   const g    = gbyid(GACTIVE);
@@ -403,6 +418,13 @@ function setMediaPage(p) {
   if (srch)  srch.value  = '';
   const fstEl = document.getElementById('fstatus');
   if (fstEl) fstEl.value = '';
+
+  // Update active tab state visually
+  document.querySelectorAll('.m-tabs .m-tab').forEach(btn => {
+    const isMatched = btn.getAttribute('onclick')?.includes(`'${p}'`);
+    btn.classList.toggle('active', !!isMatched);
+  });
+
   fadeRenderMediaBody();
 }
 
@@ -475,13 +497,13 @@ function renderList(c) {
   }
 
   const STATUS_META = {
-    watching:    { lbl:'● Watching',    cls:'watching'    },
-    plan:        { lbl:'○ Planned',     cls:'plan'        },
-    not_started: { lbl:'○ Not Started', cls:'not_started' },
-    completed:   { lbl:'✓ Completed',   cls:'completed'   },
-    on_hold:     { lbl:'⏸ On Hold',     cls:'on_hold'     },
-    dropped:     { lbl:'✗ Dropped',     cls:'dropped'     },
-    upcoming:    { lbl:'◉ Upcoming',    cls:'upcoming'    },
+    watching:    { lbl:'Watching',    cls:'watching'    },
+    plan:        { lbl:'Planned',     cls:'plan'        },
+    not_started: { lbl:'Not Started', cls:'not_started' },
+    completed:   { lbl:'Completed',   cls:'completed'   },
+    on_hold:     { lbl:'On Hold',     cls:'on_hold'     },
+    dropped:     { lbl:'Dropped',     cls:'dropped'     },
+    upcoming:    { lbl:'Upcoming',    cls:'upcoming'    },
   };
   const byS = {};
   SO.forEach(s => { byS[s] = flat.filter(r => r.status === s); });
@@ -499,7 +521,7 @@ function renderList(c) {
           <span class="m-sec-arr${coll ? ' coll' : ''}">▾</span>
         </div>
         <div class="m-rows${coll ? ' coll' : ''}">
-          ${rows.map(r => rowHtml(r.e)).join('')}
+          ${rows.map((r, i) => rowHtml(r.e, i)).join('')}
         </div>
       </div>`;
   });
@@ -526,7 +548,7 @@ function linkedPartIsComplete(e) {
 function activeSeason(e) { return null; }
 
 /* ── Card rows ── */
-function rowHtml(e) {
+function rowHtml(e, idx = 0) {
   const isA    = PANEL && PEDIT === e.id;
   const col    = _mediaStatusBar(e.status);
   const rCur   = parseInt(e.epCur || 0);
@@ -539,13 +561,14 @@ function rowHtml(e) {
   const grpBadge = e.linkedGroupId
     ? `<span style="font-size:9px;font-weight:700;background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2);border-radius:3px;padding:1px 4px">🔗</span>` : '';
 
-  return `<div class="m-card${isA ? ' m-card-active' : ''}${e.pinned ? ' m-card-pinned' : ''}" id="row-${e.id}"
+  return `<div class="m-card${isA ? ' m-card-active' : ''}${e.pinned ? ' m-card-pinned' : ''}" id="row-${e.id}" style="--card-glow:${col};animation-delay:${idx*0.04}s"
     onclick="if(window._HOLD_FIRED){window._HOLD_FIRED=false;return;}openDetail('${e.id}')"
+    onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-8+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*8+'deg')"
     onmousedown="startHold('${e.id}',event)"
     onmouseup="cancelHold()"
-    onmouseleave="cancelHold()"
+    onmouseleave="cancelHold();this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')"
     ontouchstart="startHold('${e.id}',event)"
-    ontouchend="cancelHold()"
+    ontouchend="cancelHold();this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')"
     ontouchmove="cancelHold()">
     <div class="m-card-bar" style="background:${col}"></div>
     <div class="m-card-info">
@@ -639,15 +662,15 @@ function renderDash(c) {
   c.innerHTML = `
     <div class="m-dash-title">◉ ${esc(g.name)} <span>// dashboard</span></div>
     <div class="m-dash-grid">
-      ${stats.map(s => `<div class="m-dash-stat"><div class="m-dash-stat-v">${s.v}</div><div class="m-dash-stat-l">${s.l}</div></div>`).join('')}
+      ${stats.map((s,i) => `<div class="m-dash-stat" style="--card-glow:rgba(var(--ac-rgb),0.5);animation-delay:${i*0.04}s" onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-8+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*8+'deg')" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')"><div class="m-dash-stat-v">${s.v}</div><div class="m-dash-stat-l">${s.l}</div></div>`).join('')}
     </div>
     <div class="m-dash-time-row">
-      <div class="m-dash-tc">
+      <div class="m-dash-tc" style="--card-glow:rgba(var(--ac-rgb),0.5);animation-delay:0.3s" onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-6+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*6+'deg')" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
         <div class="m-dash-tc-v">${fmtMin(totalMin)}</div>
         <div class="m-dash-tc-l">Time Watched</div>
         <div class="m-dash-tc-d">${(totalMin/60).toFixed(0)} hours total</div>
       </div>
-      <div class="m-dash-tc">
+      <div class="m-dash-tc" style="--card-glow:rgba(var(--ac-rgb),0.5);animation-delay:0.38s" onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-6+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*6+'deg')" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
         <div class="m-dash-tc-v">${Math.floor(totalMin/1440)}</div>
         <div class="m-dash-tc-l">Days Watched</div>
         <div class="m-dash-tc-d">of continuous watching</div>
@@ -670,7 +693,7 @@ function renderUpcoming(c) {
   });
   items.sort((a,b) => new Date(a.date)-new Date(b.date));
 
-  const rows = items.map(it => {
+  const rows = items.map((it, i) => {
     const d    = new Date(it.date + 'T00:00:00');
     const diff = Math.ceil((d-now)/86400000);
     const mon  = d.toLocaleString('default',{month:'short'}).toUpperCase();
@@ -678,7 +701,7 @@ function renderUpcoming(c) {
     if (diff<=0)  { cls='m-up-past'; lbl='Released'; }
     else if (diff<=3)  { cls='m-up-soon'; lbl=`${diff}d left`; }
     else if (diff<=14) { cls='m-up-near'; lbl=`${diff}d`; }
-    return `<div class="m-up-card" onclick="openDetail('${it.id}')">
+    return `<div class="m-up-card" onclick="openDetail('${it.id}')" style="--card-glow:#fb923c;animation-delay:${i*0.04}s" onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-6+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*6+'deg')" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
       <div class="m-up-date"><div class="m-up-mon">${mon}</div><div class="m-up-day">${d.getDate()}</div></div>
       <div class="m-up-info">
         <div class="m-up-title">${esc(it.title)}</div>
@@ -711,13 +734,13 @@ function renderIncomplete(c) {
     return someDone && someLeft;
   });
 
-  const rows = incompleteGroups.map(members => {
+  const rows = incompleteGroups.map((members, i) => {
     const sorted = [...members].sort((a, b) => (a.linkedGroupOrder ?? 0) - (b.linkedGroupOrder ?? 0));
     const firstIncomplete = sorted.find(e => !linkedPartIsComplete(e));
     const lead = firstIncomplete || sorted[0];
     const first = sorted[0];
     const done = members.filter(linkedPartIsComplete).length;
-    return `<div class="m-card" onclick="openDetail('${first.id}')">
+    return `<div class="m-card" onclick="openDetail('${first.id}')" style="--card-glow:${_mediaStatusBar(lead.status)};animation-delay:${i*0.04}s" onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-6+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*6+'deg')" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
       <div class="m-card-bar" style="background:${_mediaStatusBar(lead.status)}"></div>
       <div class="m-card-info">
         <div class="m-card-title">${esc(first.title.replace(/ S\d+$| Season \d+$/,''))}</div>
@@ -1396,25 +1419,28 @@ function askDel(id) {
    PIN + LONG-PRESS CONTEXT MENU
 ═══════════════════════════════ */
 
-function _injectPinStyles() {
-  if (document.getElementById('m-pin-styles')) return;
+function _injectPremiumStyles() {
+  if (document.getElementById('m-premium-styles')) return;
   const s = document.createElement('style');
-  s.id = 'm-pin-styles';
+  s.id = 'm-premium-styles';
   s.textContent = `
+    /* Premium Context Menu */
     #m-ctx-menu {
       position: fixed;
       z-index: 99999;
-      background: #1a1a24;
-      border: 1px solid rgba(255,255,255,.13);
-      border-radius: 10px;
-      box-shadow: 0 16px 48px rgba(0,0,0,.75);
-      min-width: 180px;
+      background: rgba(18, 18, 26, 0.85);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      box-shadow: 0 24px 54px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.1);
+      min-width: 190px;
       overflow: hidden;
-      animation: ctxIn .13s ease;
+      animation: ctxIn .2s cubic-bezier(0.16, 1, 0.3, 1);
     }
     @keyframes ctxIn {
-      from { opacity:0; transform:scale(.93) translateY(-4px); }
-      to   { opacity:1; transform:scale(1)   translateY(0);     }
+      0% { opacity:0; transform:scale(.9) translateY(-10px); }
+      100% { opacity:1; transform:scale(1) translateY(0); }
     }
     .m-ctx-header {
       padding: 9px 14px 7px;
@@ -1442,11 +1468,69 @@ function _injectPinStyles() {
     }
     .m-ctx-item:hover { background: rgba(255,255,255,.07); }
     .m-ctx-item.danger { color: #f87171; }
-    .m-ctx-item .ctx-ico { font-size: 15px; width: 18px; text-align: center; flex-shrink:0; }
-    .m-ctx-sep { height: 1px; background: rgba(255,255,255,.07); margin: 3px 0; }
-    .m-pin-badge { font-size: 11px; margin-right: 4px; vertical-align: middle; opacity: .85; }
-    .m-card-pinned .m-card-bar { width: 4px !important; box-shadow: 0 0 8px 1px rgba(251,191,36,.35); }
-    .m-card-pinned { border-color: rgba(251,191,36,.18) !important; }
+    .m-ctx-item .ctx-ico { font-size: 15px; width: 22px; text-align: center; flex-shrink:0; opacity: 0.8; }
+    .m-ctx-sep { height: 1px; background: rgba(255,255,255,.05); margin: 4px 0; }
+    
+    /* Premium Pin Badge */
+    .m-pin-badge { font-size: 11px; margin-right: 6px; vertical-align: middle; filter: drop-shadow(0 0 4px rgba(251,191,36,0.6)); display: inline-block; animation: pulsePin 2s infinite ease-in-out; }
+    @keyframes pulsePin { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+    
+    /* Premium Cards Enhancements */
+    @keyframes staggeredFadeUp {
+      from { opacity: 0; transform: translateY(20px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .m-card, .m-dash-stat, .m-dash-tc, .m-up-card {
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease, border-color 0.4s ease;
+      position: relative;
+      animation: staggeredFadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+      animation-fill-mode: both;
+      transform-style: preserve-3d;
+      transform: perspective(1000px) rotateX(var(--rot-x, 0)) rotateY(var(--rot-y, 0)) translateY(0);
+    }
+    .m-card::before, .m-dash-stat::before, .m-dash-tc::before, .m-up-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(800px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), var(--card-glow, rgba(255,255,255,0.05)), transparent 40%);
+      opacity: 0;
+      transition: opacity 0.4s;
+      pointer-events: none;
+      z-index: 0;
+      border-radius: inherit;
+    }
+    .m-card:hover, .m-dash-stat:hover, .m-dash-tc:hover, .m-up-card:hover {
+      transform: perspective(1000px) rotateX(var(--rot-x, 0)) rotateY(var(--rot-y, 0)) translateY(-4px);
+      z-index: 10;
+      box-shadow: 0 16px 32px rgba(0,0,0,0.5), 0 4px 10px rgba(0,0,0,0.2) !important;
+    }
+    .m-card:hover::before, .m-dash-stat:hover::before, .m-dash-tc:hover::before, .m-up-card:hover::before { opacity: 0.15; }
+    .m-card > *, .m-dash-stat > *, .m-dash-tc > *, .m-up-card > * { position: relative; z-index: 1; transform: translateZ(15px); }
+    
+    .m-card-pinned .m-card-bar { 
+      width: 4px !important; 
+      box-shadow: 0 0 12px 2px rgba(251,191,36,.4); 
+      background: linear-gradient(to bottom, #fcd34d, #fb923c) !important;
+    }
+    .m-card-pinned { border-color: rgba(251,191,36,.25) !important; background: linear-gradient(145deg, rgba(251,191,36,.05) 0%, rgba(0,0,0,0.2) 100%) !important; }
+    
+    /* Premium Detail Panel Stats */
+    .pstat {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      transition: transform 0.2s, background 0.2s;
+    }
+    .pstat:hover {
+      transform: translateY(-2px);
+      background: rgba(255,255,255,0.06);
+    }
+    
+    /* Dashboard Aesthetics Enhancements */
+    #media-interactive-bg { filter: saturate(1.2); }
+    .m-dash-stat-v { filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5)); }
+
     #m-ctx-overlay { position: fixed; inset: 0; z-index: 99998; }
   `;
   document.head.appendChild(s);
