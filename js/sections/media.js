@@ -74,12 +74,25 @@ function _renderFilterChips() {
   }).join('');
 }
 
+function fadeRenderMediaBody() {
+  const el = document.getElementById('media-body'); if (!el) return;
+  el.style.transition = 'none';
+  el.style.opacity = '0';
+  el.style.transform = 'translateY(10px)';
+  setTimeout(() => {
+    renderMediaBody();
+    el.style.transition = 'opacity 0.3s cubic-bezier(0.16,1,0.3,1), transform 0.3s cubic-bezier(0.16,1,0.3,1)';
+    el.style.opacity = '1';
+    el.style.transform = 'translateY(0)';
+  }, 10);
+}
+
 function setMediaChip(val) {
   const v = val === 'all' ? '' : val;
   _M_STATUS_CHIP = v;
   const fstEl = document.getElementById('fstatus');
   if (fstEl) fstEl.value = v;
-  renderMediaBody();
+  fadeRenderMediaBody();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -219,7 +232,7 @@ function toggleMediaSortDd(e) {
 function setMediaSort(val) {
   const sel = document.getElementById('fsort');
   if (sel) sel.value = val;
-  renderMediaBody();
+  fadeRenderMediaBody();
 }
 
 function renderMedia(c) {
@@ -259,6 +272,127 @@ function renderMedia(c) {
   if (glbl) glbl.textContent = g.name;
 
   renderMediaBody();
+
+  // Media Background Canvas (Falling Cherry Petals)
+  setTimeout(() => {
+    document.getElementById('media-interactive-bg')?.remove();
+    const cvs = document.createElement('canvas');
+    cvs.id = 'media-interactive-bg';
+    cvs.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:0; pointer-events:none; opacity:1;';
+    document.body.appendChild(cvs);
+
+    const ctx = cvs.getContext('2d', { alpha: true });
+    let w = window.innerWidth, h = window.innerHeight;
+    
+    // High-DPI Scaling for Crystal Clear Leaves
+    function setSize() {
+      w = window.innerWidth;
+      h = window.innerHeight;
+      let dpr = window.devicePixelRatio || 1;
+      cvs.width = w * dpr;
+      cvs.height = h * dpr;
+      ctx.scale(dpr, dpr);
+    }
+    setSize();
+
+    let p = [];
+    let num = w < 768 ? 40 : 90; // Increased leaf density
+    let style = getComputedStyle(document.documentElement);
+    let acRgb = style.getPropertyValue('--ac-rgb').trim() || '125,211,252';
+    
+    for (let i = 0; i < num; i++) {
+      p.push({
+        x: Math.random() * w, y: Math.random() * h,
+        r: Math.random() * 6 + 4, // Slightly larger base scale
+        vx: (Math.random() - 0.5) * 0.5, // Relaxed horizontal drift
+        vy: Math.random() * 0.5 + 0.3, // Greatly reduced fall speed for serenity
+        angle: Math.random() * Math.PI * 2,
+        spin: (Math.random() - 0.5) * 0.02, // Gentle rotation
+        swayAmp: Math.random() * 0.8 + 0.4, // Mellow pendulum swing
+        swaySpeed: Math.random() * 0.015 + 0.005,
+        time: Math.random() * 100
+      });
+    }
+    
+    let mx = -999, my = -999;
+    if (window._mediaBgListener) window.removeEventListener('mousemove', window._mediaBgListener);
+    window._mediaBgListener = e => { mx = e.clientX; my = e.clientY; };
+    window.addEventListener('mousemove', window._mediaBgListener);
+    
+    if (window._mediaBgResize) window.removeEventListener('resize', window._mediaBgResize);
+    window._mediaBgResize = () => { if(cvs) setSize(); };
+    window.addEventListener('resize', window._mediaBgResize);
+
+    function draw() {
+      if (document.documentElement.getAttribute('data-section') !== 'media') {
+        window.removeEventListener('mousemove', window._mediaBgListener);
+        window.removeEventListener('resize', window._mediaBgResize);
+        cvs.remove();
+        return;
+      }
+      ctx.clearRect(0, 0, w, h);
+      for (let i = 0; i < p.length; i++) {
+        let a = p[i];
+        a.time += a.swaySpeed;
+        
+        let dx = a.x - mx, dy = a.y - my, dist = dx * dx + dy * dy;
+        
+        // Initialize momentum property if missing
+        a.pushX = a.pushX || 0;
+        
+        // Dynamic sideways wind scattering when mouse is near
+        if (dist < 45000) {
+          let force = (45000 - dist) / 45000;
+          let dir = dx > 0 ? 1 : -1;
+          // Add horizontal momentum (stronger closer to center)
+          a.pushX += dir * force * 0.6;
+          // Add a burst of spin due to the wind
+          a.spin += dir * force * 0.005;
+        }
+
+        // Apply air friction to wind push and spin burst
+        a.pushX *= 0.92;
+        // Slowly return spin to original normal gentle speed (-0.02 to 0.02)
+        if (a.spin > 0.02) a.spin -= 0.001;
+        if (a.spin < -0.02) a.spin += 0.001;
+
+        let currentVx = a.vx + a.pushX + Math.sin(a.time) * a.swayAmp;
+
+        a.x += currentVx; 
+        a.y += a.vy;
+        a.angle += a.spin;
+        
+        if (a.y > h + 50) {
+          a.y = -50;
+          a.x = Math.random() * w;
+        }
+        if (a.x < -50) a.x = w + 50;
+        if (a.x > w + 50) a.x = -50;
+        
+        ctx.save();
+        ctx.translate(a.x, a.y);
+        ctx.rotate(a.angle);
+        ctx.beginPath();
+        // Highly refined Sakura petal geometry
+        ctx.moveTo(0, -a.r * 1.6);
+        ctx.bezierCurveTo(a.r * 1.2, -a.r * 0.4, a.r * 0.9, a.r * 1.1, 0.25 * a.r, a.r * 1.3);
+        ctx.lineTo(0, a.r * 1.05); // More distinct authentic cleft
+        ctx.lineTo(-0.25 * a.r, a.r * 1.3);
+        ctx.bezierCurveTo(-a.r * 0.9, a.r * 1.1, -a.r * 1.2, -a.r * 0.4, 0, -a.r * 1.6);
+        
+        // Tri-color node gradient for lush volume
+        let grad = ctx.createLinearGradient(0, -a.r * 1.6, 0, a.r * 1.3);
+        grad.addColorStop(0, `rgba(${acRgb}, 0.9)`);
+        grad.addColorStop(0.6, `rgba(${acRgb}, 0.5)`);
+        grad.addColorStop(1, `rgba(${acRgb}, 0.05)`);
+        ctx.fillStyle = grad; 
+        ctx.fill();
+        ctx.restore();
+      }
+      requestAnimationFrame(draw);
+    }
+    draw();
+  }, 50);
 }
 
 function setMediaPage(p) {
@@ -269,7 +403,7 @@ function setMediaPage(p) {
   if (srch)  srch.value  = '';
   const fstEl = document.getElementById('fstatus');
   if (fstEl) fstEl.value = '';
-  renderMediaBody();
+  fadeRenderMediaBody();
 }
 
 function renderMediaBody() {
