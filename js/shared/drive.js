@@ -26,12 +26,22 @@ function _MPLAYLISTS()  { return window.MPLAYLISTS || []; }
 function _BDATA()       { return window.BDATA      || []; }
 function _LDATA()       { return window.LDATA      || []; }
 function _NDATA()       { return window.NDATA      || []; }
-function _saveGames(d)      { if (typeof window.saveGames      === 'function') window.saveGames(d);      }
-function _saveMusic(d)      { if (typeof window.saveMusic      === 'function') window.saveMusic(d);      }
-function _savePlaylists(d)  { if (typeof window.savePlaylists  === 'function') window.savePlaylists(d);  }
-function _saveBooks(d)      { if (typeof window.saveBooks      === 'function') window.saveBooks(d);      }
-function _saveLog(d)        { if (typeof window.saveLog        === 'function') window.saveLog(d);        }
-function _saveNotes(d)      { if (typeof window.saveNotes      === 'function') window.saveNotes(d);      }
+// Save helpers: prefer the section's own save function (which updates the
+// in-memory variable + localStorage), but ALWAYS fall back to a direct
+// ls.set() so data is never silently dropped when a section hasn't lazy-loaded yet.
+const _GAMES_KEY    = 'ac_v4_games';
+const _BOOKS_KEY    = 'ac_v4_books';
+const _MUSIC_KEY    = 'ac_v4_music';
+const _MUSIC_PL_KEY = 'ac_v4_music_playlists';
+const _LOG_KEY      = 'ac_v4_log';
+const _NOTES_KEY    = 'ac_v4_notes';
+
+function _saveGames(d)     { if (typeof window.saveGames     === 'function') window.saveGames(d);     else { ls.set(_GAMES_KEY, d);    window.GDATA = d; } }
+function _saveMusic(d)     { if (typeof window.saveMusic     === 'function') window.saveMusic(d);     else { ls.set(_MUSIC_KEY, d);    window.MDATA = d; } }
+function _savePlaylists(d) { if (typeof window.savePlaylists === 'function') window.savePlaylists(d); else { ls.set(_MUSIC_PL_KEY, d); window.MPLAYLISTS = d; } }
+function _saveBooks(d)     { if (typeof window.saveBooks     === 'function') window.saveBooks(d);     else { ls.set(_BOOKS_KEY, d);    window.BDATA = d; } }
+function _saveLog(d)       { if (typeof window.saveLog       === 'function') window.saveLog(d);       else { ls.set(_LOG_KEY, d);      window.LDATA = d; } }
+function _saveNotes(d)     { if (typeof window.saveNotes     === 'function') window.saveNotes(d);     else { ls.set(_NOTES_KEY, d);    window.NDATA = d; } }
 
 // ═══════════════════════════════════════════════════════════════════
 //  Wire up the lazy stubs declared in utils.js
