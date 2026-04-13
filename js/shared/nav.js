@@ -24,7 +24,7 @@ export function nav(id, push = true) {
   if (push) try { history.pushState({}, '', ' #/' + (id === 'home' ? '' : id)); } catch(e) {}
 
   const c = document.getElementById('content');
-  const ORDER = ['home','media','games','books','music','notes','vault','tools','settings','log'];
+  const ORDER = ['home','media','games','books','music','notes','vault','tools','log','settings'];
   const pi = ORDER.indexOf(prevId), ni = ORDER.indexOf(id);
   const goingRight = ni > pi;
 
