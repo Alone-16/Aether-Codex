@@ -724,60 +724,7 @@ async function _getLegacySingleFile() {
   return null;
 }
 
-/**
- * Recovery tool: search Drive trash for the old single-file and restore data from it.
- * Call from console: window._recoverFromTrash()
- */
-async function _recoverFromTrash() {
-  console.log('[Drive:recovery] Searching Drive trash for legacy file…');
-  const folderId = await _getOrCreateFolder(); if (!folderId) { console.error('No folder'); return; }
-  // Search for trashed files with the legacy name
-  const r = await _req(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FILE}'+and+trashed=true&fields=files(id,name,modifiedTime)`);
-  if (!r) { console.error('Search failed'); return; }
-  const d = await r.json();
-  if (!d.files?.length) {
-    console.warn('[Drive:recovery] No trashed legacy file found. Data cannot be recovered from Drive trash.');
-    _toast('No legacy backup found in Drive trash', '#fb7185');
-    return;
-  }
-  console.log('[Drive:recovery] Found', d.files.length, 'trashed file(s):', d.files.map(f => f.id + ' (' + f.modifiedTime + ')'));
-  // Try the most recently modified one
-  const file = d.files.sort((a,b) => new Date(b.modifiedTime) - new Date(a.modifiedTime))[0];
-  const fr = await _req(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`);
-  if (!fr || !fr.ok) { console.error('Could not read trashed file'); return; }
-  const legacy = await fr.json();
-  console.log('[Drive:recovery] Legacy file contents:',
-    'data:', (legacy.data||[]).length,
-    'genres:', (legacy.genres||[]).length,
-    'games:', (legacy.games||[]).length,
-    'books:', (legacy.books||[]).length,
-    'music:', (legacy.music||[]).length,
-    'notes:', (legacy.notes||[]).length,
-    'vault_pub:', (legacy.vault_public||[]).length,
-    'log:', (legacy.log||[]).length,
-    'vault_enc:', !!legacy.vault_enc,
-    'notes_enc:', !!legacy.notes_enc,
-  );
-  // Restore any sections that have data
-  let restored = [];
-  if ((legacy.notes||[]).length > 0) { ls.set('ac_v4_notes', legacy.notes); restored.push('notes(' + legacy.notes.length + ')'); }
-  if (legacy.notes_enc)              { ls.set('ac_v4_notes_enc', legacy.notes_enc); restored.push('notes_enc'); }
-  if (legacy.vault_enc)              { ls.set('ac_v4_vault_enc', legacy.vault_enc); restored.push('vault_enc'); }
-  if ((legacy.vault_public||[]).length > 0) { ls.set('ac_v4_vault_public', legacy.vault_public); restored.push('vault_pub(' + legacy.vault_public.length + ')'); }
-  if ((legacy.log||[]).length > 0)   { ls.set('ac_v4_log', legacy.log); restored.push('log(' + legacy.log.length + ')'); }
-  if ((legacy.books||[]).length > 0) { ls.set('ac_v4_books', legacy.books); restored.push('books(' + legacy.books.length + ')'); }
-  if (restored.length) {
-    console.log('[Drive:recovery] ✓ Restored to localStorage:', restored.join(', '));
-    _toast('✓ Recovered: ' + restored.join(', '), '#4ade80');
-    // Push the recovered data to Drive split files
-    await _pushToDrive();
-    _toast('✓ Recovered data pushed to Drive', '#4ade80');
-  } else {
-    console.warn('[Drive:recovery] Legacy file had no notes/vault/log data to recover.');
-    _toast('Legacy backup is also empty for notes/vault', '#fb7185');
-  }
-}
-window._recoverFromTrash = _recoverFromTrash;
+
 
 // ═══════════════════════════════════════════════════════════════════
 //  PUSH / PULL / MERGE
@@ -809,7 +756,6 @@ async function _pushToDrive(opts = {}) {
     if (typeof window.refreshDriveSyncIfVisible === 'function') window.refreshDriveSyncIfVisible();
   } catch(e) {
     _updateDriveBtn('error');
-    console.error('[Drive] Push failed:', e);
     _toast('Drive sync failed: ' + e.message, '#fb7185');
     throw e;
   }
@@ -844,12 +790,11 @@ async function _pullFromDrive() {
     }
 
     // ── Fetch all section files in parallel ──
-    console.log('[Drive] Fetching', ALL_SECTIONS.length, 'section files…');
     const remoteChunks = await Promise.all(ALL_SECTIONS.map(async section => {
-      const fileId = await _getOrCreateSectionFile(section); if (!fileId) { console.warn('[Drive] No file ID for', section); return null; }
+      const fileId = await _getOrCreateSectionFile(section); if (!fileId) return null;
       const r = await _req(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
-      if (!r || !r.ok) { console.warn('[Drive] Fetch failed for', section, r?.status); return null; }
-      try { const j = await r.json(); console.log(`[Drive] ${section}:`, j && j.version != null ? 'valid' : 'empty', j ? Object.keys(j) : '(null)'); return j; } catch(e) { console.warn('[Drive] JSON parse failed for', section, e); return null; }
+      if (!r || !r.ok) return null;
+      try { return await r.json(); } catch { return null; }
     }));
 
     // Merge into a single "remote" object the same shape as the old single-file
@@ -860,11 +805,10 @@ async function _pullFromDrive() {
       Object.assign(remote, chunk);
     });
     // Only return if we got at least one valid section
-    if (Object.keys(remote).length === 0) { console.warn('[Drive] All section files are empty — nothing to pull'); return null; }
+    if (Object.keys(remote).length === 0) return null;
     if (!remote.version) remote.version = DATA_VERSION;
-    console.log('[Drive] Merged remote has keys:', Object.keys(remote).filter(k => k !== 'version' && k !== 'savedAt'));
     return remote;
-  } catch(e) { console.error('[Drive] Pull failed:', e); return null; }
+  } catch { return null; }
 }
 
 /**
@@ -932,27 +876,6 @@ function _mergeLogEntries(local, remote) {
 function _mergeRemoteIntoLocal(remote, localSavedBefore) {
   const remoteSaved = remote.savedAt || 0;
 
-  console.log('[Drive:merge] remote counts →',
-    'media:', (remote.data||[]).length,
-    'genres:', (remote.genres||[]).length,
-    'games:', (remote.games||[]).length,
-    'books:', (remote.books||[]).length,
-    'music:', (remote.music||[]).length,
-    'notes:', (remote.notes||[]).length,
-    'vault_pub:', (remote.vault_public||[]).length,
-    'log:', (remote.log||[]).length,
-    'vault_enc:', !!remote.vault_enc,
-    'notes_enc:', !!remote.notes_enc,
-  );
-  console.log('[Drive:merge] local counts →',
-    'media:', DATA.length,
-    'games:', _GDATA().length,
-    'books:', _BDATA().length,
-    'music:', _MDATA().length,
-    'notes:', _NDATA().length,
-    'log:', _LDATA().length,
-  );
-
   setDATA(_mergeData(DATA, remote.data || []));
 
   if (remote.genres && Array.isArray(remote.genres)) {
@@ -984,12 +907,10 @@ function _mergeRemoteIntoLocal(remote, localSavedBefore) {
 
   if (remote.vault_enc) {
     ls.set(VAULT_ENC_KEY, remote.vault_enc);
-    console.log('[Drive:merge] vault_enc written');
   }
   if (remote.vault_public && Array.isArray(remote.vault_public)) {
     const merged = _mergeRowsById(ls.get(VAULT_PUBLIC_KEY) || [], remote.vault_public, e => e.updatedAt || e.addedAt || 0);
     ls.set(VAULT_PUBLIC_KEY, merged);
-    console.log('[Drive:merge] vault_public written:', merged.length, 'entries');
     if (typeof window.reloadVaultPublicFromStorage === 'function') window.reloadVaultPublicFromStorage();
   }
 
@@ -1005,10 +926,7 @@ function _mergeRemoteIntoLocal(remote, localSavedBefore) {
   }
   if (remote.notes_enc) {
     ls.set(NOTES_ENC_KEY, remote.notes_enc);
-    console.log('[Drive:merge] notes_enc written');
   }
-
-  console.log('[Drive:merge] done — merged media:', DATA.length);
 }
 
 /**
@@ -1051,12 +969,10 @@ async function _runDriveInit() {
     const remote = await _pullFromDrive();
     // New or empty Drive file parses as {} — truthy but has no version; must upload or first sync never runs.
     if (!remote || remote.version == null) {
-      console.log('[Drive] No valid remote data — pushing local state to Drive');
       await _pushToDrive();
       _toast('✓ Pushed local data to Google Drive', '#4ade80');
       return;
     }
-    console.log('[Drive] Merging remote data (remoteSaved=%d, localSaved=%d)', remote.savedAt || 0, localSavedBefore);
     // Always merge remote into local (per-entry newer wins). File-level savedAt alone is wrong because any
     // local edit bumps K.SAVED and would skip pulling rows that exist only on Drive.
     _mergeRemoteIntoLocal(remote, localSavedBefore);
