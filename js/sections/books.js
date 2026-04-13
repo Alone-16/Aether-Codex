@@ -4,7 +4,7 @@
 const BOOKS_KEY = 'ac_v4_books';
 
 function loadBooks()  { return ls.get(BOOKS_KEY) || []; }
-function saveBooks(d) { BDATA = d; window.BDATA = d; ls.set(BOOKS_KEY, d); ls.setStr(K.SAVED, String(Date.now())); window.scheduleDriveSync(); }
+function saveBooks(d) { BDATA = d; window.BDATA = d; ls.set(BOOKS_KEY, d); ls.setStr(K.SAVED, String(Date.now())); window.scheduleDriveSync('books'); }
 
 let BDATA      = loadBooks();
 window.BDATA = BDATA;

@@ -14,7 +14,7 @@ const NOTES_KEY     = 'ac_v4_notes';
 const NOTES_ENC_KEY = 'ac_v4_notes_enc';
 
 function loadNotes()  { return ls.get(NOTES_KEY) || []; }
-function saveNotes(d) { NDATA = d; window.NDATA = d; ls.set(NOTES_KEY, d); ls.setStr(K.SAVED, String(Date.now())); if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync(); }
+function saveNotes(d) { NDATA = d; window.NDATA = d; ls.set(NOTES_KEY, d); ls.setStr(K.SAVED, String(Date.now())); if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync('notes'); }
 
 let NDATA          = loadNotes();
 window.NDATA = NDATA;
@@ -45,7 +45,7 @@ async function saveNotesEncrypted(data) {
     );
     ls.set(NOTES_ENC_KEY, {salt:_b64(VAULT_CRYPTO_SALT), iv:_b64(iv), data:_b64(buf), v:1});
     ls.setStr(K.SAVED, String(Date.now()));
-    if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync();
+    if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync('notes');
   } catch(e) { console.warn('Notes encrypt failed:', e); }
 }
 

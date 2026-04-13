@@ -6,7 +6,7 @@ const MUSIC_PL_KEY  = 'ac_v4_music_playlists';
 const YT_SCOPE      = 'https://www.googleapis.com/auth/youtube.readonly';
 
 function loadMusic()      { return ls.get(MUSIC_KEY) || []; }
-function saveMusic(d) { MDATA = d; window.MDATA = d; ls.set(MUSIC_KEY, d); ls.setStr(K.SAVED, String(Date.now())); window.scheduleDriveSync(); }
+function saveMusic(d) { MDATA = d; window.MDATA = d; ls.set(MUSIC_KEY, d); ls.setStr(K.SAVED, String(Date.now())); window.scheduleDriveSync('music'); }
 function loadPlaylists()  { return ls.get(MUSIC_PL_KEY) || []; }
 function savePlaylists(p) { MPLAYLISTS = p; window.MPLAYLISTS = p; ls.set(MUSIC_PL_KEY, p); }
 

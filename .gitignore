@@ -6,6 +6,7 @@ electron-app/dist/
 .DS_Store
 Thumbs.db
 desktop.ini
+worker.js
 
 # ── Editor folders ──
 .vscode/

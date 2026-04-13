@@ -98,6 +98,7 @@ function saveSettings(s) {
   }
   SETTINGS = next;
   window.SETTINGS = next;
+  if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync('settings');
 }
 
 var SETTINGS = loadSettings();

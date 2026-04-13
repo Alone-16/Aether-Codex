@@ -12,7 +12,7 @@ export const CLIENT_ID     = '750528266098-oudtbb5dcmf4c167sf7l3fu46luqeq11.apps
 export const DRIVE_SCOPE   = 'https://www.googleapis.com/auth/drive.file';
 export const YT_SCOPE_CONST= 'https://www.googleapis.com/auth/youtube.readonly';
 export const DRIVE_FOLDER  = 'Aether Codex';
-export const DRIVE_FILE    = 'AetherCodex_data.json';
+export const DRIVE_FILE    = 'AetherCodex_data.json';  // legacy single-file (migration only)
 
 export const ls = {
   get    : k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
@@ -77,11 +77,11 @@ export function setFDRG(v)         { FDRG       = v; window.FDRG       = v; }
 export function saveData(d) {
   ls.set(K.DATA, d);
   ls.setStr(K.SAVED, String(Date.now()));
-  scheduleDriveSync();   // defined in drive.js; call via lazy import below
+  scheduleDriveSync('media');   // defined in drive.js; call via lazy import below
 }
 export function saveGenres(g) {
   ls.set(K.GENRES, g);
-  scheduleDriveSync();
+  scheduleDriveSync('media');
 }
 
 // Lazy reference patched in by drive.js after module graph settles.
@@ -95,9 +95,9 @@ export function resumeDriveSyncScheduling() {
   _driveSyncSchedulePauseDepth = Math.max(0, _driveSyncSchedulePauseDepth - 1);
 }
 
-export function scheduleDriveSync() {
+export function scheduleDriveSync(sectionKey) {
   if (_driveSyncSchedulePauseDepth > 0) return;
-  _scheduleDriveSync();
+  _scheduleDriveSync(sectionKey);
 }
 export function patchScheduleDriveSync(fn) { _scheduleDriveSync = fn; }
 

@@ -580,6 +580,7 @@ export function driveAction() {
       _clearAccessToken();
       _clearRefreshToken();
       ls.del(K.DFILE); ls.del(K.DSYNC);
+      ALL_SECTIONS.forEach(s => ls.del(_sectionFileKey(s)));
       _driveFolderId = null; _updateDriveBtn('off'); _toast('Disconnected from Drive');
     }, { title:'Disconnect Drive?', okLabel:'Disconnect', danger:false });
   } else {
@@ -616,6 +617,49 @@ async function _req(url, opts = {}) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+//  SECTION FILE MAP — one JSON per section on Drive
+// ═══════════════════════════════════════════════════════════════════
+const SECTION_FILES = {
+  media:    'ac_media.json',
+  games:    'ac_games.json',
+  books:    'ac_books.json',
+  music:    'ac_music.json',
+  notes:    'ac_notes.json',
+  vault:    'ac_vault.json',
+  log:      'ac_log.json',
+  settings: 'ac_settings.json',
+};
+const ALL_SECTIONS = Object.keys(SECTION_FILES);
+
+/** localStorage key for cached Drive file ID per section. */
+function _sectionFileKey(section) { return `ac_v4_dfile_${section}`; }
+
+/** Build the JSON payload for one section from current in-memory state. */
+function _buildSectionPayload(section) {
+  const savedAt = parseInt(ls.str(K.SAVED) || '0');
+  switch (section) {
+    case 'media':
+      return { version: DATA_VERSION, savedAt, data: DATA, genres: GENRES };
+    case 'games':
+      return { version: DATA_VERSION, savedAt, games: _GDATA() };
+    case 'books':
+      return { version: DATA_VERSION, savedAt, books: _BDATA() };
+    case 'music':
+      return { version: DATA_VERSION, savedAt, music: _MDATA(), playlists: _MPLAYLISTS() };
+    case 'notes':
+      return { version: DATA_VERSION, savedAt, notes: _NDATA(), notes_enc: ls.get(NOTES_ENC_KEY) || null };
+    case 'vault':
+      return { version: DATA_VERSION, savedAt, vault_enc: ls.get(VAULT_ENC_KEY) || null, vault_public: ls.get(VAULT_PUBLIC_KEY) || null };
+    case 'log':
+      return { version: DATA_VERSION, savedAt, log: _LDATA() };
+    case 'settings':
+      return { version: DATA_VERSION, savedAt, settings: window.SETTINGS || {} };
+    default:
+      return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 //  DRIVE FILE / FOLDER HELPERS
 // ═══════════════════════════════════════════════════════════════════
 async function _getOrCreateFolder() {
@@ -632,44 +676,63 @@ async function _getOrCreateFolder() {
   const cf = await cr.json(); _driveFolderId = cf.id; return _driveFolderId;
 }
 
-async function _getOrCreateFile() {
+/**
+ * Resolve (or create) the Drive file for a single section.
+ * Caches the file ID in localStorage per section.
+ */
+async function _getOrCreateSectionFile(section) {
+  const cacheKey = _sectionFileKey(section);
+  const cached = ls.str(cacheKey); if (cached) return cached;
+  const folderId = await _getOrCreateFolder(); if (!folderId) return null;
+  const fileName = SECTION_FILES[section];
+  const r = await _req(`https://www.googleapis.com/drive/v3/files?q=name='${fileName}'+and+'${folderId}'+in+parents+and+trashed=false&fields=files(id,modifiedTime)`);
+  if (!r) return null;
+  const d = await r.json();
+  if (d.files?.length) { ls.setStr(cacheKey, d.files[0].id); return d.files[0].id; }
+  const cr = await _req('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method:'POST',
+    headers:{'Content-Type':'multipart/related; boundary=boundary'},
+    body:`--boundary\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({name:fileName,parents:[folderId]})}\r\n--boundary\r\nContent-Type: application/json\r\n\r\n{}\r\n--boundary--`,
+  });
+  if (!cr) return null;
+  const cf = await cr.json(); ls.setStr(cacheKey, cf.id); return cf.id;
+}
+
+/** Legacy single-file lookup — used only for migration. */
+async function _getLegacySingleFile() {
   const cached = ls.str(K.DFILE); if (cached) return cached;
   const folderId = await _getOrCreateFolder(); if (!folderId) return null;
   const r = await _req(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FILE}'+and+'${folderId}'+in+parents+and+trashed=false&fields=files(id,modifiedTime)`);
   if (!r) return null;
   const d = await r.json();
   if (d.files?.length) { ls.setStr(K.DFILE, d.files[0].id); return d.files[0].id; }
-  const cr = await _req('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-    method:'POST',
-    headers:{'Content-Type':'multipart/related; boundary=boundary'},
-    body:`--boundary\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({name:DRIVE_FILE,parents:[folderId]})}\r\n--boundary\r\nContent-Type: application/json\r\n\r\n{}\r\n--boundary--`,
-  });
-  if (!cr) return null;
-  const cf = await cr.json(); ls.setStr(K.DFILE, cf.id); return cf.id;
+  return null;
 }
 
 // ═══════════════════════════════════════════════════════════════════
 //  PUSH / PULL / MERGE
 // ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Push one or more sections to Drive.
+ * @param {Object} opts
+ * @param {string[]} [opts.sections] — keys to push; defaults to ALL_SECTIONS
+ * @param {boolean}  [opts.silentToast]
+ */
 async function _pushToDrive(opts = {}) {
   const silentToast = !!opts.silentToast;
+  const sections = opts.sections || ALL_SECTIONS;
   _updateDriveBtn('syncing');
   try {
-    const fileId      = await _getOrCreateFile(); if (!fileId) throw new Error('No file');
-    const vaultEnc    = ls.get(VAULT_ENC_KEY)    || null;
-    const vaultPublic = ls.get(VAULT_PUBLIC_KEY) || null;
-    const notesEnc    = ls.get(NOTES_ENC_KEY)    || null;
-    const notesData   = _NDATA();
-    const payload     = JSON.stringify({
-      version:DATA_VERSION, savedAt:parseInt(ls.str(K.SAVED)||'0'),
-      data:DATA, genres:GENRES, games:_GDATA(), music:_MDATA(), playlists:_MPLAYLISTS(),
-      books:_BDATA(), vault_enc:vaultEnc, vault_public:vaultPublic,
-      log:_LDATA(), notes:notesData, notes_enc:notesEnc,
-    });
-    const r = await _req(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-      method:'PATCH', headers:{'Content-Type':'application/json'}, body:payload,
-    });
-    if (!r || !r.ok) throw new Error('Upload failed');
+    const results = await Promise.all(sections.map(async section => {
+      const fileId = await _getOrCreateSectionFile(section); if (!fileId) throw new Error(`No file for ${section}`);
+      const payload = _buildSectionPayload(section);
+      if (!payload) return;
+      const r = await _req(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload),
+      });
+      if (!r || !r.ok) throw new Error(`Upload failed for ${section}`);
+    }));
     ls.setStr(K.DSYNC, String(Date.now()));
     _updateDriveBtn('connected');
     if (!silentToast) _toast('✓ Saved to Google Drive', '#4ade80');
@@ -681,13 +744,79 @@ async function _pushToDrive(opts = {}) {
   }
 }
 
+/**
+ * Pull all section files from Drive and return a merged remote object.
+ * Also handles backward-compat migration from the old single-file format.
+ */
 async function _pullFromDrive() {
   try {
-    const fileId = await _getOrCreateFile(); if (!fileId) return null;
-    const r = await _req(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
-    if (!r || !r.ok) return null;
-    return await r.json();
+    // ── Check for legacy single-file & migrate if present ──
+    const legacyId = await _getLegacySingleFile();
+    if (legacyId) {
+      const lr = await _req(`https://www.googleapis.com/drive/v3/files/${legacyId}?alt=media`);
+      if (lr && lr.ok) {
+        const legacyData = await lr.json();
+        if (legacyData && legacyData.version != null) {
+          console.info('[Drive] Found legacy single-file format — migrating to split files…');
+          // Write each section file from the legacy blob
+          await _migrateLegacyToSplit(legacyData);
+          // Trash the old file so migration doesn't repeat
+          await _req(`https://www.googleapis.com/drive/v3/files/${legacyId}`, {
+            method:'PATCH', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ trashed: true }),
+          });
+          ls.del(K.DFILE);
+          _toast('✓ Drive data migrated to split files', '#4ade80');
+          return legacyData; // Return the legacy data for the current merge cycle
+        }
+      }
+    }
+
+    // ── Fetch all section files in parallel ──
+    const remoteChunks = await Promise.all(ALL_SECTIONS.map(async section => {
+      const fileId = await _getOrCreateSectionFile(section); if (!fileId) return null;
+      const r = await _req(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+      if (!r || !r.ok) return null;
+      try { return await r.json(); } catch { return null; }
+    }));
+
+    // Merge into a single "remote" object the same shape as the old single-file
+    const remote = {};
+    ALL_SECTIONS.forEach((section, i) => {
+      const chunk = remoteChunks[i];
+      if (!chunk || chunk.version == null) return;
+      Object.assign(remote, chunk);
+    });
+    // Only return if we got at least one valid section
+    if (Object.keys(remote).length === 0) return null;
+    if (!remote.version) remote.version = DATA_VERSION;
+    return remote;
   } catch { return null; }
+}
+
+/**
+ * Write the legacy single-file blob into the per-section split files.
+ */
+async function _migrateLegacyToSplit(legacy) {
+  const savedAt = legacy.savedAt || 0;
+  const sectionPayloads = {
+    media:    { version: DATA_VERSION, savedAt, data: legacy.data || [], genres: legacy.genres || [] },
+    games:    { version: DATA_VERSION, savedAt, games: legacy.games || [] },
+    books:    { version: DATA_VERSION, savedAt, books: legacy.books || [] },
+    music:    { version: DATA_VERSION, savedAt, music: legacy.music || [], playlists: legacy.playlists || [] },
+    notes:    { version: DATA_VERSION, savedAt, notes: legacy.notes || [], notes_enc: legacy.notes_enc || null },
+    vault:    { version: DATA_VERSION, savedAt, vault_enc: legacy.vault_enc || null, vault_public: legacy.vault_public || null },
+    log:      { version: DATA_VERSION, savedAt, log: legacy.log || [] },
+    settings: { version: DATA_VERSION, savedAt, settings: {} },
+  };
+  await Promise.all(ALL_SECTIONS.map(async section => {
+    const fileId = await _getOrCreateSectionFile(section); if (!fileId) return;
+    const r = await _req(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(sectionPayloads[section]),
+    });
+    if (!r || !r.ok) console.warn(`[Drive] Migration: failed to write ${section}`);
+  }));
 }
 
 function _mergeData(local, remote) {
@@ -847,8 +976,12 @@ async function _runDriveInit() {
  * Debounced upload only (PATCH). Does not pull from Drive — avoids GET+PATCH loops from saveData/saveGames
  * each scheduling a full reconcile. Pull+merge runs on connect (initGIS), OAuth, and “Sync Now”.
  */
-function _scheduleDriveSyncImpl() {
+let _dirtySections = new Set();
+
+function _scheduleDriveSyncImpl(sectionKey) {
   if (!_isConnected()) return;
+  if (sectionKey) _dirtySections.add(sectionKey);
+  else ALL_SECTIONS.forEach(s => _dirtySections.add(s));
   clearTimeout(_syncTimer);
   _updateDriveBtn('pending');
   _syncTimer = setTimeout(async () => {
@@ -858,8 +991,12 @@ function _scheduleDriveSyncImpl() {
       try { await _driveInitPromise; } catch (e) { /* reconcile failed; still try push */ }
     }
     if (!_isConnected()) return;
+    const toPush = [..._dirtySections];
+    _dirtySections.clear();
+    // Log entries are created alongside most section saves; piggyback them
+    if (!toPush.includes('log')) toPush.push('log');
     try {
-      await _pushToDrive({ silentToast: true });
+      await _pushToDrive({ sections: toPush, silentToast: true });
     } catch (e) {
       console.error('[Drive] auto-push:', e);
     }
