@@ -60,7 +60,7 @@ async function _decryptPrivateNotes() {
   } catch { return []; }
 }
 
-function unlockPrivateNotes() {
+async function unlockPrivateNotes() {
   const _afterUnlock = () => {
     _decryptPrivateNotes().then(data => {
       NDATA_PRIVATE  = data;
@@ -70,6 +70,11 @@ function unlockPrivateNotes() {
   };
 
   if (VAULT_UNLOCKED && VAULT_CRYPTO_KEY) { _afterUnlock(); return; }
+
+  // Ensure vault functions are loaded (sections are lazy-loaded)
+  if (typeof window.showVaultPasswordUnlock !== 'function') {
+    await import('./vault.js').catch(e => console.error('[Notes] Vault module load failed:', e));
+  }
 
   const hasPw  = ls.str('ac_vault_pw_set');
   const hasEnc = !!ls.get('ac_v4_vault_enc');
@@ -471,12 +476,16 @@ function quickNoteDelete(id) {
   }, {title:'Delete Note?', okLabel:'Delete'});
 }
 
-function toggleNoteLock(id) {
+async function toggleNoteLock(id) {
   const note = NDATA.find(n=>n.id===id) || NDATA_PRIVATE.find(n=>n.id===id);
   if (!note) return;
   if (!note.locked) {
     // Lock it — need vault unlocked
     if (!VAULT_UNLOCKED || !VAULT_CRYPTO_KEY) {
+      // Ensure vault functions are loaded
+      if (typeof window.showVaultPasswordUnlock !== 'function') {
+        await import('./vault.js').catch(e => console.error('[Notes] Vault module load failed:', e));
+      }
       const hasPw  = ls.str('ac_vault_pw_set');
       const hasEnc = !!ls.get('ac_v4_vault_enc');
       const proceed = () => _doNoteLock(id, true);
