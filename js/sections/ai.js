@@ -21,64 +21,59 @@ function buildAIContext() {
   const today = days[now.getDay()];
   const dateStr = now.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
-  // Compact media summary
-  const watching = DATA.filter(e => e.status === 'watching').map(e => {
-    const as = activeSeason(e);
-    const st = entryStats(e);
-    return `${e.title} (${gbyid(e.genreId).name}, ${st.cur}/${st.tot||'?'} ep${e.airingDay!=null?`, airs ${days[e.airingDay]}`:''}${e.rating?`, rated ${e.rating}`:''})`; 
-  });
-
-  const allMedia = DATA.map(e => {
-    const st = entryStats(e);
-    const tl = (e.timeline||[]).map(t => `${t.name||t.movieTitle||''}:${t.status||''}${t.type==='season'?`(${t.epWatched||0}/${t.eps||'?'}ep)`:'(movie)'}`).join('; ');
-    return {
-      id: e.id, title: e.title, genre: gbyid(e.genreId).name,
-      status: e.status, watched: st.cur, total: st.tot||null,
-      rating: e.rating||null, notes: e.notes||null,
-      airingDay: e.airingDay!=null ? days[e.airingDay] : null,
-      airingTime: e.airingTime||null,
-      rewatchCount: e.rewatchCount||null,
-      favorite: e.favorite||false,
-      timeline: tl || null,
-    };
-  });
-
-  const stats = {
-    total: DATA.length,
-    watching: DATA.filter(e=>e.status==='watching').length,
-    completed: DATA.filter(e=>e.status==='completed').length,
-    dropped: DATA.filter(e=>e.status==='dropped').length,
-    planToWatch: DATA.filter(e=>e.status==='plan').length,
-    avgRating: (() => { const r=DATA.filter(e=>e.rating); return r.length?(r.reduce((a,e)=>a+parseFloat(e.rating),0)/r.length).toFixed(1):'N/A'; })(),
-    totalEpsWatched: DATA.reduce((a,e)=>a+entryStats(e).cur, 0),
+  const getTopMods = (data, getVal) => {
+    const counts = {};
+    data.forEach(e => {
+      const v = getVal(e);
+      if (v) counts[v] = (counts[v]||0)+1;
+    });
+    return Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>x[0]).join(', ');
   };
 
-  return `You are an AI assistant for "The Aether Codex" — a personal media tracker. You are helping the user manage and explore their media data.
+  const getStats = (data, getTop) => {
+    if (!data || !data.length) return { total: 0, completed: 0, completionRate: '0%' };
+    const comps = data.filter(e => e.status === 'completed' || e.status === 'finished').length;
+    return {
+      total: data.length,
+      completed: comps,
+      completionRate: Math.round((comps / data.length) * 100) + '%',
+      topGenres: getTop ? getTop(data) : undefined
+    };
+  };
+
+  const stats = {
+    media: getStats(DATA, d => getTopMods(d, e => window.gbyid ? window.gbyid(e.genreId)?.name : null)),
+    games: getStats(window.GDATA, d => getTopMods(d, e => e.platform)),
+    books: getStats(window.BDATA),
+    music: { total: (window.MDATA||[]).length, topArtists: getTopMods(window.MDATA||[], e => e.artist) }
+  };
+
+  const sortByRecent = (arr) => [...arr].sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).slice(0, 30);
+  const recentMedia = sortByRecent(DATA).map(e => ({id:e.id, title:e.title, status:e.status}));
+  const recentGames = sortByRecent(window.GDATA||[]).map(g => ({title:g.title, status:g.status}));
+  const recentBooks = sortByRecent(window.BDATA||[]).map(b => ({title:b.title, status:b.status}));
+
+  return `You are an AI assistant for "The Aether Codex" — a personal media tracker.
 
 TODAY: ${dateStr}
 
-USER STATS:
+SUMMARY STATS:
 ${JSON.stringify(stats, null, 2)}
 
-ALL MEDIA ENTRIES (${allMedia.length} total):
-${JSON.stringify(allMedia, null, 2)}
-
-GAMES (${window.GDATA.length}):
-${JSON.stringify(window.GDATA.map(g=>({id:g.id,title:g.title,platform:g.platform,status:g.status,hours:g.totalHours,rating:g.rating})), null, 2)}
-
-BOOKS (${window.BDATA.length}):
-${JSON.stringify(window.BDATA.map(b=>({id:b.id,title:b.title,author:b.author,status:b.status,rating:b.rating})), null, 2)}
-
-MUSIC (${window.MDATA.filter(s=>!s.removedFromPlaylist).length} songs):
-${JSON.stringify(window.MDATA.filter(s=>!s.removedFromPlaylist).slice(0,50).map(s=>({title:s.title,artist:s.artist,album:s.album})), null, 2)}${window.MDATA.length>50?`\n... and ${window.MDATA.length-50} more songs`:''}
+RECENTLY UPDATED ENTRIES (Top 30 per category):
+Media: ${JSON.stringify(recentMedia)}
+Games: ${JSON.stringify(recentGames)}
+Books: ${JSON.stringify(recentBooks)}
 
 INSTRUCTIONS:
 - Be conversational, friendly and concise. Use short responses.
-- For READ queries: answer directly from the data above.
+- To ANSWER about a specific entry not in the recent list, or to GET FULL DETAILS before answering, use the ACTION:
+  <ACTION>{"type":"search_entry","title":"exact or partial title"}</ACTION>
+  (I will immediately reply with the full details of matching entries for you to complete your answer).
 - For ACTION requests (add/edit/delete/update): respond with a friendly confirmation message AND include a JSON block at the end of your response like this:
   <ACTION>{"type":"update_status","id":"entry_id","field":"status","value":"completed"}</ACTION>
-  Valid action types: update_status, update_rating, update_episodes, update_hours, add_entry, delete_entry, update_notes
-  For update_hours: {type:"update_hours", title, value} — updates totalHours for a game entry
+  Valid action types: update_status, update_rating, update_episodes, update_hours, add_entry, delete_entry, update_notes, search_entry
+  For update_hours: {type:"update_hours", title, value}
   For add_entry include: {type:"add_entry", title, genreId, status, epTot(optional)}
   For update_episodes: {type:"update_episodes", id, epCur}
 - Always confirm before destructive actions (delete).
@@ -88,19 +83,21 @@ INSTRUCTIONS:
 }
 
 // ── Send message to Claude API ──
-async function sendAIMessage(userMsg) {
+async function sendAIMessage(userMsg, isSecondPass = false) {
   const key = 'proxy'; // Key handled by Cloudflare Worker
 
-  AI_HISTORY.push({ role: 'user', parts: [{ text: userMsg }] });
-  renderAIMessages();
-  setAITyping(true);
+  if (!isSecondPass) {
+    AI_HISTORY.push({ role: 'user', parts: [{ text: userMsg }] });
+    renderAIMessages();
+    setAITyping(true);
+  }
 
   try {
-    // Inject system context as first user/model exchange (same pattern as test file)
+    // Inject system context as first user/model exchange
     const withContext = [
       { role: 'user',  parts: [{ text: buildAIContext() }] },
-      { role: 'model', parts: [{ text: 'Understood. I have full access to your media data and am ready to help!' }] },
-      ...AI_HISTORY
+      { role: 'model', parts: [{ text: 'Understood. I have access to your summary stats and recent entries. I will search for full details when needed.' }] },
+      ...AI_HISTORY.map(m => ({ role: m.role, parts: m.parts }))
     ];
 
     const res = await fetch(aiWorkerUrl(), {
@@ -128,14 +125,32 @@ async function sendAIMessage(userMsg) {
 
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response.';
     const actionMatch = reply.match(/<ACTION>([\s\S]*?)<\/ACTION>/);
+    let parsedAction = null;
+    if (actionMatch) {
+      try { parsedAction = JSON.parse(actionMatch[1]); } catch(e) { console.warn('AI action parse failed:', e); }
+    }
+
+    // Second AI pass for specific titles
+    if (parsedAction && parsedAction.type === 'search_entry') {
+      AI_HISTORY.push({ role: 'model', parts: [{ text: reply }], hidden: true });
+      const t = (parsedAction.title || '').toLowerCase();
+      let found = [];
+      DATA.forEach(e => { if(e.title.toLowerCase().includes(t)) found.push({category:'media', ...e}); });
+      (window.GDATA||[]).forEach(e => { if(e.title.toLowerCase().includes(t)) found.push({category:'games', ...e}); });
+      (window.BDATA||[]).forEach(e => { if(e.title.toLowerCase().includes(t)) found.push({category:'books', ...e}); });
+      
+      const searchRes = `SYSTEM: Search results for "${parsedAction.title}": ${found.length ? JSON.stringify(found.slice(0,5)) : 'No results found.'}. Please respond to the user based on these details.`;
+      AI_HISTORY.push({ role: 'user', parts: [{ text: searchRes }], hidden: true });
+      
+      return sendAIMessage(null, true);
+    }
 
     AI_HISTORY.push({ role: 'model', parts: [{ text: reply }] });
     setAITyping(false);
     renderAIMessages();
 
-    if (actionMatch) {
-      try { const action = JSON.parse(actionMatch[1]); setTimeout(() => handleAIAction(action), 300); }
-      catch(e) { console.warn('AI action parse failed:', e); }
+    if (parsedAction && parsedAction.type !== 'search_entry') {
+      setTimeout(() => handleAIAction(parsedAction), 300);
     }
   } catch(e) {
     setAITyping(false);
@@ -271,7 +286,8 @@ function saveAIKeyFromInput() {
 
 function renderAIMessages() {
   const msgs = document.getElementById('ai-messages'); if (!msgs) return;
-  if (!AI_HISTORY.length) {
+  const visibleHistory = AI_HISTORY.filter(m => !m.hidden);
+  if (!visibleHistory.length) {
     msgs.innerHTML = `<div style="padding:20px;text-align:center;color:var(--mu);font-size:13px">
       <div style="font-size:28px;margin-bottom:8px">✦</div>
       <div style="font-weight:600;color:var(--tx2);margin-bottom:4px">AI Assistant</div>
@@ -279,14 +295,15 @@ function renderAIMessages() {
     </div>`;
     return;
   }
-  msgs.innerHTML = AI_HISTORY
+  msgs.innerHTML = visibleHistory
     .map(m => {
       const isUser = m.role === 'user';
       const rawText = m.parts?.[0]?.text || '';
       const clean = rawText.replace(/<ACTION>[\s\S]*?<\/ACTION>/g, '').trim();
+      const escaped = window.esc ? esc(clean) : clean.replace(/</g, '&lt;').replace(/>/g, '&gt;');
       return `<div style="display:flex;justify-content:${isUser?'flex-end':'flex-start'};padding:4px 12px">
         <div style="max-width:85%;padding:9px 13px;border-radius:${isUser?'12px 12px 3px 12px':'12px 12px 12px 3px'};background:${isUser?'var(--ac)':'var(--surf2)'};color:${isUser?'#000':'var(--tx)'};font-size:13px;line-height:1.5;border:${isUser?'none':'1px solid var(--brd)'}">
-          ${clean.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')}
+          ${escaped.replace(/\n/g,'<br>').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')}
         </div>
       </div>`;
     }).join('');
