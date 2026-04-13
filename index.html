@@ -17,7 +17,7 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 (function(){
-  var VALID = ['home','media','games','books','music','vault','notes','log','tools','settings'];
+  var VALID = ['home','media','games','books','music','notes','vault','tools','settings','log'];
   var bg = {
     home:'#000000', media:'#000000', games:'#000000',
     books:'#000000', music:'#000000', vault:'#000000',
@@ -64,12 +64,12 @@
   <div class="mob-ni" data-r="games" onclick="nav('games')"><span>◈</span>Games</div>
   <div class="mob-ni" data-r="books" onclick="nav('books')"><span>◎</span>Books</div>
   <div class="mob-ni" data-r="music" onclick="nav('music')"><span>♪</span>Music</div>
-  <div class="mob-ni" data-r="vault" onclick="nav('vault')"><span>⛓</span>Vault</div>
   <div class="mob-ni" data-r="notes" onclick="nav('notes')"><span>✎</span>Notes</div>
-  <div class="mob-ni" data-r="log" onclick="nav('log')"><span>◎</span>Log</div>
+  <div class="mob-ni" data-r="vault" onclick="nav('vault')"><span>⛓</span>Vault</div>
   <div class="mob-ni" data-r="tools" onclick="nav('tools')"><span>⬇</span>Tools</div>
   <div class="mob-sep"></div>
   <div class="mob-ni" data-r="settings" onclick="nav('settings')"><span>⚙</span>Settings</div>
+  <div class="mob-ni" data-r="log" onclick="nav('log')"><span>◎</span>Log</div>
 </div>
 
 <div id="app">
@@ -81,13 +81,13 @@
     <div class="ni" data-r="games" data-tip="Games" onclick="nav('games')"><span class="ni-ico">◈</span><span class="ni-lbl">Games</span></div>
     <div class="ni" data-r="books" data-tip="Books" onclick="nav('books')"><span class="ni-ico">◎</span><span class="ni-lbl">Books</span></div>
     <div class="ni" data-r="music" data-tip="Music" onclick="nav('music')"><span class="ni-ico">♪</span><span class="ni-lbl">Music</span></div>
-    <div class="ni" data-r="vault" data-tip="Vault" onclick="nav('vault')"><span class="ni-ico">◈</span><span class="ni-lbl">Vault</span></div>
     <div class="ni" data-r="notes" data-tip="Notes" onclick="nav('notes')"><span class="ni-ico">✎</span><span class="ni-lbl">Notes</span></div>
-    <div class="ni" data-r="log" data-tip="Activity" onclick="nav('log')"><span class="ni-ico">◎</span><span class="ni-lbl">Log</span></div>
+    <div class="ni" data-r="vault" data-tip="Vault" onclick="nav('vault')"><span class="ni-ico">◈</span><span class="ni-lbl">Vault</span></div>
     <div class="ni" data-r="tools" data-tip="Tools" onclick="nav('tools')"><span class="ni-ico">⬇</span><span class="ni-lbl">Tools</span></div>
     <div class="sb-bot">
       <div class="sb-sep"></div>
       <div class="ni" data-r="settings" data-tip="Settings" onclick="nav('settings')"><span class="ni-ico">⚙</span><span class="ni-lbl">Settings</span></div>
+      <div class="ni" data-r="log" data-tip="Activity" onclick="nav('log')"><span class="ni-ico">◎</span><span class="ni-lbl">Log</span></div>
     </div>
   </nav>
 
