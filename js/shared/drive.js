@@ -18,17 +18,9 @@ import { nav, patchCloseMob } from './nav.js';
 // The fallbacks here prevent ReferenceErrors if drive.js pushes before
 // those sections have loaded, or if a section is disabled.
 const VAULT_ENC_KEY    = window.VAULT_ENC_KEY    || 'ac_v4_vault_enc';
-const VAULT_PUBLIC_KEY = window.VAULT_PUBLIC_KEY || 'ac_v4_vault_pub';
+const VAULT_PUBLIC_KEY = window.VAULT_PUBLIC_KEY || 'ac_v4_vault_public';
 const NOTES_ENC_KEY    = window.NOTES_ENC_KEY    || 'ac_v4_notes_enc';
-function _GDATA()       { return window.GDATA      || []; }
-function _MDATA()       { return window.MDATA      || []; }
-function _MPLAYLISTS()  { return window.MPLAYLISTS || []; }
-function _BDATA()       { return window.BDATA      || []; }
-function _LDATA()       { return window.LDATA      || []; }
-function _NDATA()       { return window.NDATA      || []; }
-// Save helpers: prefer the section's own save function (which updates the
-// in-memory variable + localStorage), but ALWAYS fall back to a direct
-// ls.set() so data is never silently dropped when a section hasn't lazy-loaded yet.
+// localStorage key constants — must be declared before the reader/save helpers.
 const _GAMES_KEY    = 'ac_v4_games';
 const _BOOKS_KEY    = 'ac_v4_books';
 const _MUSIC_KEY    = 'ac_v4_music';
@@ -36,6 +28,19 @@ const _MUSIC_PL_KEY = 'ac_v4_music_playlists';
 const _LOG_KEY      = 'ac_v4_log';
 const _NOTES_KEY    = 'ac_v4_notes';
 
+// Data readers: prefer the in-memory global (set by section modules), but fall back
+// to localStorage so _buildSectionPayload never pushes empty arrays when a module
+// hasn't lazy-loaded yet.
+function _GDATA()       { return window.GDATA      || ls.get(_GAMES_KEY)    || []; }
+function _MDATA()       { return window.MDATA      || ls.get(_MUSIC_KEY)    || []; }
+function _MPLAYLISTS()  { return window.MPLAYLISTS || ls.get(_MUSIC_PL_KEY) || []; }
+function _BDATA()       { return window.BDATA      || ls.get(_BOOKS_KEY)    || []; }
+function _LDATA()       { return window.LDATA      || ls.get(_LOG_KEY)      || []; }
+function _NDATA()       { return window.NDATA      || ls.get(_NOTES_KEY)    || []; }
+
+// Save helpers: prefer the section's own save function (which updates the
+// in-memory variable + localStorage), but ALWAYS fall back to a direct
+// ls.set() so data is never silently dropped when a section hasn't lazy-loaded yet.
 function _saveGames(d)     { if (typeof window.saveGames     === 'function') window.saveGames(d);     else { ls.set(_GAMES_KEY, d);    window.GDATA = d; } }
 function _saveMusic(d)     { if (typeof window.saveMusic     === 'function') window.saveMusic(d);     else { ls.set(_MUSIC_KEY, d);    window.MDATA = d; } }
 function _savePlaylists(d) { if (typeof window.savePlaylists === 'function') window.savePlaylists(d); else { ls.set(_MUSIC_PL_KEY, d); window.MPLAYLISTS = d; } }
