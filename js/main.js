@@ -47,6 +47,7 @@ Object.assign(window, {
 const sections = [
   './sections/home.js',
   './sections/settings.js',
+  './sections/ai.js'
 ];
 
 await Promise.all(
