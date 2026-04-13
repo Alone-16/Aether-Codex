@@ -102,10 +102,23 @@
         <input class="srch" id="srch" placeholder="Search everything..." oninput="onSearch(this.value)">
       </div>
       <div class="nb-r">
-        <button class="nb-btn" id="drive-btn" onclick="driveAction()" title="Drive" style="min-width:60px;gap:3px"><span style="font-size:12px">☁</span><span class="drive-status-txt" style="font-size:10px;font-weight:700">Drive</span></button>
-        <button class="nb-btn mob-hide" onclick="exportData()">⬇ <span>Export</span></button>
-        <button class="nb-btn mob-hide" onclick="importFile()">⬆ <span>Import</span></button>
-        <button class="nb-ico ac" id="add-btn" onclick="openAdd()" title="Add" style="font-size:16px;font-weight:700">+</button>
+        <button class="nb-btn" id="drive-btn" onclick="driveAction()" title="Drive" style="min-width:64px;gap:5px"><span style="font-size:14px">☁</span><span class="drive-status-txt" style="font-size:11px;font-weight:700">Drive</span></button>
+        <div class="cdd mob-hide">
+          <button class="nb-btn" onclick="openCDD('nb-data')" style="gap:5px">
+            <span style="font-size:14px;color:var(--tx2)">🗃</span>
+            <span>Data</span>
+            <span style="font-size:10px;opacity:0.6;margin-left:2px">▾</span>
+          </button>
+          <div class="cdd-menu" id="nb-data-menu" style="min-width:160px;right:0;left:auto;top:calc(100% + 10px)">
+            <div class="cdd-item" style="display:flex;align-items:center;gap:10px" onclick="importFile()">
+              <span style="color:var(--ac);font-size:15px;width:16px;text-align:center">⬆</span> <span style="font-weight:500">Import Data</span>
+            </div>
+            <div class="cdd-item" style="display:flex;align-items:center;gap:10px" onclick="exportData()">
+              <span style="color:var(--ac);font-size:15px;width:16px;text-align:center">⬇</span> <span style="font-weight:500">Export Backup</span>
+            </div>
+          </div>
+        </div>
+        <button class="nb-ico ac" id="add-btn" onclick="openAdd()" title="Add" style="font-size:18px;font-weight:700">+</button>
         <button class="nb-ico" onclick="showKeyboardHelp()" title="Keyboard Shortcuts (?)" style="display:none" id="kb-btn">⌨</button>
         <button class="nb-ico" onclick="toggleAI()" id="ai-btn" title="AI Assistant" style="font-size:16px">✦</button>
       </div>
