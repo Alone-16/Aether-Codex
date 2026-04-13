@@ -1,7 +1,3 @@
-# ── Electron build output ──
-electron-app/node_modules/
-electron-app/dist/
-
 # ── OS files ──
 .DS_Store
 Thumbs.db

@@ -62,6 +62,25 @@ await Promise.all(
 // are defaults only until this runs.
 if (typeof window.applySettings === 'function') window.applySettings();
 
+// ── Service Worker & PWA Install ──────────────────────────────────
+window.deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  window.deferredPrompt = e;
+  if (window.CURRENT === 'settings' && typeof window.renderSettingsDesktop === 'function') {
+    const el = document.getElementById('settings-body');
+    if (el) window.renderSettingsDesktop(el);
+  }
+});
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('[ServiceWorker] Registered:', reg.scope))
+      .catch(err => console.error('[ServiceWorker] Failed:', err));
+  });
+}
+
 // ── Shared extras ─────────────────────────────────────────────────
 await import('./shared/extras.js').catch(e =>
   console.warn('[main] extras.js failed to load:', e.message)

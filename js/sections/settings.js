@@ -188,8 +188,8 @@ function rebuildSidebar() {
 
 // ─── SETTINGS RENDER ───
 function renderSettings(c) {
-  const tabs       = ['sections','sync','storage','ai','security','share'];
-  const tabLabels  = ['Sections','Sync','Storage','AI Assistant','Security','Public Share'];
+  const tabs       = ['sections','sync','storage','desktop','ai','security','share'];
+  const tabLabels  = ['Sections','Sync','Storage','Desktop Run','AI Assistant','Security','Public Share'];
 
   c.innerHTML = `
     <div style="font-family:var(--fd);font-size:20px;font-weight:700;margin-bottom:20px;color:var(--tx)">⚙ Settings</div>
@@ -207,14 +207,54 @@ function renderSettingsBody() {
   if      (SETTINGS_TAB === 'sections')   renderSettingsSections(el);
   else if (SETTINGS_TAB === 'sync')       renderSettingsSync(el);
   else if (SETTINGS_TAB === 'storage')    renderSettingsStorage(el);
+  else if (SETTINGS_TAB === 'desktop')    renderSettingsDesktop(el);
   else if (SETTINGS_TAB === 'ai')         renderSettingsAI(el);
-  else if (SETTINGS_TAB === 'share')       renderSettingsPublicShare(el);
+  else if (SETTINGS_TAB === 'share')      renderSettingsPublicShare(el);
   else if (SETTINGS_TAB === 'security')   renderSettingsSecurity(el);
 
   // Update active tab
   document.querySelectorAll('.stab').forEach(t => {
-    const tabs = ['sections','sync','storage','appearance','security'];
+    const tabs = ['sections','sync','storage','desktop','appearance','security'];
     t.classList.toggle('active', t.textContent.toLowerCase() === (tabs.find(x => x === SETTINGS_TAB) || ''));
+  });
+}
+
+// ── DESKTOP TAB ──
+function renderSettingsDesktop(el) {
+  const canInstall = !!window.deferredPrompt;
+  el.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Install Desktop App</div>
+        <div style="font-size:12px;color:var(--mu)">Install Aether Codex as a standalone app for offline access and a native experience.</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:13px;color:var(--tx)">App Status</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:2px">
+            ${canInstall ? 'Ready to install' : (window.matchMedia('(display-mode: standalone)').matches ? 'Installed and running as app' : 'Install prompt not available (already installed?)')}
+          </div>
+        </div>
+        <button onclick="installDesktopApp()" ${canInstall ? '' : 'disabled'}
+          style="background:${canInstall ? 'var(--ac)' : 'rgba(255,255,255,.05)'};color:${canInstall ? '#000' : '#888'};border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:${canInstall ? 'pointer' : 'not-allowed'}">
+          Install App
+        </button>
+      </div>
+    </div>`;
+}
+
+function installDesktopApp() {
+  if (!window.deferredPrompt) {
+    if (typeof toast === 'function') toast('Installation is not available or already installed.', '#fbbf24');
+    return;
+  }
+  window.deferredPrompt.prompt();
+  window.deferredPrompt.userChoice.then((choiceResult) => {
+    if (choiceResult.outcome === 'accepted') {
+      if (typeof toast === 'function') toast('App installed successfully!', '#4ade80');
+    }
+    window.deferredPrompt = null;
+    renderSettingsDesktop(document.getElementById('settings-body'));
   });
 }
 
@@ -1022,7 +1062,7 @@ Object.assign(window, {
   renderSettingsSections, ssDragStart, ssDragOver, ssDrop,
   toggleSection, saveSectionOrder,
   renderSettingsSync, saveBackupDays,
-  renderSettingsStorage,
+  renderSettingsStorage, renderSettingsDesktop, installDesktopApp,
   renderSettingsAI, saveAIKeySetting, clearAIKey,
   setFontSize, setDensity,
   renderSettingsSecurity,
