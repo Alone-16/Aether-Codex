@@ -754,6 +754,7 @@ async function _pushToDrive(opts = {}) {
     if (typeof window.refreshDriveSyncIfVisible === 'function') window.refreshDriveSyncIfVisible();
   } catch(e) {
     _updateDriveBtn('error');
+    console.error('[Drive] Push failed:', e);
     _toast('Drive sync failed: ' + e.message, '#fb7185');
     throw e;
   }
@@ -788,11 +789,12 @@ async function _pullFromDrive() {
     }
 
     // ── Fetch all section files in parallel ──
+    console.log('[Drive] Fetching', ALL_SECTIONS.length, 'section files…');
     const remoteChunks = await Promise.all(ALL_SECTIONS.map(async section => {
-      const fileId = await _getOrCreateSectionFile(section); if (!fileId) return null;
+      const fileId = await _getOrCreateSectionFile(section); if (!fileId) { console.warn('[Drive] No file ID for', section); return null; }
       const r = await _req(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
-      if (!r || !r.ok) return null;
-      try { return await r.json(); } catch { return null; }
+      if (!r || !r.ok) { console.warn('[Drive] Fetch failed for', section, r?.status); return null; }
+      try { const j = await r.json(); console.log(`[Drive] ${section}:`, j && j.version != null ? 'valid' : 'empty', j ? Object.keys(j) : '(null)'); return j; } catch(e) { console.warn('[Drive] JSON parse failed for', section, e); return null; }
     }));
 
     // Merge into a single "remote" object the same shape as the old single-file
@@ -803,10 +805,11 @@ async function _pullFromDrive() {
       Object.assign(remote, chunk);
     });
     // Only return if we got at least one valid section
-    if (Object.keys(remote).length === 0) return null;
+    if (Object.keys(remote).length === 0) { console.warn('[Drive] All section files are empty — nothing to pull'); return null; }
     if (!remote.version) remote.version = DATA_VERSION;
+    console.log('[Drive] Merged remote has keys:', Object.keys(remote).filter(k => k !== 'version' && k !== 'savedAt'));
     return remote;
-  } catch { return null; }
+  } catch(e) { console.error('[Drive] Pull failed:', e); return null; }
 }
 
 /**
@@ -967,9 +970,12 @@ async function _runDriveInit() {
     const remote = await _pullFromDrive();
     // New or empty Drive file parses as {} — truthy but has no version; must upload or first sync never runs.
     if (!remote || remote.version == null) {
+      console.log('[Drive] No valid remote data — pushing local state to Drive');
       await _pushToDrive();
+      _toast('✓ Pushed local data to Google Drive', '#4ade80');
       return;
     }
+    console.log('[Drive] Merging remote data (remoteSaved=%d, localSaved=%d)', remote.savedAt || 0, localSavedBefore);
     // Always merge remote into local (per-entry newer wins). File-level savedAt alone is wrong because any
     // local edit bumps K.SAVED and would skip pulling rows that exist only on Drive.
     _mergeRemoteIntoLocal(remote, localSavedBefore);
