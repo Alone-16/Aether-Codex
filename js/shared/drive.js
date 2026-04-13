@@ -877,6 +877,27 @@ function _mergeLogEntries(local, remote) {
 function _mergeRemoteIntoLocal(remote, localSavedBefore) {
   const remoteSaved = remote.savedAt || 0;
 
+  console.log('[Drive:merge] remote counts →',
+    'media:', (remote.data||[]).length,
+    'genres:', (remote.genres||[]).length,
+    'games:', (remote.games||[]).length,
+    'books:', (remote.books||[]).length,
+    'music:', (remote.music||[]).length,
+    'notes:', (remote.notes||[]).length,
+    'vault_pub:', (remote.vault_public||[]).length,
+    'log:', (remote.log||[]).length,
+    'vault_enc:', !!remote.vault_enc,
+    'notes_enc:', !!remote.notes_enc,
+  );
+  console.log('[Drive:merge] local counts →',
+    'media:', DATA.length,
+    'games:', _GDATA().length,
+    'books:', _BDATA().length,
+    'music:', _MDATA().length,
+    'notes:', _NDATA().length,
+    'log:', _LDATA().length,
+  );
+
   setDATA(_mergeData(DATA, remote.data || []));
 
   if (remote.genres && Array.isArray(remote.genres)) {
@@ -906,12 +927,14 @@ function _mergeRemoteIntoLocal(remote, localSavedBefore) {
     _saveBooks(d);
   }
 
-  if (remote.vault_enc && remoteSaved > localSavedBefore) {
+  if (remote.vault_enc) {
     ls.set(VAULT_ENC_KEY, remote.vault_enc);
+    console.log('[Drive:merge] vault_enc written');
   }
   if (remote.vault_public && Array.isArray(remote.vault_public)) {
     const merged = _mergeRowsById(ls.get(VAULT_PUBLIC_KEY) || [], remote.vault_public, e => e.updatedAt || e.addedAt || 0);
     ls.set(VAULT_PUBLIC_KEY, merged);
+    console.log('[Drive:merge] vault_public written:', merged.length, 'entries');
     if (typeof window.reloadVaultPublicFromStorage === 'function') window.reloadVaultPublicFromStorage();
   }
 
@@ -925,9 +948,12 @@ function _mergeRemoteIntoLocal(remote, localSavedBefore) {
     window.NDATA = d;
     _saveNotes(d);
   }
-  if (remote.notes_enc && remoteSaved > localSavedBefore) {
+  if (remote.notes_enc) {
     ls.set(NOTES_ENC_KEY, remote.notes_enc);
+    console.log('[Drive:merge] notes_enc written');
   }
+
+  console.log('[Drive:merge] done — merged media:', DATA.length);
 }
 
 /**
