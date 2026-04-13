@@ -724,6 +724,61 @@ async function _getLegacySingleFile() {
   return null;
 }
 
+/**
+ * Recovery tool: search Drive trash for the old single-file and restore data from it.
+ * Call from console: window._recoverFromTrash()
+ */
+async function _recoverFromTrash() {
+  console.log('[Drive:recovery] Searching Drive trash for legacy file…');
+  const folderId = await _getOrCreateFolder(); if (!folderId) { console.error('No folder'); return; }
+  // Search for trashed files with the legacy name
+  const r = await _req(`https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FILE}'+and+trashed=true&fields=files(id,name,modifiedTime)`);
+  if (!r) { console.error('Search failed'); return; }
+  const d = await r.json();
+  if (!d.files?.length) {
+    console.warn('[Drive:recovery] No trashed legacy file found. Data cannot be recovered from Drive trash.');
+    _toast('No legacy backup found in Drive trash', '#fb7185');
+    return;
+  }
+  console.log('[Drive:recovery] Found', d.files.length, 'trashed file(s):', d.files.map(f => f.id + ' (' + f.modifiedTime + ')'));
+  // Try the most recently modified one
+  const file = d.files.sort((a,b) => new Date(b.modifiedTime) - new Date(a.modifiedTime))[0];
+  const fr = await _req(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`);
+  if (!fr || !fr.ok) { console.error('Could not read trashed file'); return; }
+  const legacy = await fr.json();
+  console.log('[Drive:recovery] Legacy file contents:',
+    'data:', (legacy.data||[]).length,
+    'genres:', (legacy.genres||[]).length,
+    'games:', (legacy.games||[]).length,
+    'books:', (legacy.books||[]).length,
+    'music:', (legacy.music||[]).length,
+    'notes:', (legacy.notes||[]).length,
+    'vault_pub:', (legacy.vault_public||[]).length,
+    'log:', (legacy.log||[]).length,
+    'vault_enc:', !!legacy.vault_enc,
+    'notes_enc:', !!legacy.notes_enc,
+  );
+  // Restore any sections that have data
+  let restored = [];
+  if ((legacy.notes||[]).length > 0) { ls.set('ac_v4_notes', legacy.notes); restored.push('notes(' + legacy.notes.length + ')'); }
+  if (legacy.notes_enc)              { ls.set('ac_v4_notes_enc', legacy.notes_enc); restored.push('notes_enc'); }
+  if (legacy.vault_enc)              { ls.set('ac_v4_vault_enc', legacy.vault_enc); restored.push('vault_enc'); }
+  if ((legacy.vault_public||[]).length > 0) { ls.set('ac_v4_vault_public', legacy.vault_public); restored.push('vault_pub(' + legacy.vault_public.length + ')'); }
+  if ((legacy.log||[]).length > 0)   { ls.set('ac_v4_log', legacy.log); restored.push('log(' + legacy.log.length + ')'); }
+  if ((legacy.books||[]).length > 0) { ls.set('ac_v4_books', legacy.books); restored.push('books(' + legacy.books.length + ')'); }
+  if (restored.length) {
+    console.log('[Drive:recovery] ✓ Restored to localStorage:', restored.join(', '));
+    _toast('✓ Recovered: ' + restored.join(', '), '#4ade80');
+    // Push the recovered data to Drive split files
+    await _pushToDrive();
+    _toast('✓ Recovered data pushed to Drive', '#4ade80');
+  } else {
+    console.warn('[Drive:recovery] Legacy file had no notes/vault/log data to recover.');
+    _toast('Legacy backup is also empty for notes/vault', '#fb7185');
+  }
+}
+window._recoverFromTrash = _recoverFromTrash;
+
 // ═══════════════════════════════════════════════════════════════════
 //  PUSH / PULL / MERGE
 // ═══════════════════════════════════════════════════════════════════
