@@ -105,7 +105,10 @@ async function sendAIMessage(userMsg) {
 
     const res = await fetch(aiWorkerUrl(), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Action': 'gemini_ai'
+      },
       body: JSON.stringify({ contents: withContext }),
     });
 
