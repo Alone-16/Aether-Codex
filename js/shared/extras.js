@@ -272,6 +272,18 @@ const SHORTCUTS = [
 let _kbSeq = ''; // for two-key sequences like "g h"
 let _kbTimer = null;
 
+function globalAdd() {
+  const c = window.CURRENT;
+  if (c === 'media' && window.openAdd) window.openAdd();
+  else if (c === 'games' && window.openAddGame) window.openAddGame();
+  else if (c === 'books' && window.openAddBook) window.openAddBook();
+  else if (c === 'music' && window.openAddSong) window.openAddSong();
+  else if (c === 'vault' && window.openAddLink) window.openAddLink();
+  else if (['home', 'tools', 'settings', 'log'].includes(c) && window.toast) {
+    window.toast('Navigate to a library section to add an entry', '#8888aa');
+  }
+}
+
 function initKeyboardShortcuts() {
   document.addEventListener('keydown', e => {
     // Ignore when typing in inputs
@@ -317,11 +329,7 @@ function initKeyboardShortcuts() {
         break;
       case 'n':
         // New entry for current section
-        if (CURRENT === 'media')  openAdd();
-        else if (CURRENT === 'games')  openAddGame();
-        else if (CURRENT === 'books')  openAddBook();
-        else if (CURRENT === 'music')  openAddSong();
-        else if (CURRENT === 'vault')  openAddLink();
+        globalAdd();
         break;
       case 'f':
         // Toggle favourite on open entry
@@ -433,7 +441,7 @@ Object.assign(window, {
   updateRewatch, deleteRewatch,
   toastWithUndo,
   initNotifications, sendAiringNotifications,
-  initKeyboardShortcuts, showKeyboardHelp,
+  initKeyboardShortcuts, showKeyboardHelp, globalAdd,
   openCDD, setCDD,
   airingMobileList,
 });
