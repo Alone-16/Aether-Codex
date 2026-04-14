@@ -164,7 +164,7 @@ html[data-section="media"] #content{padding:22px 22px 28px}
 /* ═══ RIGHT PANEL ═══ */
 #poverlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:299;opacity:0;pointer-events:none;transition:opacity .25s}
 #poverlay.show{opacity:1;pointer-events:all}
-#rpanel{position:fixed;top:0;right:0;width:420px;height:100vh;background:var(--surf);border-left:1px solid var(--brd);z-index:300;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1),background .35s,border-color .35s;display:flex;flex-direction:column;overflow:hidden}
+#rpanel{position:fixed;top:64px;right:0;width:420px;height:calc(100vh - 64px);background:var(--surf);border-left:1px solid var(--brd);z-index:300;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1),background .35s,border-color .35s;display:flex;flex-direction:column;overflow:hidden}
 #rpanel.open{transform:translateX(0)}
 #panel-inner{flex:1;overflow-y:auto;display:flex;flex-direction:column}
 #content.pushed{margin-right:420px}
@@ -443,7 +443,7 @@ textarea.fin{resize:vertical;min-height:70px}
   #mob-ov{display:block}
   #content{padding:12px}
   #content.pushed{margin-right:0}
-  #rpanel{width:100%;max-width:100%}
+  #rpanel{width:100%;max-width:100%;top:64px;height:calc(100vh - 64px)}
   .srch-wrap{max-width:130px}
   .nb-btn span{display:none}
   /* Drive button is only icon+label in spans — keep icon visible on small screens */
@@ -499,7 +499,7 @@ textarea.fin{resize:vertical;min-height:70px}
   .prog-txt{font-size:10px}
 
   /* ── PANEL ── */
-  #rpanel{width:100%;max-width:100%;border-radius:12px 12px 0 0}
+  #rpanel{width:100%;max-width:100%;border-radius:12px 12px 0 0;top:52px;height:calc(100vh - 52px)}
   .pstats{grid-template-columns:repeat(2,1fr)}
   .panel-actions{padding:14px 16px;gap:8px}
   .panel-actions button{font-size:12px;padding:10px 14px}
