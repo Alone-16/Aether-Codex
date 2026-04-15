@@ -209,13 +209,27 @@ function renderSettingsBody() {
   else if (SETTINGS_TAB === 'storage')    renderSettingsStorage(el);
   else if (SETTINGS_TAB === 'desktop')    renderSettingsDesktop(el);
   else if (SETTINGS_TAB === 'ai')         renderSettingsAI(el);
-  else if (SETTINGS_TAB === 'share')      renderSettingsPublicShare(el);
-  else if (SETTINGS_TAB === 'security')   renderSettingsSecurity(el);
+  else if (SETTINGS_TAB === 'share') {
+    if (typeof window.renderSettingsPublicShare === 'function') {
+      window.renderSettingsPublicShare(el);
+    } else {
+      el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--mu)">Loading...</div>';
+      import('./public.js').then(() => { if (SETTINGS_TAB === 'share') window.renderSettingsPublicShare(el); });
+    }
+  }
+  else if (SETTINGS_TAB === 'security') {
+    if (typeof window.getPin !== 'function') {
+      el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--mu)">Loading...</div>';
+      import('./games.js').then(() => { if (SETTINGS_TAB === 'security') renderSettingsSecurity(el); });
+    } else {
+      renderSettingsSecurity(el);
+    }
+  }
 
   // Update active tab
-  document.querySelectorAll('.stab').forEach(t => {
-    const tabs = ['sections','sync','storage','desktop','appearance','security'];
-    t.classList.toggle('active', t.textContent.toLowerCase() === (tabs.find(x => x === SETTINGS_TAB) || ''));
+  document.querySelectorAll('.stab').forEach((t, i) => {
+    const tabs = ['sections','sync','storage','desktop','ai','security','share'];
+    t.classList.toggle('active', tabs[i] === SETTINGS_TAB);
   });
 }
 
@@ -602,7 +616,7 @@ function setDensity(v) {
 
 // ── SECURITY TAB ──
 function renderSettingsSecurity(el) {
-  const hasPin = !!getPin();
+  const hasPin = !!window.getPin();
   el.innerHTML = `
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
       <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
@@ -864,7 +878,7 @@ async function startMALBulkSync() {
 
 function clearPin() {
   showConfirm('Remove your PIN? 18+ content will no longer be locked.', () => {
-    ls.del(PIN_KEY); renderSettingsSecurity(document.getElementById('settings-body'));
+    ls.del('ac_vault_pin'); renderSettingsSecurity(document.getElementById('settings-body'));
     toast('PIN removed');
   }, { title:'Remove PIN?', okLabel:'Remove', danger:false });
 }
