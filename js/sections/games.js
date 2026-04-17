@@ -124,11 +124,354 @@ function showPinModal(onSuccess, context='unlock') {
 // ═══════════════════════════════════════════════════════
 //  GAMES RENDER
 // ═══════════════════════════════════════════════════════
+let GAMES_BG_ANIM = null;
+
+function initGamesBg() {
+  const canvas = document.getElementById('games-anim-bg');
+  if (!canvas || canvas.dataset.init) return;
+  canvas.dataset.init = '1';
+  setTimeout(() => { if(canvas) canvas.style.opacity = '0.5'; }, 100);
+
+  const ctx = canvas.getContext('2d');
+  let w, h;
+  const resize = () => {
+    if(!document.getElementById('games-anim-bg')) return;
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  };
+  window.addEventListener('resize', resize);
+  resize();
+
+  const particles = [];
+  const colors = ['#38bdf8', '#a78bfa', '#fbbf24', '#fb7185', '#4ade80'];
+  const shapes = ['cross', 'circle', 'triangle', 'square'];
+
+  for(let i=0; i<35; i++) {
+    particles.push({
+      x: Math.random() * w, y: Math.random() * h,
+      vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4,
+      size: Math.random() * 6 + 3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      shape: shapes[Math.floor(Math.random() * shapes.length)],
+      rot: Math.random() * Math.PI * 2,
+      vrot: (Math.random() - 0.5) * 0.02
+    });
+  }
+
+  let mx = w/2, my = h/2;
+  const mm = e => { mx = e.clientX; my = e.clientY; };
+  window.addEventListener('mousemove', mm);
+
+  function render() {
+    if(!document.getElementById('games-anim-bg')) {
+      window.removeEventListener('mousemove', mm);
+      window.removeEventListener('resize', resize);
+      return;
+    }
+    ctx.clearRect(0,0,w,h);
+    
+    // Draw premium mouse glow
+    let radgrad = ctx.createRadialGradient(mx, my, 0, mx, my, 400);
+    radgrad.addColorStop(0, 'rgba(167, 139, 250, 0.12)');
+    radgrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.05)');
+    radgrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = radgrad;
+    ctx.fillRect(0, 0, w, h);
+
+    const connectDist = 140;
+
+    particles.forEach((p, index) => {
+      let dx = mx - p.x; let dy = my - p.y;
+      let dist = Math.sqrt(dx*dx + dy*dy);
+      
+      // Mouse interaction
+      if (dist < 220) {
+        ctx.beginPath();
+        ctx.strokeStyle = p.color;
+        ctx.globalAlpha = (1 - dist/220) * 0.5;
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(mx, my);
+        ctx.stroke();
+        // Gentle attraction
+        p.x += dx * 0.005; p.y += dy * 0.005;
+      }
+
+      // Constellation connections
+      for (let j = index + 1; j < particles.length; j++) {
+        let p2 = particles[j];
+        let pdx = p2.x - p.x;
+        let pdy = p2.y - p.y;
+        let pdist = Math.sqrt(pdx*pdx + pdy*pdy);
+        if (pdist < connectDist) {
+          ctx.beginPath();
+          // Create gradient line between particles
+          let lgrad = ctx.createLinearGradient(p.x, p.y, p2.x, p2.y);
+          lgrad.addColorStop(0, p.color);
+          lgrad.addColorStop(1, p2.color);
+          ctx.strokeStyle = lgrad;
+          ctx.globalAlpha = (1 - pdist/connectDist) * 0.25;
+          ctx.lineWidth = 1;
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.stroke();
+        }
+      }
+
+      p.x += p.vx; p.y += p.vy; p.rot += p.vrot;
+      if (p.x < 0 || p.x > w) p.vx *= -1;
+      if (p.y < 0 || p.y > h) p.vy *= -1;
+
+      ctx.save();
+      ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.6 + (Math.sin(Date.now()*0.0015 + p.x)*0.4);
+      ctx.beginPath();
+      let s = p.size;
+      if (p.shape === 'circle') ctx.arc(0,0,s,0,Math.PI*2);
+      else if (p.shape === 'square') ctx.rect(-s,-s,s*2,s*2);
+      else if (p.shape === 'triangle') { ctx.moveTo(0,-s); ctx.lineTo(s,s); ctx.lineTo(-s,s); ctx.closePath(); }
+      else if (p.shape === 'cross') { ctx.moveTo(-s,-s); ctx.lineTo(s,s); ctx.moveTo(s,-s); ctx.lineTo(-s,s); }
+      
+      ctx.shadowBlur = 12; ctx.shadowColor = p.color;
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    GAMES_BG_ANIM = requestAnimationFrame(render);
+  }
+  if(GAMES_BG_ANIM) cancelAnimationFrame(GAMES_BG_ANIM);
+  render();
+}
+
 function renderGames(c) {
   // Only reset lock state if navigating TO games from elsewhere
   // (auto-lock on nav away is handled in nav() already)
   const tabs = ['Library','Dashboard','Upcoming'];
   const tabsHtml = `
+    <!-- Premium Gaming UI Aesthetics -->
+    <style>
+      #games-body {
+        position: relative;
+        min-height: 400px;
+        display: grid;
+        grid-template-columns: 100%;
+      }
+      #games-body .row {
+        background: linear-gradient(145deg, rgba(30, 30, 40, 0.45) 0%, rgba(20, 20, 28, 0.55) 100%);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid rgba(255,255,255,0.05);
+        border-top: 1px solid rgba(255,255,255,0.1);
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 8px;
+        position: relative;
+      }
+      #games-body .row:hover {
+        transform: translateY(-4px) scale(1.01);
+        background: linear-gradient(145deg, rgba(40, 40, 55, 0.65) 0%, rgba(25, 25, 35, 0.75) 100%);
+        border: 1px solid rgba(255,255,255,0.2);
+        box-shadow: 0 15px 35px rgba(0,0,0,0.4), 0 0 20px rgba(var(--ac-rgb), 0.15);
+        z-index: 2;
+      }
+      #games-body .row-bar {
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        opacity: 0.9;
+        width: 4px;
+      }
+      #games-body .row:hover .row-bar {
+        width: 8px;
+        opacity: 1;
+        box-shadow: 0 0 15px currentColor;
+      }
+      #games-body .row-title {
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        color: #fff;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+      }
+      #games-body .ss-head {
+        background: linear-gradient(90deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+        border-left: 3px solid currentColor;
+        border-bottom: none;
+        padding: 14px 16px;
+        margin: 16px 0 12px;
+        transition: all 0.3s ease;
+        border-radius: 0 8px 8px 0;
+        box-shadow: inset 1px 0 0 rgba(255,255,255,0.1);
+        cursor: pointer;
+      }
+      #games-body .ss-head:hover {
+        background: linear-gradient(90deg, rgba(255,255,255,0.08) 0%, transparent 100%);
+        padding-left: 20px;
+      }
+      #games-body .ss-lbl {
+        text-shadow: 0 0 15px currentColor;
+        font-weight: 800;
+        letter-spacing: 2px;
+      }
+      .sub-tabs .stab {
+        transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
+        position: relative;
+        overflow: hidden;
+        font-weight: 600;
+        padding: 8px 16px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid transparent;
+      }
+      .sub-tabs .stab:hover {
+        background: rgba(255,255,255,0.08);
+      }
+      .sub-tabs .stab.active {
+        background: rgba(var(--ac-rgb), 0.15);
+        color: var(--ac);
+        box-shadow: 0 4px 15px rgba(var(--ac-rgb), 0.2);
+        border-color: rgba(var(--ac-rgb), 0.4);
+        transform: translateY(-2px);
+      }
+      .sub-tabs .stab.active::after {
+        content: '';
+        position: absolute;
+        bottom: 0; left: 0; right: 0; height: 3px;
+        background: var(--ac);
+        box-shadow: 0 0 15px var(--ac);
+        border-radius: 3px 3px 0 0;
+      }
+      .dash-grid .dc {
+        background: linear-gradient(135deg, rgba(30,30,40,0.5) 0%, rgba(20,20,30,0.6) 100%);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-top: 1px solid rgba(255,255,255,0.15);
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        border-radius: 16px;
+        position: relative;
+        overflow: hidden;
+      }
+      .dash-grid .dc::before {
+        content: ''; position: absolute; inset: 0;
+        background: radial-gradient(circle at top right, rgba(255,255,255,0.1), transparent 50%);
+        pointer-events: none;
+      }
+      .dash-grid .dc:hover {
+        transform: translateY(-6px) scale(1.02);
+        box-shadow: 0 15px 35px rgba(0,0,0,0.4), 0 0 20px rgba(var(--ac-rgb), 0.15);
+        border-color: rgba(var(--ac-rgb), 0.5);
+      }
+      .up-card {
+        background: linear-gradient(145deg, rgba(30, 30, 40, 0.45) 0%, rgba(20, 20, 28, 0.55) 100%);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-top: 1px solid rgba(255,255,255,0.15);
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        border-radius: 16px;
+        margin-bottom: 12px;
+      }
+      .up-card:hover {
+        transform: translateY(-5px) scale(1.01);
+        box-shadow: 0 15px 35px rgba(0,0,0,0.4), 0 0 20px rgba(var(--ac-rgb), 0.1);
+        border-color: rgba(255,255,255,0.25);
+        z-index: 2;
+        position: relative;
+      }
+      .m-chip {
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .m-chip:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        border-color: rgba(255,255,255,0.3);
+      }
+      @keyframes gameCardEnter {
+        0% { opacity: 0; transform: translateY(20px) scale(0.96); filter: blur(4px); }
+        100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+      }
+      @keyframes progFillEnter {
+        0% { transform: scaleX(0); opacity: 0; }
+        100% { transform: scaleX(1); opacity: 1; }
+      }
+      #games-body .row, .up-card, .dash-grid .dc {
+        animation: gameCardEnter 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+      .prog-fill {
+        transform-origin: left;
+        animation: progFillEnter 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+      #games-body .row {
+        display: flex; align-items: center; justify-content: space-between;
+        min-height: 52px; padding: 4px 12px 4px 0;
+      }
+      .action-btn {
+        width: 28px; height: 28px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 8px;
+        color: rgba(255,255,255,0.7);
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.16,1,0.3,1);
+        font-size: 12px;
+        backdrop-filter: blur(8px);
+      }
+      .action-btn:hover {
+        background: rgba(var(--ac-rgb), 0.15);
+        border-color: rgba(var(--ac-rgb), 0.4);
+        color: #fff;
+        transform: translateY(-2px) scale(1.05);
+        box-shadow: 0 4px 12px rgba(var(--ac-rgb), 0.25);
+      }
+      .action-btn.del:hover {
+        background: rgba(251,113,133,0.15);
+        border-color: rgba(251,113,133,0.4);
+        color: #fb7185;
+        box-shadow: 0 4px 12px rgba(251,113,133,0.25);
+      }
+      .dash-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 16px;
+      }
+      .dash-grid .dc {
+        padding: 24px 16px;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+        text-align: center;
+      }
+      .dash-grid .dc-v {
+        font-size: 28px; font-weight: 800; color: #fff;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.4); line-height: 1;
+      }
+      .dash-grid .dc-l {
+        font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.5);
+        text-transform: uppercase; letter-spacing: 1px;
+      }
+      #g-ctx-overlay { position: fixed; inset: 0; z-index: 99998; }
+      #g-ctx-menu {
+        position: fixed; z-index: 99999; background: rgba(30,30,40,0.95);
+        backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 12px; padding: 6px; min-width: 180px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+        transform-origin: top left; animation: gCtxMenuEnter 0.2s cubic-bezier(0.16,1,0.3,1);
+      }
+      .g-ctx-header {
+        padding: 8px 12px; font-size: 12px; font-weight: 800; color: rgba(255,255,255,0.5);
+        border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 4px;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .g-ctx-item {
+        padding: 10px 12px; font-size: 13px; font-weight: 600; color: #fff;
+        border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 10px;
+        transition: background 0.2s;
+      }
+      .g-ctx-item:hover { background: rgba(255,255,255,0.1); }
+      .g-ctx-item.danger:hover { background: rgba(251,113,133,0.15); color: #fb7185; }
+      .g-ctx-sep { height: 1px; background: rgba(255,255,255,0.08); margin: 4px 0; }
+      @keyframes gCtxMenuEnter { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    </style>
+    <canvas id="games-anim-bg" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;opacity:0;transition:opacity 1.5s ease;"></canvas>
+
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div class="sub-tabs">
@@ -144,11 +487,48 @@ function renderGames(c) {
 
   c.innerHTML = tabsHtml;
   renderGamesBody();
+  setTimeout(initGamesBg, 0);
 }
 
+let _G_STATUS_CHIP = null;
+
 function setGamesPage(p) {
-  GAMES_PAGE = p; GSEARCH = '';
+  GAMES_PAGE = p; GSEARCH = ''; _G_STATUS_CHIP = null;
   document.getElementById('srch').value = '';
+  renderGamesBody();
+}
+
+function _gamesListStatusFilter() {
+  if (_G_STATUS_CHIP === null || _G_STATUS_CHIP === undefined) {
+    return document.getElementById('fstatus')?.value || '';
+  }
+  return _G_STATUS_CHIP;
+}
+
+function _renderGamesFilterChips() {
+  const chips = [
+    { val:'',          lbl:'All',       col:'rgba(255,255,255,.45)' },
+    { val:'playing',   lbl:'Playing',   col:'#38bdf8' },
+    { val:'completed', lbl:'Completed', col:'#4ade80' },
+    { val:'wishlist',  lbl:'Wishlist',  col:'#a78bfa' },
+    { val:'on_hold',   lbl:'On Hold',   col:'#fbbf24' },
+    { val:'dropped',   lbl:'Dropped',   col:'#fb7185' },
+  ];
+  const fstEff = _gamesListStatusFilter();
+  return chips.map((c) => {
+    const active = c.val === fstEff;
+    const onClick = c.val === '' ? `setGamesChip('all')` : `setGamesChip('${c.val}')`;
+    return `<button type="button" class="m-chip${active ? ' active' : ''}" style="--chip-c:${c.col}" onclick="${onClick}">
+      <span class="m-chip-dot" aria-hidden="true"></span>${c.lbl}
+    </button>`;
+  }).join('');
+}
+
+function setGamesChip(val) {
+  const v = val === 'all' ? '' : val;
+  _G_STATUS_CHIP = v;
+  const fstEl = document.getElementById('fstatus');
+  if (fstEl) fstEl.value = v;
   renderGamesBody();
 }
 
@@ -169,7 +549,7 @@ function renderGamesBody() {
 function filteredGames() {
   let d = GDATA;
   if (GSEARCH) d = d.filter(g => g.title.toLowerCase().includes(GSEARCH));
-  const fst = document.getElementById('fstatus')?.value || '';
+  const fst = _gamesListStatusFilter();
   if (fst) d = d.filter(g => g.status === fst);
   return { data: d, fst };
 }
@@ -179,15 +559,21 @@ function renderGamesLibrary(c) {
   const publicGames = data.filter(g => !g.adult18);
   const adultGames  = data.filter(g => g.adult18);
 
+  let html = `
+    <div class="m-filter-row" style="margin-bottom:14px; display:flex; gap:8px; flex-wrap:wrap;">
+      <div class="m-filter-chips" style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">${_renderGamesFilterChips()}</div>
+    </div>`;
+
   if (!data.length) {
-    c.innerHTML = `<div class="empty"><div class="empty-ico">◈</div><p>No games yet — add your first one!</p></div>`;
+    html += `<div class="empty"><div class="empty-ico">◈</div><p>No games yet — add your first one!</p></div>`;
+    c.innerHTML = html;
     return;
   }
 
   const byStatus = {};
-  GS_ORDER.forEach(s => { byStatus[s] = publicGames.filter(g => g.status === s); });
-
-  let html = '';
+  GS_ORDER.forEach(s => { 
+    byStatus[s] = publicGames.filter(g => g.status === s).sort((a,b) => (b.pinned?1:0) - (a.pinned?1:0)); 
+  });
   GS_ORDER.forEach(s => {
     const rows = byStatus[s]; if(!rows?.length) return;
     const [col, lbl] = GS_SECTION[s];
@@ -200,13 +586,14 @@ function renderGamesLibrary(c) {
         <span class="ss-arr${coll?' coll':''}">▾</span>
       </div>
       <div class="ss-rows${coll?' coll':''}">
-        ${rows.map(g => gameRowHtml(g)).join('')}
+        ${rows.map((g, i) => gameRowHtml(g, i)).join('')}
       </div>
     </div>`;
   });
 
   // 18+ section
   if (adultGames.length) {
+    const sortedAdults = adultGames.sort((a,b) => (b.pinned?1:0) - (a.pinned?1:0));
     html += `<div class="ss-section" style="margin-top:16px">
       <div style="display:flex;align-items:center;gap:10px;padding:10px 0 8px;border-top:1px solid var(--brd)">
         <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:#fb7185">🔞 Adult Games</span>
@@ -214,7 +601,7 @@ function renderGamesLibrary(c) {
         ${!GAMES_UNLOCKED ? `<button onclick="unlockGames()" style="background:rgba(251,113,133,.1);color:#fb7185;border:1px solid rgba(251,113,133,.25);border-radius:4px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer">🔒 Unlock</button>` : ''}
       </div>
       <div style="display:flex;flex-direction:column;gap:2px;${!GAMES_UNLOCKED?'filter:blur(6px);pointer-events:none;user-select:none':''}">
-        ${adultGames.map(g => gameRowHtml(g)).join('')}
+        ${sortedAdults.map((g, i) => gameRowHtml(g, i)).join('')}
       </div>
     </div>`;
   }
@@ -222,7 +609,7 @@ function renderGamesLibrary(c) {
   c.innerHTML = html;
 }
 
-function gameRowHtml(g) {
+function gameRowHtml(g, idx = 0) {
   const isActive = GPANEL && GPEDIT === g.id;
   const col = GS_COLOR[g.status] || 'var(--ac)';
   const platIcon = PLAT_ICON[g.platform] || '🖥';
@@ -230,29 +617,40 @@ function gameRowHtml(g) {
   const activePart = pt.find(p => p.status === 'playing') || pt.find(p=>p.status==='on_hold') || pt[pt.length-1];
   const hours = g.totalHours || 0;
 
-  return `<div class="row${isActive?' active-row':''}" id="grow-${g.id}" onclick="openGameDetail('${g.id}')">
-    <div class="row-bar" style="background:${col}"></div>
-    <div class="row-info">
-      <div class="row-title" style="display:flex;align-items:center;gap:6px">
-        <span style="font-size:11px">${platIcon}</span>
-        ${esc(g.title)}
+  return `<div class="row${isActive?' active-row':''}${g.pinned?' m-card-pinned':''}" id="grow-${g.id}" style="animation-delay:${idx * 0.04}s" 
+    onclick="if(window._G_HOLD_FIRED){window._G_HOLD_FIRED=false;return;}openGameDetail('${g.id}')"
+    onmousedown="startGamesHold('${g.id}',event)"
+    onmouseup="cancelGamesHold()"
+    onmouseleave="cancelGamesHold()"
+    ontouchstart="startGamesHold('${g.id}',event)"
+    ontouchend="cancelGamesHold()"
+    ontouchmove="cancelGamesHold()">
+    <div class="row-bar" style="background:${col}; height:100%; position:absolute; left:0; top:0;"></div>
+    <div class="row-info" style="flex:1; padding-left:14px; display:flex; flex-direction:column; gap:4px;">
+      <div class="row-title" style="display:flex;align-items:center;gap:8px;font-size:14px;">
+        <div style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;background:rgba(255,255,255,0.05);border-radius:6px;border:1px solid rgba(255,255,255,0.08);box-shadow:inset 0 1px 0 rgba(255,255,255,0.1)">
+           <span style="font-size:11px">${platIcon}</span>
+        </div>
+        <span style="text-shadow:0 2px 4px rgba(0,0,0,0.5); font-weight:700; color:#fff; letter-spacing:0.3px">${g.pinned?'<span style="font-size:10px;margin-right:4px">📌</span>':''}${esc(g.title)}</span>
       </div>
-      <div class="row-meta">
+      <div class="row-meta" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         ${gstag(g.status)}
-        ${g.difficulty?`<span style="font-size:10px;color:var(--mu)">⚔ ${esc(g.difficulty)}</span>`:''}
-        ${hours?`<span style="font-size:10px;color:var(--mu)">⏱ ${hours}h</span>`:''}
-        ${g.completionPct?`<span style="font-size:10px;color:var(--mu)">${g.completionPct}%</span>`:''}
+        ${g.difficulty?`<span style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.05);border-radius:4px;padding:2px 6px;font-size:9px;color:rgba(255,255,255,0.65);display:flex;align-items:center;gap:4px;font-weight:600"><span style="color:var(--ac)">⚔</span> ${esc(g.difficulty)}</span>`:''}
+        ${hours?`<span style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.05);border-radius:4px;padding:2px 6px;font-size:9px;color:rgba(255,255,255,0.65);display:flex;align-items:center;gap:4px;font-weight:600">⏱ ${hours}h</span>`:''}
       </div>
     </div>
-    <div class="row-r">
-      ${g.completionPct?`<div class="row-prog">
-        <div class="prog-bar"><div class="prog-fill" style="width:${g.completionPct}%;background:${col}"></div></div>
-        <span class="prog-txt">${g.completionPct}%</span>
+    <div class="row-r" style="display:flex;align-items:center;gap:20px;padding-right:12px">
+      ${g.completionPct?`
+      <div class="row-prog" style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+        <span class="prog-txt" style="font-size:11px;font-weight:800;color:${col};text-shadow:0 0 10px ${col}44">${g.completionPct}%</span>
+        <div class="prog-bar" style="width:70px;height:4px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,0.3)">
+           <div class="prog-fill" style="width:${g.completionPct}%;background:${col};height:100%;border-radius:2px;box-shadow:0 0 10px ${col}"></div>
+        </div>
       </div>`:''}
-      <div class="row-btns" onclick="event.stopPropagation()">
-        ${g.watchUrl&&g.status==='playing'?`<button class="rbt" onclick="window.open('${g.watchUrl}','_blank')" title="Open" style="color:var(--ac);border-color:rgba(var(--ac-rgb),.3)">▶</button>`:''}
-        <button class="rbt" onclick="openEditGame('${g.id}')">✏</button>
-        <button class="rbt del" onclick="askDelGame('${g.id}')">✕</button>
+      <div class="row-btns" style="display:flex;gap:6px;" onclick="event.stopPropagation()">
+        ${g.watchUrl&&g.status==='playing'?`<button class="action-btn" onclick="window.open('${g.watchUrl}','_blank')" title="Open">▶</button>`:''}
+        <button class="action-btn" onclick="openEditGame('${g.id}')">✏️</button>
+        <button class="action-btn del" onclick="askDelGame('${g.id}')">✕</button>
       </div>
     </div>
   </div>`;
@@ -297,8 +695,8 @@ function renderGameDetailPanel(g) {
   const pt = g.series || g.playthroughs || [];
   const platIcon = PLAT_ICON[g.platform] || '🖥';
   const ptHtml = pt.length ? pt.map((p,i) => `
-    <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:10px 12px;margin-bottom:5px">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
+    <div style="background:rgba(255,255,255,0.03);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.08);border-top:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:12px 14px;margin-bottom:8px;transition:all 0.3s cubic-bezier(0.16,1,0.3,1);box-shadow:0 4px 15px rgba(0,0,0,0.1)" onmouseover="this.style.background='rgba(255,255,255,0.06)';this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.03)';this.style.transform='translateY(0)';this.style.boxShadow='0 4px 15px rgba(0,0,0,0.1)'">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
         <span style="font-size:13px;font-weight:600">${esc(p.name||`Playthrough ${i+1}`)}</span>
         <span class="stag" style="background:${GS_COLOR[p.status]||'var(--mu)'}1a;color:${GS_COLOR[p.status]||'var(--mu)'};font-size:10px">${GS_LABEL[p.status]||p.status}</span>
       </div>
@@ -604,8 +1002,8 @@ async function saveGame(eid) {
     notes:         document.getElementById('gf-notes')?.value?.trim()||null,
     favorite:      document.getElementById('gf-fav')?.checked||false,
     adult18:       document.getElementById('gf-adult')?.checked||false,
-    series:        pts,
     saveFileId:    existing?.saveFileId||null,
+    pinned:        existing ? !!existing.pinned : false,
     addedAt:       existing ? existing.addedAt : Date.now(),
     updatedAt:     Date.now(),
   };
@@ -744,21 +1142,25 @@ function renderGamesDash(c) {
 
   c.innerHTML = `
     <div style="font-family:var(--fd);font-size:18px;font-weight:700;margin-bottom:16px;letter-spacing:2px;text-transform:uppercase;color:var(--ac)">◈ Game Dashboard</div>
-    <div class="dash-grid" style="margin-bottom:20px">
-      <div class="dc"><div class="dc-v">${GDATA.length}</div><div class="dc-l">Total</div></div>
-      <div class="dc"><div class="dc-v">${cnt.playing||0}</div><div class="dc-l">Playing</div></div>
-      <div class="dc"><div class="dc-v">${cnt.completed||0}</div><div class="dc-l">Completed</div></div>
-      <div class="dc"><div class="dc-v">${cnt.wishlist||0}</div><div class="dc-l">Wishlist</div></div>
-      <div class="dc"><div class="dc-v">${totalH.toFixed(0)}h</div><div class="dc-l">Hours Played</div></div>
-      <div class="dc"><div class="dc-v">${avgPct}%</div><div class="dc-l">Avg Complete</div></div>
+    <div class="dash-grid" style="margin-bottom:24px">
+      <div class="dc" style="animation-delay:0.04s"><div class="dc-v">${GDATA.length}</div><div class="dc-l">Total</div></div>
+      <div class="dc" style="animation-delay:0.08s"><div class="dc-v">${cnt.playing||0}</div><div class="dc-l">Playing</div></div>
+      <div class="dc" style="animation-delay:0.12s"><div class="dc-v">${cnt.completed||0}</div><div class="dc-l">Completed</div></div>
+      <div class="dc" style="animation-delay:0.16s"><div class="dc-v">${cnt.wishlist||0}</div><div class="dc-l">Wishlist</div></div>
+      <div class="dc" style="animation-delay:0.20s"><div class="dc-v">${totalH.toFixed(0)}<span style="font-size:16px;color:rgba(255,255,255,0.4)">h</span></div><div class="dc-l">Played</div></div>
+      <div class="dc" style="animation-delay:0.24s"><div class="dc-v">${avgPct}<span style="font-size:16px;color:rgba(255,255,255,0.4)">%</span></div><div class="dc-l">Avg Complete</div></div>
     </div>
-    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);padding:16px;max-width:400px">
-      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu);margin-bottom:12px">By Platform</div>
+    <div style="background:linear-gradient(145deg, rgba(30, 30, 40, 0.45) 0%, rgba(20, 20, 28, 0.55) 100%);backdrop-filter:blur(24px);border:1px solid rgba(255,255,255,0.08);border-top:1px solid rgba(255,255,255,0.15);border-radius:16px;padding:20px;max-width:400px;box-shadow:0 6px 20px rgba(0,0,0,0.15)">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu);margin-bottom:16px;display:flex;align-items:center;gap:8px">
+        <span style="color:var(--ac)">❯</span> By Platform
+      </div>
       ${Object.entries(byPlatform).filter(([,v])=>v>0).map(([k,v])=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--brd)">
-          <span style="font-size:16px">${PLAT_ICON[k]}</span>
-          <span style="flex:1;font-size:13px">${PLAT_LABEL[k]}</span>
-          <span style="font-size:14px;font-weight:700;color:var(--ac)">${v}</span>
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
+          <div style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;background:rgba(255,255,255,0.05);border-radius:8px;border:1px solid rgba(255,255,255,0.05)">
+            <span style="font-size:16px">${PLAT_ICON[k]}</span>
+          </div>
+          <span style="flex:1;font-size:14px;font-weight:600;color:rgba(255,255,255,0.8)"><span style="color:#fff">${PLAT_LABEL[k]}</span> Devices</span>
+          <span style="font-size:16px;font-weight:800;color:var(--ac);text-shadow:0 0 10px rgba(var(--ac-rgb),0.3)">${v}</span>
         </div>`).join('')}
     </div>`;
 }
@@ -768,7 +1170,7 @@ function renderGamesUpcoming(c) {
   const now = new Date(); now.setHours(0,0,0,0);
   const items = GDATA.filter(g=>g.upcomingDate).map(g=>({...g, date:g.upcomingDate}));
   items.sort((a,b)=>new Date(a.date)-new Date(b.date));
-  const rows = items.map(g => {
+  const rows = items.map((g, i) => {
     const d = new Date(g.date+'T00:00:00');
     const diff = Math.ceil((d-now)/86400000);
     const mon = d.toLocaleString('default',{month:'short'}).toUpperCase();
@@ -776,7 +1178,7 @@ function renderGamesUpcoming(c) {
     if(diff<=0){cls='up-past';lbl='Released';}
     else if(diff<=3){cls='up-soon';lbl=`${diff}d left`;}
     else if(diff<=14){cls='up-near';lbl=`${diff}d`;}
-    return `<div class="up-card" onclick="openGameDetail('${g.id}')">
+    return `<div class="up-card" style="animation-delay:${i * 0.04}s" onclick="openGameDetail('${g.id}')">
       <div class="up-date-box"><div class="up-mon">${mon}</div><div class="up-day">${d.getDate()}</div></div>
       <div class="up-info"><div class="up-title">${esc(g.title)}</div><div class="up-sub">${PLAT_LABEL[g.platform]||''}</div></div>
       <div class="up-pill ${cls}">${lbl}</div>
@@ -788,6 +1190,83 @@ function renderGamesUpcoming(c) {
 
 
 // ── Register all games functions + constants as globals ───────────────────
+
+let _G_HOLD_TIMER = null;
+let _G_HOLD_FIRED = false;
+let _G_CTX_ENTRY_ID = null;
+
+function startGamesHold(id, ev) {
+  cancelGamesHold();
+  _G_HOLD_FIRED = false; window._G_HOLD_FIRED = false;
+  const touch = ev.touches ? ev.touches[0] : ev;
+  const cx = touch.clientX, cy = touch.clientY;
+  _G_HOLD_TIMER = setTimeout(() => {
+    _G_HOLD_TIMER = null;
+    _G_HOLD_FIRED = true; window._G_HOLD_FIRED = true;
+    showGamesCtxMenu(id, cx, cy);
+  }, 500);
+}
+
+function cancelGamesHold() {
+  if (_G_HOLD_TIMER) { clearTimeout(_G_HOLD_TIMER); _G_HOLD_TIMER = null; }
+}
+
+function hideGamesCtxMenu() {
+  document.getElementById('g-ctx-overlay')?.remove();
+  document.getElementById('g-ctx-menu')?.remove();
+  _G_CTX_ENTRY_ID = null;
+}
+
+function showGamesCtxMenu(id, x, y) {
+  hideGamesCtxMenu();
+  _G_CTX_ENTRY_ID = id;
+  const g = GDATA.find(d => d.id === id); if (!g) return;
+
+  const ov = document.createElement('div');
+  ov.id = 'g-ctx-overlay';
+  ov.onclick = hideGamesCtxMenu;
+  document.body.appendChild(ov);
+
+  const menu = document.createElement('div');
+  menu.id = 'g-ctx-menu';
+  const isPinned = !!g.pinned;
+
+  menu.innerHTML = `
+    <div class="g-ctx-header">${esc(g.title)}</div>
+    <div class="g-ctx-item" onclick="ctxGamesPin('${id}')">
+      <span class="ctx-ico" style="font-size:16px">${isPinned ? '📌' : '📍'}</span>
+      ${isPinned ? 'Unpin' : 'Pin to Top'}
+    </div>
+    <div class="g-ctx-item" onclick="hideGamesCtxMenu();openGameDetail('${id}')">
+      <span class="ctx-ico" style="font-size:16px">👁</span>View Details
+    </div>
+    <div class="g-ctx-item" onclick="hideGamesCtxMenu();openEditGame('${id}')">
+      <span class="ctx-ico" style="font-size:16px">✏️</span>Edit
+    </div>
+    <div class="g-ctx-sep"></div>
+    <div class="g-ctx-item danger" onclick="hideGamesCtxMenu();askDelGame('${id}')">
+      <span class="ctx-ico" style="font-size:16px">✕</span>Delete
+    </div>`;
+
+  document.body.appendChild(menu);
+
+  const mw = menu.offsetWidth, mh = menu.offsetHeight;
+  let px = x + 10, py = y + 10;
+  if (px + mw > window.innerWidth) px = window.innerWidth - mw - 10;
+  if (py + mh > window.innerHeight) py = window.innerHeight - mh - 10;
+  menu.style.left = px + 'px';
+  menu.style.top = py + 'px';
+}
+
+function ctxGamesPin(id) {
+  hideGamesCtxMenu();
+  const g = GDATA.find(d => d.id === id); if (!g) return;
+  g.pinned = !g.pinned;
+  g.updatedAt = Date.now();
+  saveGames(GDATA);
+  renderGamesBody();
+}
+
 Object.assign(window, {
   // Constants needed by settings.js
   GAMES_KEY,
@@ -796,7 +1275,7 @@ Object.assign(window, {
   getPin, setPin,
 
   // Core render
-  renderGames, renderGamesBody, setGamesPage,
+  renderGames, renderGamesBody, setGamesPage, setGamesChip,
   filteredGames, renderGamesLibrary, renderGamesDash, renderGamesUpcoming,
   gameRowHtml, toggleGColl,
 
@@ -816,4 +1295,7 @@ Object.assign(window, {
 
   // Drive uploads
   uploadSaveFile,
+  
+  // Context Menu
+  startGamesHold, cancelGamesHold, showGamesCtxMenu, hideGamesCtxMenu, ctxGamesPin,
 });

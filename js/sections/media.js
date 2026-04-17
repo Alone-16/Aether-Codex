@@ -77,29 +77,85 @@ function _renderFilterChips() {
 function fadeRenderMediaBody() {
   const el = document.getElementById('media-body'); if (!el) return;
   
+  // Capture current height and strictly lock dimensions to prevent ANY scroll jerk
+  const prevHeight = el.offsetHeight;
+  el.style.boxSizing = 'border-box';
+  el.style.height = prevHeight + 'px';
+  el.style.overflow = 'hidden';
+
   // 1. Trigger Fade Out
-  el.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
+  el.style.transition = 'opacity 0.12s ease, transform 0.12s ease';
   el.style.opacity = '0';
-  el.style.transform = 'translateY(-8px)';
+  el.style.transform = 'translateY(-4px)';
   el.style.pointerEvents = 'none';
 
-  // 2. Wait for fade out, then swap and fade in
+  // 2. Wait for fade out, then swap to loader state
   setTimeout(() => {
-    renderMediaBody();
-    
-    // Reset state for entry animation
-    el.style.transition = 'none';
-    el.style.transform = 'translateY(12px)';
-    
-    // Force browser reflow to register the "none" transition state
-    el.offsetHeight; 
+    if (!document.getElementById('m-spinner-style')) {
+      const style = document.createElement('style');
+      style.id = 'm-spinner-style';
+      style.textContent = `
+        @keyframes m-spin { 100% { transform: rotate(360deg); } }
+        @keyframes m-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+      `;
+      document.head.appendChild(style);
+    }
 
-    // Trigger Fade In
-    el.style.transition = 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
+    el.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;">
+        <div style="width:36px;height:36px;border:3px solid rgba(var(--ac-rgb),0.15);border-top-color:rgba(var(--ac-rgb),0.9);border-radius:50%;animation:m-spin 0.7s cubic-bezier(0.4, 0, 0.2, 1) infinite;margin-bottom:16px;box-shadow:0 0 15px rgba(var(--ac-rgb),0.2)"></div>
+        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;animation:m-pulse 1.2s ease infinite;color:rgba(var(--ac-rgb),0.7)">Loading</div>
+      </div>
+    `;
+    
+    // Animate loader in AND height
+    const loaderHeight = Math.max(prevHeight, 250);
+    el.style.transition = 'none';
+    el.style.transform = 'translateY(6px)';
+    el.offsetHeight; // Force reflow
+    
+    el.style.transition = 'height 0.15s ease, opacity 0.15s ease, transform 0.15s ease';
+    el.style.height = loaderHeight + 'px';
     el.style.opacity = '1';
     el.style.transform = 'translateY(0)';
-    el.style.pointerEvents = 'all';
-  }, 150);
+
+    // 3. Briefly show loader, then fade it out
+    setTimeout(() => {
+      el.style.transition = 'opacity 0.12s ease, transform 0.12s ease';
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(-4px)';
+
+      // 4. Swap to new content and animate final height
+      setTimeout(() => {
+        renderMediaBody();
+        
+        // Measure exact new height
+        el.style.height = 'auto';
+        const newHeight = el.offsetHeight;
+        
+        // Prep transition from loader height to new height
+        el.style.height = loaderHeight + 'px';
+        el.style.transition = 'none';
+        el.style.transform = 'translateY(8px)';
+        el.offsetHeight; // Force reflow
+        
+        // Fire combined cinematic animation
+        el.style.transition = 'height 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1)';
+        el.style.height = newHeight + 'px';
+        el.style.opacity = '1';
+        el.style.transform = 'translateY(0)';
+        el.style.pointerEvents = 'all';
+
+        // 5. Cleanup strict height bindings
+        setTimeout(() => {
+          el.style.height = 'auto';
+          el.style.overflow = 'visible';
+          el.style.boxSizing = '';
+        }, 360);
+
+      }, 120);
+    }, 220); // Hold loader visible briefly
+  }, 120);
 }
 
 function setMediaChip(val) {
@@ -288,7 +344,7 @@ function renderMedia(c) {
 
   renderMediaBody();
 
-  // Media Background Canvas (Falling Cherry Petals)
+  // Media Background Canvas (Magical Glowing Cherry Petals)
   setTimeout(() => {
     document.getElementById('media-interactive-bg')?.remove();
     const cvs = document.createElement('canvas');
@@ -311,7 +367,7 @@ function renderMedia(c) {
     setSize();
 
     let p = [];
-    let num = w < 768 ? 40 : 90; // Increased leaf density
+    let num = w < 768 ? 40 : 80; // Optimized leaf density
     let style = getComputedStyle(document.documentElement);
     let acRgb = style.getPropertyValue('--ac-rgb').trim() || '125,211,252';
     
@@ -325,7 +381,9 @@ function renderMedia(c) {
         spin: (Math.random() - 0.5) * 0.02, // Gentle rotation
         swayAmp: Math.random() * 0.8 + 0.4, // Mellow pendulum swing
         swaySpeed: Math.random() * 0.015 + 0.005,
-        time: Math.random() * 100
+        time: Math.random() * 100,
+        glowPulse: Math.random() * Math.PI * 2,
+        glowSpeed: Math.random() * 0.02 + 0.01
       });
     }
     
@@ -346,9 +404,14 @@ function renderMedia(c) {
         return;
       }
       ctx.clearRect(0, 0, w, h);
+      
+      // Global comp to blend glowing petals beautifully
+      ctx.globalCompositeOperation = 'screen';
+      
       for (let i = 0; i < p.length; i++) {
         let a = p[i];
         a.time += a.swaySpeed;
+        a.glowPulse += a.glowSpeed;
         
         let dx = a.x - mx, dy = a.y - my, dist = dx * dx + dy * dy;
         
@@ -356,13 +419,13 @@ function renderMedia(c) {
         a.pushX = a.pushX || 0;
         
         // Dynamic sideways wind scattering when mouse is near
-        if (dist < 45000) {
-          let force = (45000 - dist) / 45000;
+        if (dist < 50000) {
+          let force = (50000 - dist) / 50000;
           let dir = dx > 0 ? 1 : -1;
           // Add horizontal momentum (stronger closer to center)
-          a.pushX += dir * force * 0.6;
+          a.pushX += dir * force * 0.8;
           // Add a burst of spin due to the wind
-          a.spin += dir * force * 0.005;
+          a.spin += dir * force * 0.008;
         }
 
         // Apply air friction to wind push and spin burst
@@ -395,15 +458,21 @@ function renderMedia(c) {
         ctx.lineTo(-0.25 * a.r, a.r * 1.3);
         ctx.bezierCurveTo(-a.r * 0.9, a.r * 1.1, -a.r * 1.2, -a.r * 0.4, 0, -a.r * 1.6);
         
+        // Dynamic magical glow effect
+        let currentGlow = (Math.sin(a.glowPulse) + 1) / 2; // 0 to 1
+        ctx.shadowColor = `rgba(${acRgb}, ${0.4 + currentGlow * 0.4})`;
+        ctx.shadowBlur = a.r * (1.5 + currentGlow);
+        
         // Tri-color node gradient for lush volume
         let grad = ctx.createLinearGradient(0, -a.r * 1.6, 0, a.r * 1.3);
-        grad.addColorStop(0, `rgba(${acRgb}, 0.9)`);
+        grad.addColorStop(0, `rgba(${acRgb}, ${0.8 + currentGlow * 0.2})`);
         grad.addColorStop(0.6, `rgba(${acRgb}, 0.5)`);
         grad.addColorStop(1, `rgba(${acRgb}, 0.05)`);
         ctx.fillStyle = grad; 
         ctx.fill();
         ctx.restore();
       }
+      ctx.globalCompositeOperation = 'source-over';
       requestAnimationFrame(draw);
     }
     draw();
@@ -1424,17 +1493,93 @@ function _injectPremiumStyles() {
   const s = document.createElement('style');
   s.id = 'm-premium-styles';
   s.textContent = `
-    /* Premium Context Menu */
+    /* ────────────────────────────────────────────────────────
+       ULTRA PREMIUM GLASSMORPHISM & VISUAL EXCELLENCE
+       ──────────────────────────────────────────────────────── */
+
+    /* Typography & Smoothness Enhancements */
+    * {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Floating, Glassy Topbar */
+    .m-topbar {
+      background: rgba(15, 15, 20, 0.4) !important;
+      backdrop-filter: blur(24px) saturate(1.5) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(1.5) !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+      padding: 12px 24px !important;
+      border-radius: 0 0 24px 24px;
+      margin: -16px -16px 20px -16px !important;
+      box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      transition: all 0.3s ease;
+    }
+
+    /* Modern Tabs with Animated Indicators */
+    .m-tab {
+      position: relative;
+      background: transparent !important;
+      color: rgba(255,255,255,0.6) !important;
+      font-weight: 600 !important;
+      padding: 8px 16px !important;
+      transition: color 0.3s ease !important;
+      overflow: hidden;
+      border-radius: 8px;
+    }
+    .m-tab:hover {
+      color: rgba(255,255,255,0.9) !important;
+      background: rgba(255,255,255,0.03) !important;
+    }
+    .m-tab.active {
+      color: #fff !important;
+      text-shadow: 0 0 12px rgba(255,255,255,0.4);
+    }
+    .m-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60%;
+      height: 3px;
+      background: rgba(var(--ac-rgb), 1);
+      box-shadow: 0 0 12px rgba(var(--ac-rgb), 0.8);
+      border-radius: 3px 3px 0 0;
+      animation: tabUnderline 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes tabUnderline {
+      from { width: 0; opacity: 0; }
+      to { width: 60%; opacity: 1; }
+    }
+
+    /* Add Button Radiant Glow */
+    .m-add-btn {
+      background: linear-gradient(135deg, rgba(var(--ac-rgb), 0.9), rgba(var(--ac-rgb), 0.6)) !important;
+      box-shadow: 0 4px 20px rgba(var(--ac-rgb), 0.4) !important;
+      border: 1px solid rgba(255,255,255,0.2) !important;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+    .m-add-btn:hover {
+      transform: translateY(-2px) scale(1.05);
+      box-shadow: 0 8px 30px rgba(var(--ac-rgb), 0.6) !important;
+      background: linear-gradient(135deg, rgba(var(--ac-rgb), 1), rgba(var(--ac-rgb), 0.7)) !important;
+    }
+
+    /* Context Menu */
     #m-ctx-menu {
       position: fixed;
       z-index: 99999;
       background: rgba(18, 18, 26, 0.85);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 14px;
-      box-shadow: 0 24px 54px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.1);
-      min-width: 190px;
+      backdrop-filter: blur(24px) saturate(150%);
+      -webkit-backdrop-filter: blur(24px) saturate(150%);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      box-shadow: 0 30px 60px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.1);
+      min-width: 200px;
       overflow: hidden;
       animation: ctxIn .2s cubic-bezier(0.16, 1, 0.3, 1);
     }
@@ -1443,11 +1588,11 @@ function _injectPremiumStyles() {
       100% { opacity:1; transform:scale(1) translateY(0); }
     }
     .m-ctx-header {
-      padding: 9px 14px 7px;
+      padding: 10px 14px 8px;
       font-size: 11px;
-      font-weight: 700;
-      color: rgba(255,255,255,.35);
-      letter-spacing: .7px;
+      font-weight: 800;
+      color: rgba(255,255,255,.45);
+      letter-spacing: .8px;
       text-transform: uppercase;
       border-bottom: 1px solid rgba(255,255,255,.07);
       white-space: nowrap;
@@ -1458,78 +1603,146 @@ function _injectPremiumStyles() {
     .m-ctx-item {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
+      gap: 12px;
+      padding: 12px 14px;
       font-size: 13px;
-      color: rgba(255,255,255,.82);
+      font-weight: 500;
+      color: rgba(255,255,255,.85);
       cursor: pointer;
-      transition: background .12s;
+      transition: all .15s cubic-bezier(0.16, 1, 0.3, 1);
       user-select: none;
     }
-    .m-ctx-item:hover { background: rgba(255,255,255,.07); }
+    .m-ctx-item:hover { 
+      background: rgba(255,255,255,.07); 
+      padding-left: 18px;
+    }
     .m-ctx-item.danger { color: #f87171; }
-    .m-ctx-item .ctx-ico { font-size: 15px; width: 22px; text-align: center; flex-shrink:0; opacity: 0.8; }
+    .m-ctx-item.danger:hover { background: rgba(248,113,113,0.1); }
+    .m-ctx-item .ctx-ico { font-size: 15px; width: 22px; text-align: center; flex-shrink:0; opacity: 0.9; }
     .m-ctx-sep { height: 1px; background: rgba(255,255,255,.05); margin: 4px 0; }
     
     /* Premium Pin Badge */
-    .m-pin-badge { font-size: 11px; margin-right: 6px; vertical-align: middle; filter: drop-shadow(0 0 4px rgba(251,191,36,0.6)); display: inline-block; animation: pulsePin 2s infinite ease-in-out; }
-    @keyframes pulsePin { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+    .m-pin-badge { font-size: 11px; margin-right: 6px; vertical-align: middle; filter: drop-shadow(0 0 6px rgba(251,191,36,0.8)); display: inline-block; animation: pulsePin 2s infinite ease-in-out; }
+    @keyframes pulsePin { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15) rotate(5deg); } }
     
-    /* Premium Cards Enhancements */
+    /* Card Glassmorphism and Interactions */
     @keyframes staggeredFadeUp {
-      from { opacity: 0; transform: translateY(20px) scale(0.97); }
+      from { opacity: 0; transform: translateY(30px) scale(0.95); }
       to { opacity: 1; transform: translateY(0) scale(1); }
     }
     .m-card, .m-dash-stat, .m-dash-tc, .m-up-card {
-      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease, border-color 0.4s ease;
+      transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.5s ease, border-color 0.5s ease, background 0.5s ease;
       position: relative;
-      animation: staggeredFadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+      animation: staggeredFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) backwards;
       animation-fill-mode: both;
       transform-style: preserve-3d;
-      transform: perspective(1000px) rotateX(var(--rot-x, 0)) rotateY(var(--rot-y, 0)) translateY(0);
+      transform: perspective(1200px) rotateX(var(--rot-x, 0)) rotateY(var(--rot-y, 0)) translateY(0);
+      
+      background: linear-gradient(135deg, rgba(30, 30, 38, 0.45) 0%, rgba(18, 18, 24, 0.65) 100%) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border-radius: 18px !important;
+      overflow: visible !important;
     }
+    
+    /* Glowing spotlight effect that follows mouse */
     .m-card::before, .m-dash-stat::before, .m-dash-tc::before, .m-up-card::before {
       content: '';
       position: absolute;
-      inset: 0;
-      background: radial-gradient(800px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), var(--card-glow, rgba(255,255,255,0.05)), transparent 40%);
+      inset: -1px;
+      /* Notice the screen blend mode to make colors pop */
+      background: radial-gradient(700px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), var(--card-glow, rgba(255,255,255,0.1)), transparent 40%);
       opacity: 0;
-      transition: opacity 0.4s;
+      transition: opacity 0.5s;
       pointer-events: none;
       z-index: 0;
       border-radius: inherit;
+      mix-blend-mode: screen;
     }
+    
+    /* Card Hover State */
     .m-card:hover, .m-dash-stat:hover, .m-dash-tc:hover, .m-up-card:hover {
-      transform: perspective(1000px) rotateX(var(--rot-x, 0)) rotateY(var(--rot-y, 0)) translateY(-4px);
+      transform: perspective(1200px) rotateX(var(--rot-x, 0)) rotateY(var(--rot-y, 0)) translateY(-6px) scale(1.01);
       z-index: 10;
-      box-shadow: 0 16px 32px rgba(0,0,0,0.5), 0 4px 10px rgba(0,0,0,0.2) !important;
+      box-shadow: 0 30px 60px rgba(0,0,0,0.6), 0 0 30px rgba(var(--ac-rgb), 0.15) !important;
+      border-color: rgba(255,255,255,0.18) !important;
+      background: linear-gradient(135deg, rgba(40, 40, 50, 0.6) 0%, rgba(20, 20, 28, 0.8) 100%) !important;
     }
-    .m-card:hover::before, .m-dash-stat:hover::before, .m-dash-tc:hover::before, .m-up-card:hover::before { opacity: 0.15; }
-    .m-card > *, .m-dash-stat > *, .m-dash-tc > *, .m-up-card > * { position: relative; z-index: 1; transform: translateZ(15px); }
+    .m-card:hover::before, .m-dash-stat:hover::before, .m-dash-tc:hover::before, .m-up-card:hover::before { 
+      opacity: 0.35; 
+    }
+    .m-card > *, .m-dash-stat > *, .m-dash-tc > *, .m-up-card > * { 
+      position: relative; 
+      z-index: 1; 
+      transform: translateZ(25px); 
+    }
     
+    /* Pinned cards glowing effect */
     .m-card-pinned .m-card-bar { 
-      width: 4px !important; 
-      box-shadow: 0 0 12px 2px rgba(251,191,36,.4); 
-      background: linear-gradient(to bottom, #fcd34d, #fb923c) !important;
+      width: 5px !important; 
+      box-shadow: 0 0 16px 3px rgba(251,191,36,.5); 
+      background: linear-gradient(180deg, #fcd34d 0%, #f59e0b 100%) !important;
     }
-    .m-card-pinned { border-color: rgba(251,191,36,.25) !important; background: linear-gradient(145deg, rgba(251,191,36,.05) 0%, rgba(0,0,0,0.2) 100%) !important; }
+    .m-card-pinned { 
+      border-color: rgba(251,191,36,.3) !important; 
+      background: linear-gradient(145deg, rgba(251,191,36,.08) 0%, rgba(10,10,15,0.6) 100%) !important; 
+    }
     
-    /* Premium Detail Panel Stats */
-    .pstat {
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.06);
-      backdrop-filter: blur(10px);
-      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-      transition: transform 0.2s, background 0.2s;
+    /* Detail Panel Stats Glassmorphism */
+    .pstats .pstat {
+      background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      border-radius: 16px;
+      overflow: hidden;
     }
-    .pstat:hover {
+    .pstats .pstat:hover {
+      transform: translateY(-4px) scale(1.02);
+      background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+      box-shadow: 0 15px 40px rgba(0,0,0,0.4), 0 0 20px rgba(var(--ac-rgb), 0.15);
+      border-color: rgba(255,255,255,0.15);
+    }
+    
+    /* Action Buttons (Del, Edit, Play) pop on hover */
+    .m-act-btn {
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+      border-radius: 6px !important;
+    }
+    .m-act-btn:hover {
+      transform: scale(1.2) rotate(6deg);
+      box-shadow: 0 0 15px currentColor;
+      background: rgba(255,255,255,0.1);
+    }
+    
+    /* Filter Chips Interactivity Enhancements */
+    .m-chip {
+      background: rgba(255,255,255,0.03) !important;
+      border: 1px solid rgba(255,255,255,0.05) !important;
+      backdrop-filter: blur(8px) !important;
+      color: rgba(255,255,255,0.7) !important;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+      border-radius: 20px !important;
+    }
+    .m-chip:hover {
+      background: rgba(255,255,255,0.08) !important;
+      border-color: rgba(255,255,255,0.15) !important;
       transform: translateY(-2px);
-      background: rgba(255,255,255,0.06);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      color: #fff !important;
     }
-    
+    .m-chip.active {
+      background: rgba(var(--chip-c-rgb, 255,255,255), 0.1) !important;
+      border-color: var(--chip-c) !important;
+      color: #fff !important;
+      box-shadow: 0 0 20px -5px var(--chip-c);
+    }
+
     /* Dashboard Aesthetics Enhancements */
-    #media-interactive-bg { filter: saturate(1.2); }
-    .m-dash-stat-v { filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5)); }
+    #media-interactive-bg { filter: saturate(1.4) contrast(1.1); }
+    .m-dash-stat-v { filter: drop-shadow(0 2px 10px rgba(0,0,0,0.7)); }
 
     #m-ctx-overlay { position: fixed; inset: 0; z-index: 99998; }
   `;

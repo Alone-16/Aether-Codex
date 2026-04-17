@@ -883,12 +883,12 @@ textarea.fin{resize:vertical;min-height:70px}
 .m-tabs::-webkit-scrollbar { display:none; }
 .m-tab {
   position:relative;
-  padding:8px 18px;
+  padding:7px 17px;
   margin:0;
   font-size:12px;
   font-weight:600;
   background:none;
-  border:none;
+  border:1px solid transparent;
   border-radius:10px;
   color:var(--tx2);
   cursor:pointer;
@@ -900,11 +900,11 @@ textarea.fin{resize:vertical;min-height:70px}
 .m-tab:hover { color:var(--tx); background: rgba(255,255,255,0.05); transform: scale(1); }
 .m-tab.active {
   color:var(--tx);
-  font-weight:700;
   background:linear-gradient(135deg, rgba(var(--ac-rgb),.25), rgba(var(--ac-rgb),.1));
   box-shadow: 0 4px 12px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1);
   border: 1px solid rgba(var(--ac-rgb),.4);
   transform: scale(1);
+  text-shadow: 0 0 8px rgba(var(--ac-rgb),0.3);
 }
 .m-tab:focus-visible {
   outline:2px solid rgba(var(--ac-rgb),.45);
