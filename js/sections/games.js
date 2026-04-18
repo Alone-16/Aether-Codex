@@ -313,33 +313,70 @@ function renderGames(c) {
         font-weight: 800;
         letter-spacing: 2px;
       }
+      .sub-tabs {
+        display: inline-flex;
+        gap: 6px;
+        background: rgba(20, 20, 28, 0.4);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        padding: 6px;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.08);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05);
+      }
       .sub-tabs .stab {
         transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
         position: relative;
-        overflow: hidden;
-        font-weight: 600;
-        padding: 8px 16px;
-        border-radius: 8px;
-        background: rgba(255,255,255,0.03);
-        border: 1px solid transparent;
+        font-weight: 700;
+        font-size: 13px;
+        letter-spacing: 0.5px;
+        padding: 8px 24px;
+        border-radius: 10px;
+        background: transparent;
+        border: none;
+        color: rgba(255,255,255,0.45);
+        cursor: pointer;
+        z-index: 1;
       }
       .sub-tabs .stab:hover {
-        background: rgba(255,255,255,0.08);
+        color: rgba(255,255,255,0.9);
+        background: rgba(255,255,255,0.05);
       }
       .sub-tabs .stab.active {
-        background: rgba(var(--ac-rgb), 0.15);
-        color: var(--ac);
-        box-shadow: 0 4px 15px rgba(var(--ac-rgb), 0.2);
-        border-color: rgba(var(--ac-rgb), 0.4);
-        transform: translateY(-2px);
+        color: #fff;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
       }
-      .sub-tabs .stab.active::after {
+      .sub-tabs .stab::before {
         content: '';
         position: absolute;
-        bottom: 0; left: 0; right: 0; height: 3px;
+        inset: 0;
+        border-radius: 10px;
+        background: linear-gradient(135deg, rgba(var(--ac-rgb), 0.4) 0%, rgba(var(--ac-rgb), 0.1) 100%);
+        box-shadow: 0 4px 15px rgba(var(--ac-rgb), 0.3), inset 0 1px 1px rgba(255,255,255,0.2);
+        border: 1px solid rgba(var(--ac-rgb), 0.5);
+        opacity: 0;
+        transform: scale(0.9) translateY(5px);
+        transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
+        z-index: -1;
+      }
+      .sub-tabs .stab.active::before {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+      .sub-tabs .stab::after {
+        content: '';
+        position: absolute;
+        bottom: 0; left: 50%; width: 0; height: 3px;
         background: var(--ac);
-        box-shadow: 0 0 15px var(--ac);
+        box-shadow: 0 0 10px var(--ac);
         border-radius: 3px 3px 0 0;
+        transform: translateX(-50%);
+        opacity: 0;
+        transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
+      }
+      .sub-tabs .stab.active::after {
+        width: 24px;
+        opacity: 1;
       }
       .dash-grid .dc {
         background: linear-gradient(135deg, rgba(30,30,40,0.5) 0%, rgba(20,20,30,0.6) 100%);
@@ -694,57 +731,238 @@ function openGameDetail(id) {
 function renderGameDetailPanel(g) {
   const pt = g.series || g.playthroughs || [];
   const platIcon = PLAT_ICON[g.platform] || '🖥';
-  const ptHtml = pt.length ? pt.map((p,i) => `
-    <div style="background:rgba(255,255,255,0.03);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.08);border-top:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:12px 14px;margin-bottom:8px;transition:all 0.3s cubic-bezier(0.16,1,0.3,1);box-shadow:0 4px 15px rgba(0,0,0,0.1)" onmouseover="this.style.background='rgba(255,255,255,0.06)';this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 25px rgba(0,0,0,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.03)';this.style.transform='translateY(0)';this.style.boxShadow='0 4px 15px rgba(0,0,0,0.1)'">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
-        <span style="font-size:13px;font-weight:600">${esc(p.name||`Playthrough ${i+1}`)}</span>
-        <span class="stag" style="background:${GS_COLOR[p.status]||'var(--mu)'}1a;color:${GS_COLOR[p.status]||'var(--mu)'};font-size:10px">${GS_LABEL[p.status]||p.status}</span>
+  const col = GS_COLOR[g.status] || 'var(--ac)';
+  
+  const ptHtml = pt.length ? pt.map((p,i) => {
+    const pCol = GS_COLOR[p.status] || 'var(--mu)';
+    return `
+    <div class="g-det-run" style="--run-c: ${pCol}; --run-c-1a: ${pCol}1a;">
+      <div class="g-det-run-head">
+        <div class="g-det-run-title">${esc(p.name||`Playthrough ${i+1}`)}</div>
+        <div class="g-det-run-stat">${GS_LABEL[p.status]||p.status}</div>
       </div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--tx2)">
-        ${p.difficulty?`<span>⚔ ${esc(p.difficulty)}</span>`:''}
-        ${p.hours?`<span>⏱ ${p.hours}h</span>`:''}
-        ${p.completionPct?`<span>✓ ${p.completionPct}%</span>`:''}
-        ${p.startDate?`<span>📅 ${fmtDate(p.startDate)}</span>`:''}
-        ${p.endDate?`<span>🏁 ${fmtDate(p.endDate)}</span>`:''}
+      <div class="g-det-run-stats">
+        ${p.difficulty?`<span><i>⚔</i> ${esc(p.difficulty)}</span>`:''}
+        ${p.hours?`<span><i>⏱</i> ${p.hours}h</span>`:''}
+        ${p.completionPct?`<span><i>✓</i> ${p.completionPct}%</span>`:''}
+        ${p.startDate?`<span><i>📅</i> ${fmtDate(p.startDate)}</span>`:''}
+        ${p.endDate?`<span><i>🏁</i> ${fmtDate(p.endDate)}</span>`:''}
       </div>
-      ${p.notes?`<div style="font-size:12px;color:var(--mu);margin-top:5px;font-style:italic">${esc(p.notes)}</div>`:''}
-    </div>`).join('') : `<div style="color:var(--mu);font-size:13px;padding:8px 0">No playthroughs recorded</div>`;
+      ${p.notes?`<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:8px;font-style:italic;border-top:1px solid rgba(255,255,255,0.05);padding-top:8px">${esc(p.notes)}</div>`:''}
+    </div>`
+  }).join('') : `<div style="color:rgba(255,255,255,0.4);font-size:13px;padding:0 24px 10px;font-style:italic">No playthrough data found in system.</div>`;
 
   document.getElementById('panel-inner').innerHTML = `
-    <div class="ph">
-      <div>
-        <div class="ph-title" style="font-family:var(--fd)">${esc(g.title)}</div>
-        <div class="pbadges" style="margin-top:5px">
-          <span style="font-size:12px">${platIcon} ${PLAT_LABEL[g.platform]||''}</span>
-          ${gstag(g.status)}
-          ${g.favorite?'<span style="color:#fbbf24">★</span>':''}
-          ${g.adult18?'<span style="font-size:11px">🔞</span>':''}
+    <style>
+      /* Game Detail Panel - Premium Gamer UI */
+      .g-det-container {
+        display: flex; flex-direction: column; height: 100%;
+        background: #0f0f13;
+      }
+      .g-det-hero {
+        position: relative;
+        padding: 40px 24px 30px;
+        background: linear-gradient(180deg, ${col}22 0%, #0f0f13 100%);
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+      }
+      .g-det-hero::before {
+        content: ''; position: absolute; inset: 0;
+        background: radial-gradient(circle at top left, ${col}33 0%, transparent 60%);
+        pointer-events: none;
+      }
+      .g-det-hero::after {
+        content: ''; position: absolute; inset: 0;
+        background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px);
+        background-size: 20px 20px; opacity: 0.3; pointer-events: none;
+      }
+      .g-det-hero-content { position: relative; z-index: 2; }
+      
+      .g-det-title {
+        font-family: var(--fd); font-size: 28px; font-weight: 900; color: #fff;
+        line-height: 1.1; margin-bottom: 12px; letter-spacing: 0.5px;
+        text-shadow: 0 4px 15px rgba(0,0,0,0.6), 0 0 30px ${col}66;
+      }
+      
+      .g-det-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+      .g-det-badge {
+        background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;
+        padding: 4px 10px; font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.8);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.1); display: flex; align-items: center; gap: 6px;
+      }
+      .g-det-badge.status {
+        background: ${col}1a; border-color: ${col}55; color: ${col};
+        text-shadow: 0 0 10px ${col}66; box-shadow: 0 0 10px ${col}22, inset 0 1px 0 ${col}55;
+      }
+      
+      .g-det-stats-wrap {
+        padding: 0 24px; margin-top: -20px; position: relative; z-index: 5;
+      }
+      .g-det-stats {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+        background: rgba(20,20,28,0.7); backdrop-filter: blur(15px);
+        border: 1px solid rgba(255,255,255,0.08); border-top: 1px solid rgba(255,255,255,0.15);
+        border-radius: 12px; padding: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      }
+      .g-det-stat {
+        text-align: center; padding: 8px 4px; border-radius: 8px;
+        transition: background 0.3s;
+      }
+      .g-det-stat:hover { background: rgba(255,255,255,0.05); }
+      .g-det-stat-v {
+        font-size: 20px; font-weight: 800; color: #fff; margin-bottom: 2px;
+        text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+      }
+      .g-det-stat-l {
+        font-size: 9px; font-weight: 800; color: rgba(255,255,255,0.4);
+        text-transform: uppercase; letter-spacing: 1px;
+      }
+
+      .g-det-body {
+        flex: 1; overflow-y: auto; padding-top: 24px; padding-bottom: 24px;
+      }
+      .g-det-body::-webkit-scrollbar { width: 6px; }
+      .g-det-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+      .g-det-meta {
+        display: flex; flex-wrap: wrap; gap: 12px; padding: 0 24px 24px;
+      }
+      .g-det-meta-item {
+        display: flex; align-items: center; gap: 8px; font-size: 12px;
+        background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05);
+        padding: 6px 12px; border-radius: 6px; color: rgba(255,255,255,0.6);
+      }
+      .g-det-meta-item i { color: ${col}; font-style: normal; font-size: 14px; }
+      .g-det-meta-item b { color: #fff; font-weight: 600; }
+
+      .g-det-section { margin-top: 10px; }
+      .g-det-sh {
+        display: flex; align-items: center; gap: 16px; padding: 0 24px; margin-bottom: 16px;
+      }
+      .g-det-sh-lbl {
+        font-size: 12px; font-weight: 800; color: #fff; text-transform: uppercase;
+        letter-spacing: 2px; text-shadow: 0 0 10px rgba(255,255,255,0.3);
+      }
+      .g-det-sh-line {
+        flex: 1; height: 1px; background: linear-gradient(90deg, ${col}66 0%, transparent 100%);
+        box-shadow: 0 0 8px ${col}44;
+      }
+
+      .g-det-run {
+        margin: 0 24px 12px; background: linear-gradient(90deg, rgba(20,20,28,0.8) 0%, rgba(20,20,28,0.4) 100%);
+        border: 1px solid rgba(255,255,255,0.05); border-left: 3px solid var(--run-c);
+        border-radius: 8px; padding: 16px; position: relative; overflow: hidden;
+        transition: all 0.3s cubic-bezier(0.16,1,0.3,1); box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      }
+      .g-det-run::after {
+        content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 100px;
+        background: linear-gradient(90deg, var(--run-c) 0%, transparent 100%); opacity: 0.05;
+        pointer-events: none;
+      }
+      .g-det-run:hover {
+        transform: translateX(4px); background: linear-gradient(90deg, rgba(30,30,40,0.8) 0%, rgba(20,20,28,0.6) 100%);
+        border-color: rgba(255,255,255,0.1); box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+      }
+      .g-det-run-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; position: relative; z-index: 2; }
+      .g-det-run-title { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: 0.3px; }
+      .g-det-run-stat {
+        font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+        padding: 4px 8px; border-radius: 4px; background: var(--run-c-1a); color: var(--run-c);
+        box-shadow: inset 0 1px 0 var(--run-c-1a);
+      }
+      .g-det-run-stats { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: rgba(255,255,255,0.6); position: relative; z-index: 2; }
+      .g-det-run-stats span { display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,0.2); padding: 4px 8px; border-radius: 4px; }
+      .g-det-run-stats i { color: #fff; font-style: normal; opacity: 0.8; }
+
+      .g-det-notes {
+        margin: 0 24px 24px; padding: 16px; background: rgba(0,0,0,0.3);
+        border: 1px solid rgba(255,255,255,0.05); border-radius: 8px;
+        font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.6;
+        box-shadow: inset 0 2px 10px rgba(0,0,0,0.5); white-space: pre-wrap;
+      }
+
+      .g-det-actions {
+        display: flex; gap: 12px; padding: 20px 24px; border-top: 1px solid rgba(255,255,255,0.05);
+        background: #0a0a0d;
+      }
+      .g-det-btn {
+        flex: 1; padding: 12px; border-radius: 8px; font-size: 12px; font-weight: 800; cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.16,1,0.3,1); text-transform: uppercase; letter-spacing: 1px;
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+      }
+      .g-det-btn.edit { background: ${col}1a; color: ${col}; border: 1px solid ${col}44; }
+      .g-det-btn.edit:hover { background: ${col}33; border-color: ${col}88; box-shadow: 0 5px 15px ${col}33; transform: translateY(-2px); }
+      .g-det-btn.del { background: rgba(251,113,133,0.1); color: #fb7185; border: 1px solid rgba(251,113,133,0.2); }
+      .g-det-btn.del:hover { background: rgba(251,113,133,0.15); border-color: rgba(251,113,133,0.5); box-shadow: 0 5px 15px rgba(251,113,133,0.2); transform: translateY(-2px); }
+
+      .g-det-close {
+        position: absolute; top: 16px; right: 16px; width: 32px; height: 32px;
+        background: rgba(0,0,0,0.3); backdrop-filter: blur(5px);
+        border: 1px solid rgba(255,255,255,0.1); border-radius: 50%;
+        color: rgba(255,255,255,0.7); display: flex; align-items: center; justify-content: center;
+        cursor: pointer; transition: all 0.3s; z-index: 10; font-size: 14px;
+      }
+      .g-det-close:hover { background: rgba(255,255,255,0.1); color: #fff; transform: rotate(90deg); border-color: rgba(255,255,255,0.3); }
+    </style>
+
+    <div class="g-det-container">
+      <div class="g-det-hero">
+        <button class="g-det-close" onclick="closePanel()">✕</button>
+        <div class="g-det-hero-content">
+          <div class="g-det-title">${esc(g.title)}</div>
+          <div class="g-det-badges">
+            <span class="g-det-badge">${platIcon} ${PLAT_LABEL[g.platform]||''}</span>
+            <span class="g-det-badge status">${GS_LABEL[g.status]||g.status}</span>
+            ${g.favorite?'<span class="g-det-badge" style="color:#fbbf24;border-color:rgba(251,191,36,0.3)">★ Favorite</span>':''}
+            ${g.adult18?'<span class="g-det-badge" style="color:#fb7185;border-color:rgba(251,113,133,0.3)">🔞 Adult</span>':''}
+          </div>
         </div>
       </div>
-      <button class="ph-close" onclick="closePanel()">✕</button>
-    </div>
-    <div class="pstats">
-      <div class="pstat"><div class="pstat-v">${g.totalHours||'—'}</div><div class="pstat-l">Hours</div></div>
-      <div class="pstat"><div class="pstat-v">${g.completionPct||'—'}${g.completionPct?'%':''}</div><div class="pstat-l">Complete</div></div>
-      <div class="pstat"><div class="pstat-v">${(g.playthroughs||[]).length||'—'}</div><div class="pstat-l">Runs</div></div>
-      <div class="pstat"><div class="pstat-v">${g.rating||'—'}</div><div class="pstat-l">Rating</div></div>
-    </div>
-    <div style="padding:10px 16px;border-bottom:1px solid var(--brd);font-size:12px;color:var(--tx2);display:flex;gap:14px;flex-wrap:wrap">
-      ${g.difficulty?`<span>⚔ <b style="color:var(--tx)">${esc(g.difficulty)}</b></span>`:''}
-      ${g.startDate?`<span>📅 <b style="color:var(--tx)">${fmtDate(g.startDate)}</b></span>`:''}
-      ${g.endDate?`<span>🏁 <b style="color:var(--tx)">${fmtDate(g.endDate)}</b></span>`:''}
-    </div>
-    <div class="sec-div"><span class="sec-div-lbl">Playthroughs</span><div class="sec-div-line"></div></div>
-    <div style="padding:0 16px 8px">${ptHtml}</div>
-    ${g.notes?`<div class="sec-div"><span class="sec-div-lbl">Notes</span><div class="sec-div-line"></div></div>
-    <div class="pnotes"><div class="pnotes-box">${esc(g.notes)}</div></div>`:''}
-    ${g.saveFileId?`<div style="padding:8px 16px;border-top:1px solid var(--brd)">
-      <div style="font-size:11px;color:var(--mu);margin-bottom:4px">SAVE FILE</div>
-      <div style="font-size:13px;color:var(--cd)">✓ Save file uploaded to Drive</div>
-    </div>`:''}
-    <div class="panel-actions">
-      <button class="btn-del" onclick="askDelGame('${g.id}')">Delete</button>
-      <button class="btn-cancel" onclick="openEditGame('${g.id}')">Edit</button>
+
+      <div class="g-det-stats-wrap">
+        <div class="g-det-stats">
+          <div class="g-det-stat"><div class="g-det-stat-v">${g.totalHours||'—'}</div><div class="g-det-stat-l">Hours</div></div>
+          <div class="g-det-stat"><div class="g-det-stat-v">${g.completionPct||'—'}${g.completionPct?'%':''}</div><div class="g-det-stat-l">Complete</div></div>
+          <div class="g-det-stat"><div class="g-det-stat-v">${(g.playthroughs||[]).length||'—'}</div><div class="g-det-stat-l">Runs</div></div>
+          <div class="g-det-stat"><div class="g-det-stat-v">${g.rating||'—'}</div><div class="g-det-stat-l">Rating</div></div>
+        </div>
+      </div>
+
+      <div class="g-det-body">
+        ${(g.difficulty || g.startDate || g.endDate) ? `
+        <div class="g-det-meta">
+          ${g.difficulty?`<div class="g-det-meta-item"><i>⚔</i> <b>${esc(g.difficulty)}</b> Mode</div>`:''}
+          ${g.startDate?`<div class="g-det-meta-item"><i>📅</i> Start: <b>${fmtDate(g.startDate)}</b></div>`:''}
+          ${g.endDate?`<div class="g-det-meta-item"><i>🏁</i> End: <b>${fmtDate(g.endDate)}</b></div>`:''}
+        </div>` : ''}
+
+        <div class="g-det-section">
+          <div class="g-det-sh"><span class="g-det-sh-lbl">Mission Logs</span><div class="g-det-sh-line"></div></div>
+          ${ptHtml}
+        </div>
+
+        ${g.notes?`
+        <div class="g-det-section">
+          <div class="g-det-sh"><span class="g-det-sh-lbl">Archive Notes</span><div class="g-det-sh-line"></div></div>
+          <div class="g-det-notes">${esc(g.notes)}</div>
+        </div>` : ''}
+
+        ${g.saveFileId?`
+        <div class="g-det-section" style="padding: 0 24px 24px;">
+          <div style="background:rgba(74, 222, 128, 0.1); border: 1px solid rgba(74, 222, 128, 0.2); border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; gap: 12px;">
+            <div style="width: 32px; height: 32px; background: rgba(74, 222, 128, 0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #4ade80; font-size: 16px;">✓</div>
+            <div>
+              <div style="font-size: 10px; font-weight: 800; color: #4ade80; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">Cloud Save</div>
+              <div style="font-size: 12px; color: rgba(255,255,255,0.7);">Save file successfully synced to Drive archive.</div>
+            </div>
+          </div>
+        </div>` : ''}
+      </div>
+
+      <div class="g-det-actions">
+        <button class="g-det-btn edit" onclick="openEditGame('${g.id}')"><span>✏️</span> Initialize Edit</button>
+        <button class="g-det-btn del" onclick="askDelGame('${g.id}')"><span>✕</span> Purge Record</button>
+      </div>
     </div>`;
 }
 

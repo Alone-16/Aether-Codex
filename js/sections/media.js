@@ -371,6 +371,32 @@ function renderMedia(c) {
     let style = getComputedStyle(document.documentElement);
     let acRgb = style.getPropertyValue('--ac-rgb').trim() || '125,211,252';
     
+    // Pre-render the complex vector petal to an offscreen canvas
+    // This provides a massive performance boost by avoiding path/gradient/shadow calculations per frame
+    const pCvs = document.createElement('canvas');
+    const pr = 20; // Base radius for high-res prerender
+    pCvs.width = pr * 6; // Padding for shadow blur
+    pCvs.height = pr * 6;
+    const pCtx = pCvs.getContext('2d');
+    
+    pCtx.translate(pCvs.width / 2, pCvs.height / 2);
+    pCtx.beginPath();
+    pCtx.moveTo(0, -pr * 1.6);
+    pCtx.bezierCurveTo(pr * 1.2, -pr * 0.4, pr * 0.9, pr * 1.1, 0.25 * pr, pr * 1.3);
+    pCtx.lineTo(0, pr * 1.05); 
+    pCtx.lineTo(-0.25 * pr, pr * 1.3);
+    pCtx.bezierCurveTo(-pr * 0.9, pr * 1.1, -pr * 1.2, -pr * 0.4, 0, -pr * 1.6);
+    
+    pCtx.shadowColor = `rgba(${acRgb}, 0.8)`;
+    pCtx.shadowBlur = pr * 1.2;
+    
+    let baseGrad = pCtx.createLinearGradient(0, -pr * 1.6, 0, pr * 1.3);
+    baseGrad.addColorStop(0, `rgba(${acRgb}, 1)`);
+    baseGrad.addColorStop(0.6, `rgba(${acRgb}, 0.6)`);
+    baseGrad.addColorStop(1, `rgba(${acRgb}, 0.1)`);
+    pCtx.fillStyle = baseGrad; 
+    pCtx.fill();
+    
     for (let i = 0; i < num; i++) {
       p.push({
         x: Math.random() * w, y: Math.random() * h,
@@ -450,26 +476,16 @@ function renderMedia(c) {
         ctx.save();
         ctx.translate(a.x, a.y);
         ctx.rotate(a.angle);
-        ctx.beginPath();
-        // Highly refined Sakura petal geometry
-        ctx.moveTo(0, -a.r * 1.6);
-        ctx.bezierCurveTo(a.r * 1.2, -a.r * 0.4, a.r * 0.9, a.r * 1.1, 0.25 * a.r, a.r * 1.3);
-        ctx.lineTo(0, a.r * 1.05); // More distinct authentic cleft
-        ctx.lineTo(-0.25 * a.r, a.r * 1.3);
-        ctx.bezierCurveTo(-a.r * 0.9, a.r * 1.1, -a.r * 1.2, -a.r * 0.4, 0, -a.r * 1.6);
         
-        // Dynamic magical glow effect
+        // Scale according to particle radius vs pre-rendered radius
+        let scale = a.r / pr;
+        ctx.scale(scale, scale);
+        
+        // Dynamic magical glow effect via global alpha (hardware accelerated)
         let currentGlow = (Math.sin(a.glowPulse) + 1) / 2; // 0 to 1
-        ctx.shadowColor = `rgba(${acRgb}, ${0.4 + currentGlow * 0.4})`;
-        ctx.shadowBlur = a.r * (1.5 + currentGlow);
+        ctx.globalAlpha = 0.4 + currentGlow * 0.6;
         
-        // Tri-color node gradient for lush volume
-        let grad = ctx.createLinearGradient(0, -a.r * 1.6, 0, a.r * 1.3);
-        grad.addColorStop(0, `rgba(${acRgb}, ${0.8 + currentGlow * 0.2})`);
-        grad.addColorStop(0.6, `rgba(${acRgb}, 0.5)`);
-        grad.addColorStop(1, `rgba(${acRgb}, 0.05)`);
-        ctx.fillStyle = grad; 
-        ctx.fill();
+        ctx.drawImage(pCvs, -pCvs.width / 2, -pCvs.height / 2);
         ctx.restore();
       }
       ctx.globalCompositeOperation = 'source-over';
@@ -858,59 +874,84 @@ function renderDetailPanel(e) {
   const st = entryStats(e);
   const g  = gbyid(e.genreId);
 
+  if (e.malId && !e.coverImage && !e._fetchingCover) {
+    e._fetchingCover = true;
+    const type = e.genreId === 'manga' ? 'manga' : 'anime';
+    fetch(`https://api.jikan.moe/v4/${type}/${e.malId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d?.data?.images?.jpg?.large_image_url) {
+          e.coverImage = d.data.images.jpg.large_image_url;
+          saveData(DATA);
+          if (PANEL === 'detail' && PEDIT === e.id) renderDetailPanel(e);
+        }
+      }).catch(err => {
+        console.warn('Jikan fetch failed:', err);
+        e._fetchingCover = false;
+      });
+  }
+
+  const coverBg = e.coverImage ? `url('${esc(e.coverImage)}')` : `linear-gradient(135deg, ${g.color}, rgba(var(--ac-rgb),0.2))`;
+
   document.getElementById('panel-inner').innerHTML = `
-    <div class="ph">
-      <div>
-        <div class="ph-title">${esc(e.title)}</div>
-        <div class="pbadges">
-          <span class="m-genre-badge" style="background:${h2r(g.color,.14)};color:${g.color};border:1px solid ${h2r(g.color,.25)};border-radius:4px;font-size:10px;font-weight:700;padding:2px 8px">${esc(g.name)}</span>
-          ${_mstag(e.status)}
-          ${e.favorite ? '<span style="color:#fbbf24">★</span>' : ''}
+    <div class="m-panel-hero">
+      <div class="m-panel-hero-bg" style="background-image: ${coverBg}"></div>
+      <div class="m-panel-hero-overlay"></div>
+      <button class="ph-close m-panel-close" onclick="closePanel()">✕</button>
+      <div class="m-panel-hero-content">
+        ${e.coverImage ? `<img src="${esc(e.coverImage)}" class="m-panel-cover" alt="Cover" onerror="this.style.display='none'">` : ''}
+        <div class="m-panel-text">
+          <div class="ph-title m-panel-title">${esc(e.title)}</div>
+          <div class="pbadges m-panel-badges">
+            <span class="m-genre-badge" style="background:${h2r(g.color,.14)};color:${g.color};border:1px solid ${h2r(g.color,.25)}">${esc(g.name)}</span>
+            ${_mstag(e.status)}
+            ${e.favorite ? '<span style="color:#fbbf24;text-shadow:0 0 10px rgba(251,191,36,0.8);font-size:14px;padding-left:4px">★</span>' : ''}
+          </div>
         </div>
       </div>
-      <button class="ph-close" onclick="closePanel()">✕</button>
     </div>
-    <div class="pstats">
+    <div class="pstats m-panel-stats">
       <div class="pstat"><div class="pstat-v">${st.tot||'—'}</div><div class="pstat-l">Total Eps</div></div>
       <div class="pstat"><div class="pstat-v">${st.cur}</div><div class="pstat-l">Watched</div></div>
       <div class="pstat"><div class="pstat-v">${st.time}</div><div class="pstat-l">Est. Time</div></div>
       <div class="pstat"><div class="pstat-v">${st.pct}%</div><div class="pstat-l">Progress</div><div class="pprog"><div class="pprog-fill" style="width:${st.pct}%"></div></div></div>
     </div>
-    ${(e.startDate||e.endDate) ? `<div style="padding:7px 16px;border-bottom:1px solid var(--brd);display:flex;gap:14px;font-size:11px;color:var(--tx2)">
-      ${e.startDate ? `<span>Started: <b>${fmtDate(e.startDate)}</b></span>` : ''}
-      ${e.endDate   ? `<span>Finished: <b>${fmtDate(e.endDate)}</b></span>` : ''}
-    </div>` : ''}
-    ${e.malId ? `<div style="padding:8px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:8px;background:rgba(var(--ac-rgb),.03)">
-      <span style="font-size:9px;font-weight:800;letter-spacing:.5px;background:rgba(var(--ac-rgb),.12);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.25);border-radius:3px;padding:1px 6px;flex-shrink:0">MAL</span>
-      <span style="font-size:11px;color:var(--tx2)">ID #${esc(String(e.malId))}</span>
-      ${window.window.SETTINGS?.malRefreshToken
-        ? `<span style="font-size:10px;color:#4ade80;margin-left:2px">● Connected</span>
-           <button onclick="event.stopPropagation();_syncMALListEntry(DATA.find(x=>x.id==='${e.id}')).catch(()=>toast('MAL sync failed','#fb7185'))"
-             style="margin-left:auto;font-size:11px;color:var(--ac);background:rgba(var(--ac-rgb),.08);border:1px solid rgba(var(--ac-rgb),.2);border-radius:4px;padding:3px 9px;cursor:pointer;white-space:nowrap">↻ Sync Now</button>`
-        : `<span style="margin-left:auto;font-size:11px;color:#fb7185">● Not connected</span>`
-      }
-    </div>` : ''}
-    <div style="padding:12px 16px;border-bottom:1px solid var(--brd)">
-      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu);margin-bottom:10px">Details</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
-        <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:9px 11px">
-          <div style="color:var(--mu);font-size:10px;margin-bottom:3px">EPISODES</div>
-          <div style="font-weight:600;color:var(--tx)">${e.epCur||0}${e.epTot?' / '+e.epTot:' watched'}</div>
+    <div class="m-panel-body">
+      ${(e.startDate||e.endDate) ? `<div style="padding:10px 20px;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;gap:16px;font-size:11px;color:var(--tx2);background:rgba(255,255,255,0.01)">
+        ${e.startDate ? `<span>Started: <b style="color:var(--tx)">${fmtDate(e.startDate)}</b></span>` : ''}
+        ${e.endDate   ? `<span>Finished: <b style="color:var(--tx)">${fmtDate(e.endDate)}</b></span>` : ''}
+      </div>` : ''}
+      ${e.malId ? `<div style="padding:10px 20px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:10px;background:linear-gradient(90deg, rgba(var(--ac-rgb),0.08), transparent)">
+        <span style="font-size:9px;font-weight:800;letter-spacing:.5px;background:rgba(var(--ac-rgb),.15);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3);border-radius:4px;padding:2px 6px;flex-shrink:0">MAL</span>
+        <span style="font-size:12px;color:var(--tx2);font-weight:600">ID #${esc(String(e.malId))}</span>
+        ${window.window.SETTINGS?.malRefreshToken
+          ? `<span style="font-size:10px;color:#4ade80;margin-left:2px;font-weight:600">● Connected</span>
+             <button onclick="event.stopPropagation();_syncMALListEntry(DATA.find(x=>x.id==='${e.id}')).catch(()=>toast('MAL sync failed','#fb7185'))"
+               style="margin-left:auto;font-size:11px;font-weight:600;color:var(--ac);background:rgba(var(--ac-rgb),.1);border:1px solid rgba(var(--ac-rgb),.25);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;transition:all 0.2s">↻ Sync Now</button>`
+          : `<span style="margin-left:auto;font-size:11px;color:#fb7185;font-weight:600">● Not connected</span>`
+        }
+      </div>` : ''}
+      <div style="padding:16px 20px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--mu);margin-bottom:12px">Details</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+          <div class="m-detail-box">
+            <div class="m-detail-lbl">EPISODES</div>
+            <div class="m-detail-val">${e.epCur||0}${e.epTot?' / '+e.epTot:' watched'}</div>
+          </div>
+          <div class="m-detail-box">
+            <div class="m-detail-lbl">DURATION</div>
+            <div class="m-detail-val">${e.epDuration||24} min / ep</div>
+          </div>
+          ${e.rating ? `<div class="m-detail-box">
+            <div class="m-detail-lbl">RATING</div>
+            <div class="m-detail-val" style="color:#fbbf24">★ ${e.rating} / 10</div>
+          </div>` : ''}
+          ${e.airingDay!=null ? `<div class="m-detail-box" style="grid-column:span 2">
+            <div class="m-detail-lbl">AIRING</div>
+            <div class="m-detail-val" style="color:var(--ac)">📺 ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][e.airingDay]}${e.airingTime?' at '+e.airingTime:''}</div>
+          </div>` : ''}
         </div>
-        <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:9px 11px">
-          <div style="color:var(--mu);font-size:10px;margin-bottom:3px">DURATION</div>
-          <div style="font-weight:600;color:var(--tx)">${e.epDuration||24} min / ep</div>
-        </div>
-        ${e.rating ? `<div style="background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:9px 11px">
-          <div style="color:var(--mu);font-size:10px;margin-bottom:3px">RATING</div>
-          <div style="font-weight:600;color:#fbbf24">★ ${e.rating} / 10</div>
-        </div>` : ''}
-        ${e.airingDay!=null ? `<div style="background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:9px 11px;grid-column:span 2">
-          <div style="color:var(--mu);font-size:10px;margin-bottom:3px">AIRING</div>
-          <div style="font-weight:600;color:var(--ac)">📺 ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][e.airingDay]}${e.airingTime?' at '+e.airingTime:''}</div>
-        </div>` : ''}
       </div>
-    </div>
     ${renderLinkedEntries(e)}
     ${e.notes ? `<div class="sec-div"><span class="sec-div-lbl">Notes</span><div class="sec-div-line"></div></div>
       <div class="pnotes"><div class="pnotes-box">${esc(e.notes)}</div></div>` : ''}
@@ -940,6 +981,7 @@ function renderDetailPanel(e) {
             </div>
           </div>`).join('')}
       </div>` : ''}
+    </div>
     <div class="panel-actions">
       <button class="btn-del" onclick="askDel('${e.id}')">Delete</button>
       ${e.status==='completed' ? `<button class="btn-cancel" onclick="startRewatch('${e.id}')" style="background:rgba(var(--ac-rgb),.1);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3)">↺ Rewatch</button>` : ''}
@@ -1208,6 +1250,28 @@ let PENDING_LINKED_GROUP_LABEL = null;
 
 function renderFormPanel(e) {
   const isEdit = !!e;
+
+  if (e && e.malId && !e.coverImage && !e._fetchingCover) {
+    e._fetchingCover = true;
+    const type = e.genreId === 'manga' ? 'manga' : 'anime';
+    fetch(`https://api.jikan.moe/v4/${type}/${e.malId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d?.data?.images?.jpg?.large_image_url) {
+          e.coverImage = d.data.images.jpg.large_image_url;
+          saveData(DATA);
+          if (PANEL === 'edit' && PEDIT === e.id) {
+            const imgEl = document.getElementById('f-malimg');
+            if (imgEl) imgEl.value = e.coverImage;
+            if (typeof _malUpdateCoverPreview === 'function') _malUpdateCoverPreview(e.coverImage);
+          }
+        }
+      }).catch(err => {
+        console.warn('Jikan fetch failed:', err);
+        e._fetchingCover = false;
+      });
+  }
+
   const pendingGroupId    = !e ? PENDING_LINKED_GROUP_ID    : null;
   const pendingGroupOrder = !e ? PENDING_LINKED_GROUP_ORDER : null;
   const pendingGroupLabel = !e ? PENDING_LINKED_GROUP_LABEL : null;
@@ -1513,9 +1577,8 @@ function _injectPremiumStyles() {
       border-radius: 0 0 24px 24px;
       margin: -16px -16px 20px -16px !important;
       box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
-      position: sticky;
-      top: 0;
-      z-index: 100;
+      position: relative;
+      z-index: 10;
       transition: all 0.3s ease;
     }
 
@@ -1678,6 +1741,10 @@ function _injectPremiumStyles() {
       transform: translateZ(25px); 
     }
     
+    .m-card-bar {
+      border-radius: 17px 0 0 17px !important;
+    }
+    
     /* Pinned cards glowing effect */
     .m-card-pinned .m-card-bar { 
       width: 5px !important; 
@@ -1689,21 +1756,117 @@ function _injectPremiumStyles() {
       background: linear-gradient(145deg, rgba(251,191,36,.08) 0%, rgba(10,10,15,0.6) 100%) !important; 
     }
     
-    /* Detail Panel Stats Glassmorphism */
-    .pstats .pstat {
-      background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
-      border: 1px solid rgba(255,255,255,0.08);
+    /* Detail Panel Redesign */
+    .m-panel-hero {
+      position: relative;
+      padding: 40px 24px 24px;
+      min-height: 220px;
+      display: flex;
+      align-items: flex-end;
+      overflow: hidden;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .m-panel-hero-bg {
+      position: absolute;
+      inset: -30px;
+      background-size: cover;
+      background-position: center;
+      filter: blur(25px) saturate(1.8) brightness(0.4);
+      z-index: 0;
+    }
+    .m-panel-hero-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, var(--surf) 0%, rgba(17,17,17,0.3) 60%, rgba(17,17,17,0.1) 100%);
+      z-index: 1;
+    }
+    .m-panel-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      z-index: 10;
+      background: rgba(0,0,0,0.5) !important;
       backdrop-filter: blur(12px);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-      border-radius: 16px;
+      border-color: rgba(255,255,255,0.15) !important;
+      color: #fff !important;
+    }
+    .m-panel-close:hover { background: rgba(251,113,133,0.2) !important; color: #fb7185 !important; border-color: rgba(251,113,133,0.4) !important; }
+    .m-panel-hero-content {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: flex-end;
+      gap: 20px;
+      width: 100%;
+    }
+    .m-panel-cover {
+      width: 110px;
+      height: 155px;
+      border-radius: 12px;
+      object-fit: cover;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.15);
+      flex-shrink: 0;
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .m-panel-cover:hover { transform: translateY(-6px) scale(1.03) rotate(2deg); }
+    .m-panel-text { flex: 1; min-width: 0; }
+    .m-panel-title {
+      font-size: 28px !important;
+      font-weight: 800 !important;
+      line-height: 1.2 !important;
+      margin-bottom: 12px;
+      text-shadow: 0 4px 20px rgba(0,0,0,0.8);
+      white-space: normal;
+      color: #fff;
+    }
+    .m-panel-badges { gap: 8px; margin-top:0 !important; }
+    .m-panel-badges > span { padding: 4px 10px !important; border-radius: 6px !important; font-size: 11px !important; }
+    
+    .m-panel-stats {
+      padding: 16px 20px !important;
+      gap: 12px;
+      background: var(--surf) !important;
+      border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+    }
+    .m-panel-stats .pstat {
+      background: linear-gradient(145deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)) !important;
+      border: 1px solid rgba(255,255,255,0.06) !important;
+      border-radius: 14px !important;
+      padding: 14px 10px !important;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
       overflow: hidden;
     }
-    .pstats .pstat:hover {
+    .m-panel-stats .pstat:hover {
       transform: translateY(-4px) scale(1.02);
-      background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
-      box-shadow: 0 15px 40px rgba(0,0,0,0.4), 0 0 20px rgba(var(--ac-rgb), 0.15);
-      border-color: rgba(255,255,255,0.15);
+      border-color: rgba(var(--ac-rgb), 0.3) !important;
+      background: linear-gradient(145deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)) !important;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3), 0 0 15px rgba(var(--ac-rgb), 0.1) !important;
+    }
+    .m-panel-body { padding: 0; }
+
+    .m-detail-box {
+      background: linear-gradient(145deg, var(--surf2), var(--surf));
+      border: 1px solid var(--brd);
+      border-radius: 8px;
+      padding: 12px 14px;
+      transition: all 0.3s ease;
+    }
+    .m-detail-box:hover {
+      border-color: rgba(var(--ac-rgb), 0.3);
+      background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    }
+    .m-detail-lbl {
+      color: var(--mu);
+      font-size: 10px;
+      margin-bottom: 4px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+    .m-detail-val {
+      font-weight: 600;
+      color: var(--tx);
+      font-size: 13px;
     }
     
     /* Action Buttons (Del, Edit, Play) pop on hover */
