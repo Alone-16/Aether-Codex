@@ -1180,9 +1180,9 @@ textarea.fin{resize:vertical;min-height:70px}
 
 /* ── Card row (Premium aesthetic) ── */
 .m-card {
-  display:grid;
-  grid-template-columns:4px 1fr auto;
-  align-items:center;
+  display: flex;
+  flex-direction: column;
+  position: relative;
   background:linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.2) 100%);
   border:1px solid rgba(255,255,255,0.05);
   border-radius:12px;
@@ -1191,7 +1191,6 @@ textarea.fin{resize:vertical;min-height:70px}
   transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   min-height:58px;
   box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-  position: relative;
   margin-bottom: 8px;
   backdrop-filter: blur(10px);
 }
@@ -1217,16 +1216,20 @@ textarea.fin{resize:vertical;min-height:70px}
 .m-card-pinned {
   border-left: 2px solid rgba(255, 255, 255, 0.3);
 }
-.m-card-bar {
+.m-card-bar, .m-card-strip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
   width:4px;
-  align-self:stretch;
   flex-shrink:0;
-  transition: width 0.3s cubic-bezier(0.16,1,0.3,1), opacity 0.3s;
+  transition: width 0.3s cubic-bezier(0.16,1,0.3,1), opacity 0.3s, box-shadow 0.3s;
   opacity: 0.8;
+  z-index: 3;
 }
-.m-card:hover .m-card-bar { width: 6px; opacity: 1; box-shadow: 0 0 12px currentColor; }
+.m-card:hover .m-card-bar, .m-card:hover .m-card-strip { width: 6px; opacity: 1; box-shadow: 0 0 12px currentColor; }
 .m-card-info {
-  padding:12px 14px 12px 16px;
+  padding:12px 14px 12px 6px;
   min-width:0;
   flex:1;
 }

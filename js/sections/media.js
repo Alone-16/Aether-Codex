@@ -646,7 +646,7 @@ function rowHtml(e, idx = 0) {
   const grpBadge = e.linkedGroupId
     ? `<span style="font-size:9px;font-weight:700;background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2);border-radius:3px;padding:1px 4px">🔗</span>` : '';
 
-  return `<div class="m-card${isA ? ' m-card-active' : ''}${e.pinned ? ' m-card-pinned' : ''}" id="row-${e.id}" style="--card-glow:${col};animation-delay:${idx*0.04}s"
+  return `<div class="m-card${isA ? ' m-card-active' : ''}${e.pinned ? ' m-card-pinned' : ''}" id="row-${e.id}" style="--card-glow:${col};--status-col:${col};animation-delay:${idx*0.04}s"
     onclick="if(window._HOLD_FIRED){window._HOLD_FIRED=false;return;}openDetail('${e.id}')"
     onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-8+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*8+'deg')"
     onmousedown="startHold('${e.id}',event)"
@@ -655,32 +655,35 @@ function rowHtml(e, idx = 0) {
     ontouchstart="startHold('${e.id}',event)"
     ontouchend="cancelHold();this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')"
     ontouchmove="cancelHold()">
-    <div class="m-card-bar" style="background:${col}"></div>
-    <div class="m-card-info">
-      <div class="m-card-title">${e.pinned ? '<span class="m-pin-badge">📌</span>' : ''}${esc(e.title)}</div>
-      <div class="m-card-meta">
-        ${_mstag(e.status)}
-        ${rewBadge}
-        ${grpBadge}
-        ${e.malId ? `<span style="font-size:9px;font-weight:700;background:rgba(var(--ac-rgb),.08);color:rgba(var(--ac-rgb),.55);border:1px solid rgba(var(--ac-rgb),.15);border-radius:3px;padding:1px 4px">MAL</span>` : ''}
-        ${_airBadge(e)}
+    <div class="m-card-strip" style="--strip-col:${col}"></div>
+    <div class="m-card-body">
+      <div class="m-card-info">
+        <div class="m-card-title">${e.pinned ? '<span class="m-pin-badge">📌</span>' : ''}${esc(e.title)}</div>
+        <div class="m-card-meta">
+          ${_mstag(e.status)}
+          ${e.malId ? `<span class="m-badge-link" onclick="event.stopPropagation();window.open('https://myanimelist.net/anime/${e.malId}','_blank')">🔗</span>` : ''}
+          ${e.malId ? `<span class="m-badge-mal">MAL</span>` : ''}
+          ${rewBadge}
+          ${grpBadge}
+          ${_airBadge(e)}
+        </div>
       </div>
-    </div>
-    <div class="m-card-r">
-      ${hasBar ? `<div class="m-prog-wrap">
-        <div class="m-prog-bar"><div class="m-prog-fill" style="width:${rPct}%;background:${col}"></div></div>
-        <span class="m-prog-txt">${rCur}${rTot ? '/'+rTot : ''}</span>
-      </div>` : ''}
-      <div class="m-card-actions" onclick="event.stopPropagation()">
-        ${showCtrl && hasBar ? `<div class="m-ep-ctrl">
-          <button class="m-ep-btn" onclick="quickEp('${e.id}',-1)">−</button>
-          <span class="m-ep-num">${rCur}</span>
-          <button class="m-ep-btn" onclick="quickEp('${e.id}',1)">+</button>
+      <div class="m-card-r">
+        ${hasBar ? `<div class="m-prog-wrap">
+          <div class="m-prog-bar"><div class="m-prog-fill" style="width:${rPct}%;background:${col}"></div></div>
+          <span class="m-prog-txt">${rCur}${rTot ? '/'+rTot : ''}</span>
         </div>` : ''}
-        <button class="m-act-btn" onclick="openEdit('${e.id}')">✏</button>
-        <button class="m-act-btn m-act-del" onclick="askDel('${e.id}')">✕</button>
-        ${e.status === 'watching' && e.watchUrl
-          ? `<button class="m-act-btn m-act-play" onclick="event.stopPropagation();window.open('${esc(e.watchUrl)}','_blank')" title="Watch">▶</button>` : ''}
+        <div class="m-card-actions" onclick="event.stopPropagation()">
+          ${showCtrl && hasBar ? `<div class="m-ep-ctrl">
+            <button class="m-ep-btn" onclick="quickEp('${e.id}',-1)">−</button>
+            <span class="m-ep-num">${rCur}</span>
+            <button class="m-ep-btn" onclick="quickEp('${e.id}',1)">+</button>
+          </div>` : ''}
+          <button class="m-act-btn m-act-more" onclick="openEdit('${e.id}')" title="Edit">⋯</button>
+          <button class="m-act-btn m-act-del" onclick="askDel('${e.id}')" title="Delete">✕</button>
+          ${e.status === 'watching' && e.watchUrl
+            ? `<button class="m-act-btn m-act-play" onclick="event.stopPropagation();window.open('${esc(e.watchUrl)}','_blank')" title="Watch">▶</button>` : ''}
+        </div>
       </div>
     </div>
   </div>`;
@@ -825,15 +828,18 @@ function renderIncomplete(c) {
     const lead = firstIncomplete || sorted[0];
     const first = sorted[0];
     const done = members.filter(linkedPartIsComplete).length;
-    return `<div class="m-card" onclick="openDetail('${first.id}')" style="--card-glow:${_mediaStatusBar(lead.status)};animation-delay:${i*0.04}s" onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-6+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*6+'deg')" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
-      <div class="m-card-bar" style="background:${_mediaStatusBar(lead.status)}"></div>
-      <div class="m-card-info">
-        <div class="m-card-title">${esc(first.title.replace(/ S\d+$| Season \d+$/,''))}</div>
-        <div class="m-card-meta">${_mstag(lead.status)}<span class="m-card-seasons">${done}/${members.length} parts done</span></div>
-      </div>
-      <div class="m-card-r">
-        <div class="m-card-actions" onclick="event.stopPropagation()">
-          <button class="m-act-btn" onclick="openEdit('${first.id}')">✏</button>
+    const leadCol = _mediaStatusBar(lead.status);
+    return `<div class="m-card" onclick="openDetail('${first.id}')" style="--card-glow:${leadCol};--status-col:${leadCol};animation-delay:${i*0.04}s" onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-6+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*6+'deg')" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
+      <div class="m-card-strip" style="--strip-col:${leadCol}"></div>
+      <div class="m-card-body">
+        <div class="m-card-info">
+          <div class="m-card-title">${esc(first.title.replace(/ S\d+$| Season \d+$/,''))}</div>
+          <div class="m-card-meta">${_mstag(lead.status)}<span class="m-card-seasons">${done}/${members.length} parts done</span></div>
+        </div>
+        <div class="m-card-r">
+          <div class="m-card-actions" onclick="event.stopPropagation()">
+            <button class="m-act-btn m-act-more" onclick="openEdit('${first.id}')" title="Edit">⋯</button>
+          </div>
         </div>
       </div>
     </div>`;
@@ -1705,16 +1711,15 @@ function _injectPremiumStyles() {
       backdrop-filter: blur(20px) !important;
       -webkit-backdrop-filter: blur(20px) !important;
       border: 1px solid rgba(255, 255, 255, 0.08) !important;
-      border-radius: 18px !important;
-      overflow: visible !important;
+      border-radius: 16px !important;
+      overflow: hidden !important;
     }
     
     /* Glowing spotlight effect that follows mouse */
     .m-card::before, .m-dash-stat::before, .m-dash-tc::before, .m-up-card::before {
       content: '';
       position: absolute;
-      inset: -1px;
-      /* Notice the screen blend mode to make colors pop */
+      inset: 0;
       background: radial-gradient(700px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), var(--card-glow, rgba(255,255,255,0.1)), transparent 40%);
       opacity: 0;
       transition: opacity 0.5s;
@@ -1735,25 +1740,95 @@ function _injectPremiumStyles() {
     .m-card:hover::before, .m-dash-stat:hover::before, .m-dash-tc:hover::before, .m-up-card:hover::before { 
       opacity: 0.35; 
     }
-    .m-card > *, .m-dash-stat > *, .m-dash-tc > *, .m-up-card > * { 
+    .m-card > .m-card-body, .m-dash-stat > *, .m-dash-tc > *, .m-up-card > * { 
       position: relative; 
       z-index: 1; 
-      transform: translateZ(25px); 
+    }
+    .m-card > .m-card-strip {
+      position: absolute !important;
+      z-index: 3;
     }
     
-    .m-card-bar {
-      border-radius: 17px 0 0 17px !important;
+    /* ── New Card Strip (left status indicator) ── */
+    .m-card-strip {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: var(--strip-col, rgba(255,255,255,.18));
+      z-index: 3;
+      transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease;
+      box-shadow: 0 0 6px color-mix(in srgb, var(--strip-col, rgba(255,255,255,.18)) 40%, transparent);
+    }
+    .m-card:hover .m-card-strip {
+      width: 5px;
+      box-shadow: 0 0 18px var(--strip-col, rgba(255,255,255,.3)), 0 0 6px var(--strip-col);
+    }
+    
+    /* Card body flex container */
+    .m-card-body {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      min-height: 58px;
+      padding-left: 12px;
+    }
+    
+    /* ── Card badge styles ── */
+    .m-badge-mal {
+      font-size: 9px;
+      font-weight: 700;
+      background: rgba(var(--ac-rgb), .08);
+      color: rgba(var(--ac-rgb), .55);
+      border: 1px solid rgba(var(--ac-rgb), .15);
+      border-radius: 4px;
+      padding: 1px 5px;
+      letter-spacing: .04em;
+      transition: color 0.2s, background 0.2s;
+    }
+    .m-card:hover .m-badge-mal {
+      color: rgba(var(--ac-rgb), .8);
+      background: rgba(var(--ac-rgb), .12);
+    }
+    .m-badge-link {
+      font-size: 10px;
+      cursor: pointer;
+      opacity: 0.5;
+      transition: opacity 0.2s, transform 0.2s;
+      display: inline-flex;
+      align-items: center;
+    }
+    .m-badge-link:hover {
+      opacity: 1;
+      transform: scale(1.15);
+    }
+    
+    /* Edit/more button style */
+    .m-act-more {
+      font-size: 18px !important;
+      font-weight: 900;
+      letter-spacing: 1px;
+      line-height: 0.5;
     }
     
     /* Pinned cards glowing effect */
-    .m-card-pinned .m-card-bar { 
+    .m-card-pinned .m-card-strip { 
       width: 5px !important; 
       box-shadow: 0 0 16px 3px rgba(251,191,36,.5); 
       background: linear-gradient(180deg, #fcd34d 0%, #f59e0b 100%) !important;
     }
+    .m-card-pinned:hover .m-card-strip {
+      width: 6px !important;
+      box-shadow: 0 0 28px 5px rgba(251,191,36,.7), 0 0 8px rgba(251,191,36,.9);
+    }
     .m-card-pinned { 
       border-color: rgba(251,191,36,.3) !important; 
       background: linear-gradient(145deg, rgba(251,191,36,.08) 0%, rgba(10,10,15,0.6) 100%) !important; 
+    }
+    .m-card-pinned:hover {
+      border-color: rgba(251,191,36,.5) !important;
+      box-shadow: 0 30px 60px rgba(0,0,0,0.6), 0 0 30px rgba(251,191,36,.2) !important;
     }
     
     /* Detail Panel Redesign */
