@@ -194,13 +194,13 @@ function extractArtist(title, channelTitle) {
 function updateMusicSyncBtn(state) {
   const btn = document.getElementById('music-sync-btn'); if (!btn) return;
   const map = {
-    syncing: ['↻ Syncing', 'var(--ac)'],
+    syncing: ['<span class="mu-sync-spinning">↻</span> Syncing', 'var(--ac)'],
     synced:  ['✓ Synced',  '#4ade80'],
     error:   ['✗ Sync',    '#fb7185'],
     idle:    ['⟳ Sync YT', 'var(--ac)'],
   };
   const [label, color] = map[state] || map.idle;
-  btn.textContent = label; btn.style.color = color;
+  btn.innerHTML = label; btn.style.color = color;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -256,42 +256,38 @@ function renderMusicLibrary(c) {
     : MDATA.filter(s => !s.removedFromPlaylist);
 
   if (!songs.length) {
-    c.innerHTML = `<div class="empty"><div class="empty-ico">♪</div><p>No songs yet — sync a YouTube playlist to get started</p></div>`;
+    c.innerHTML = `<div class="mu-empty"><div class="mu-empty-ico">♪</div><div class="mu-empty-title">No songs yet</div><div class="mu-empty-sub">Sync a YouTube playlist or add songs manually to get started</div></div>`;
     return;
   }
 
-  // Group by album/artist
-  const byArtist = {};
-  songs.forEach(s => {
-    const key = s.artist || 'Unknown Artist';
-    if (!byArtist[key]) byArtist[key] = [];
-    byArtist[key].push(s);
-  });
-
   const totalSecs = songs.reduce((a, s) => a + (s.duration || 0), 0);
   c.innerHTML = `
-    <div style="font-size:12px;color:var(--mu);margin-bottom:12px">${songs.length} song${songs.length!==1?'s':''} · ${fmtTotalDuration(totalSecs)}</div>
-    <div style="display:flex;flex-direction:column;gap:2px">
-      ${songs.map(s => songRowHtml(s)).join('')}
+    <div class="mu-cnt-lbl">${songs.length} song${songs.length!==1?'s':''} · ${fmtTotalDuration(totalSecs)}</div>
+    <div style="display:flex;flex-direction:column;gap:0">
+      ${songs.map((s,i) => songRowHtml(s,i)).join('')}
     </div>`;
 }
 
-function songRowHtml(s) {
-  return `<div class="row" style="min-height:52px" onclick="openSongDetail('${s.id}')">
-    <div class="row-bar" style="background:var(--ac)"></div>
-    ${s.thumbnail ? `<img src="${esc(s.thumbnail)}" style="width:40px;height:40px;object-fit:cover;flex-shrink:0;border-radius:3px;margin:0 6px" onerror="this.style.display='none'">` : '<div style="width:8px"></div>'}
-    <div class="row-info">
-      <div class="row-title">${esc(s.title)}</div>
-      <div class="row-meta">
-        <span style="font-size:11px;color:var(--tx2)">${esc(s.artist||'Unknown')}</span>
-        ${s.album?`<span style="font-size:10px;color:var(--mu)">· ${esc(s.album)}</span>`:''}
+function songRowHtml(s, idx=0) {
+  const hasLyrics = !!(s.lyrics || s.lyricsLink);
+  return `<div class="mu-row" style="animation-delay:${idx*0.04}s" onclick="openSongDetail('${s.id}')">
+    <div class="mu-row-bar" style="background:var(--ac)"></div>
+    ${s.thumbnail ? `<img src="${esc(s.thumbnail)}" class="mu-thumb" onerror="this.style.display='none'">` : '<div class="mu-thumb-ph">♪</div>'}
+    <div class="mu-info">
+      <div class="mu-title">${esc(s.title)}</div>
+      <div class="mu-meta">
+        <span class="mu-artist">${esc(s.artist||'Unknown')}</span>
+        ${s.album?`<span class="mu-album">${esc(s.album)}</span>`:''}
+        ${hasLyrics?'<span class="mu-lyrics-badge">♫ Lyrics</span>':''}
       </div>
     </div>
-    <div class="row-r">
-      <span style="font-size:11px;color:var(--mu);white-space:nowrap">${fmtDuration(s.duration)}</span>
-      <div class="row-btns" onclick="event.stopPropagation()">
-        ${s.videoId?`<button class="rbt" onclick="window.open('https://youtu.be/${s.videoId}','_blank')" title="Open on YouTube" style="color:var(--ac)">▶</button>`:''}
-        <button class="rbt del" onclick="delSong('${s.id}')">✕</button>
+    <div class="mu-right">
+      <div class="mu-eq"><span></span><span></span><span></span></div>
+      <span class="mu-dur">${fmtDuration(s.duration)}</span>
+      <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
+        ${s.videoId?`<button class="mu-act-btn mu-act-play" onclick="window.open('https://youtu.be/${s.videoId}','_blank')" title="Open on YouTube">▶</button>`:''}
+        <button class="mu-act-btn mu-act-edit" onclick="openEditSong('${s.id}')" title="Edit">✎</button>
+        <button class="mu-act-btn mu-act-del" onclick="delSong('${s.id}')">✕</button>
       </div>
     </div>
   </div>`;
@@ -308,6 +304,18 @@ function openSongDetail(id) {
   document.getElementById('rpanel').classList.add('open');
   document.getElementById('poverlay').classList.add('show');
   document.getElementById('content').classList.add('pushed');
+
+  const lyricsSection = s.lyrics ? `
+    <div class="mu-lyrics-section">
+      <div class="mu-lyrics-header" onclick="document.getElementById('mu-lyrics-body').classList.toggle('collapsed');this.querySelector('.mu-lyrics-arrow').classList.toggle('open')">
+        <span class="flbl" style="margin:0;cursor:pointer">♫ Lyrics</span>
+        <span class="mu-lyrics-arrow open">▾</span>
+      </div>
+      <div id="mu-lyrics-body" class="mu-lyrics-body">
+        <pre class="mu-lyrics-text">${esc(s.lyrics)}</pre>
+      </div>
+    </div>` : '';
+
   document.getElementById('panel-inner').innerHTML = `
     <div class="ph">
       <div>
@@ -318,16 +326,20 @@ function openSongDetail(id) {
       </div>
       <button class="ph-close" onclick="closePanel()">✕</button>
     </div>
-    ${s.thumbnail?`<img src="${esc(s.thumbnail)}" style="width:100%;max-height:200px;object-fit:cover" onerror="this.style.display='none'">`:''}
-    <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px;font-size:13px">
-      ${s.artist?`<div><span style="color:var(--mu);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:2px">Artist</span><span style="color:var(--tx)">${esc(s.artist)}</span></div>`:''}
-      ${s.album?`<div><span style="color:var(--mu);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:2px">Album</span><span style="color:var(--tx)">${esc(s.album)}</span></div>`:''}
-      ${s.duration?`<div><span style="color:var(--mu);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:2px">Duration</span><span style="color:var(--tx)">${fmtDuration(s.duration)}</span></div>`:''}
-      ${s.videoId?`<div><span style="color:var(--mu);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:2px">YouTube</span>
-        <a href="https://youtu.be/${s.videoId}" target="_blank" style="color:var(--ac)">Open on YouTube ↗</a></div>`:''}
+    ${s.thumbnail?`<div class="mu-det-hero"><img src="${esc(s.thumbnail)}" class="mu-det-hero-img" onerror="this.parentElement.style.display='none'"><div class="mu-det-hero-overlay"></div></div>`:''}
+    <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;font-size:13px">
+      ${s.artist?`<div><span class="flbl">Artist</span><span style="color:var(--tx);font-size:14px;font-weight:600">${esc(s.artist)}</span></div>`:''}
+      ${s.album?`<div><span class="flbl">Album</span><span style="color:var(--tx);font-size:14px;font-weight:600">${esc(s.album)}</span></div>`:''}
+      ${s.duration?`<div><span class="flbl">Duration</span><span style="color:var(--tx);font-size:14px;font-weight:600">${fmtDuration(s.duration)}</span></div>`:''}
+      ${s.videoId?`<div><span class="flbl">YouTube</span>
+        <a href="https://youtu.be/${s.videoId}" target="_blank" style="color:var(--ac);font-weight:600;font-size:14px;transition:opacity .2s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">Open on YouTube ↗</a></div>`:''}
+      ${s.lyricsLink?`<div><span class="flbl">Lyrics Link</span>
+        <a href="${esc(s.lyricsLink)}" target="_blank" style="color:var(--ac);font-weight:600;font-size:14px;transition:opacity .2s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">View Lyrics ↗</a></div>`:''}
     </div>
+    ${lyricsSection}
     <div class="panel-actions">
       <button class="btn-del" onclick="delSong('${s.id}')">Remove</button>
+      <button class="btn-save" onclick="openEditSong('${s.id}')">✎ Edit</button>
       <button class="btn-cancel" onclick="closePanel()">Close</button>
     </div>`;
 }
@@ -347,35 +359,27 @@ function delSong(id) {
 // ── PLAYLISTS ──
 function renderMusicPlaylists(c) {
   if (!MPLAYLISTS.length) {
-    c.innerHTML = `
-      <div style="text-align:center;padding:40px 20px">
-        <div style="font-size:32px;opacity:.3;margin-bottom:12px">♪</div>
-        <p style="font-size:14px;color:var(--tx2);margin-bottom:16px">No YouTube playlists found</p>
-        <button onclick="handleMusicSync()" class="nb-btn ac" style="margin:0 auto">Connect YouTube →</button>
-      </div>`;
+    c.innerHTML = `<div class="mu-empty"><div class="mu-empty-ico">♪</div><div class="mu-empty-title">No YouTube playlists found</div><div class="mu-empty-sub">Connect your YouTube account to sync playlists</div><button onclick="handleMusicSync()" class="nb-btn ac" style="margin:12px auto 0">Connect YouTube →</button></div>`;
     return;
   }
 
-  const cards = MPLAYLISTS.map(pl => {
+  const cards = MPLAYLISTS.map((pl,i) => {
     const songCount = MDATA.filter(s => s.playlistId === pl.id && !s.removedFromPlaylist).length;
     const isSynced = pl.synced;
-    return `<div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:8px;transition:border-color .15s" onmouseover="this.style.borderColor='var(--brd2)'" onmouseout="this.style.borderColor='var(--brd)'">
-      ${pl.thumbnail?`<img src="${esc(pl.thumbnail)}" style="width:56px;height:56px;object-fit:cover;border-radius:5px;flex-shrink:0" onerror="this.style.display='none'">`:'<div style="width:56px;height:56px;background:var(--surf2);border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:24px">♪</div>'}
-      <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(pl.title)}</div>
-        <div style="font-size:12px;color:var(--tx2);margin-top:2px">${pl.itemCount} videos${isSynced?' · '+songCount+' synced':''}</div>
-        ${pl.lastSync?`<div style="font-size:10px;color:var(--mu);margin-top:2px">Last synced: ${new Date(pl.lastSync).toLocaleDateString()}</div>`:''}
+    return `<div class="mu-pl-card" style="animation-delay:${i*0.06}s">
+      ${pl.thumbnail?`<img src="${esc(pl.thumbnail)}" class="mu-pl-thumb" onerror="this.style.display='none'">`:'<div class="mu-pl-thumb-ph">♪</div>'}
+      <div class="mu-pl-info">
+        <div class="mu-pl-title">${esc(pl.title)}</div>
+        <div class="mu-pl-meta">${pl.itemCount} videos${isSynced?' · '+songCount+' synced':''}</div>
+        ${pl.lastSync?`<div class="mu-pl-sync-date">Last synced: ${new Date(pl.lastSync).toLocaleDateString()}</div>`:''}
       </div>
-      <button onclick="togglePlaylistSync('${pl.id}')" style="padding:6px 14px;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid;white-space:nowrap;
-        ${isSynced?'background:rgba(var(--ac-rgb),.12);color:var(--ac);border-color:rgba(var(--ac-rgb),.3)':'background:var(--surf2);color:var(--tx2);border-color:var(--brd)'}">
+      <button onclick="togglePlaylistSync('${pl.id}')" class="mu-sync-toggle ${isSynced?'synced':'unsynced'}">
         ${isSynced?'✓ Synced':'+ Sync'}
       </button>
     </div>`;
   }).join('');
 
-  c.innerHTML = `
-    <div style="font-size:12px;color:var(--mu);margin-bottom:12px">${MPLAYLISTS.length} playlist${MPLAYLISTS.length!==1?'s':''} found</div>
-    ${cards}`;
+  c.innerHTML = `<div class="mu-cnt-lbl">${MPLAYLISTS.length} playlist${MPLAYLISTS.length!==1?'s':''} found</div>${cards}`;
 }
 
 async function togglePlaylistSync(id) {
@@ -415,6 +419,8 @@ function openAddSong() {
       <div class="fg"><label class="flbl">Artist</label><input class="fin" id="ms-artist" placeholder="Artist name"></div>
       <div class="fg"><label class="flbl">Album</label><input class="fin" id="ms-album" placeholder="Album name"></div>
       <div class="fg"><label class="flbl">YouTube Video ID (optional)</label><input class="fin" id="ms-vid" placeholder="e.g. dQw4w9WgXcQ"></div>
+      <div class="fg"><label class="flbl">Lyrics Link (optional)</label><input class="fin" id="ms-lyricslink" placeholder="https://genius.com/..."></div>
+      <div class="fg"><label class="flbl">Lyrics (optional)</label><textarea class="fin mu-lyrics-input" id="ms-lyrics" placeholder="Paste song lyrics here..." rows="6"></textarea></div>
     </div>
     <div class="panel-actions">
       <button class="btn-cancel" onclick="closePanel()">Cancel</button>
@@ -428,8 +434,10 @@ function saveManualSong() {
   const vid = document.getElementById('ms-vid')?.value?.trim().replace(/.*v=|.*youtu\.be\//,'').split('&')[0] || null;
   const song = {
     id: uid(), title,
-    artist:  document.getElementById('ms-artist')?.value?.trim() || null,
-    album:   document.getElementById('ms-album')?.value?.trim() || null,
+    artist:     document.getElementById('ms-artist')?.value?.trim() || null,
+    album:      document.getElementById('ms-album')?.value?.trim() || null,
+    lyricsLink: document.getElementById('ms-lyricslink')?.value?.trim() || null,
+    lyrics:     document.getElementById('ms-lyrics')?.value?.trim() || null,
     videoId: vid, thumbnail: vid ? `https://img.youtube.com/vi/${vid}/mqdefault.jpg` : '',
     duration: null, playlistId: null, manual: true,
     addedAt: Date.now(), updatedAt: Date.now(),
@@ -438,12 +446,60 @@ function saveManualSong() {
   closePanel(); renderMusicBody(); toast('✓ Song added');
 }
 
+// ── EDIT SONG ──
+function openEditSong(id) {
+  const s = MDATA.find(x => x.id === id); if (!s) return;
+  document.getElementById('rpanel').classList.add('open');
+  document.getElementById('poverlay').classList.add('show');
+  document.getElementById('content').classList.add('pushed');
+  document.getElementById('panel-inner').innerHTML = `
+    <div class="ph">
+      <div class="ph-title">Edit Song</div>
+      <button class="ph-close" onclick="closePanel()">✕</button>
+    </div>
+    ${s.thumbnail?`<div class="mu-det-hero" style="margin-bottom:-10px"><img src="${esc(s.thumbnail)}" class="mu-det-hero-img" onerror="this.parentElement.style.display='none'"><div class="mu-det-hero-overlay"></div></div>`:''}
+    <div class="form-wrap">
+      <div class="fg"><label class="flbl">Title *</label><input class="fin" id="me-title" value="${esc(s.title||'')}"></div>
+      <div class="fg"><label class="flbl">Artist</label><input class="fin" id="me-artist" value="${esc(s.artist||'')}"></div>
+      <div class="fg"><label class="flbl">Album</label><input class="fin" id="me-album" value="${esc(s.album||'')}"></div>
+      ${s.videoId?`<div class="fg"><label class="flbl">YouTube Video</label><div style="font-size:12px;color:var(--tx2);padding:8px 0"><a href="https://youtu.be/${s.videoId}" target="_blank" style="color:var(--ac)">youtu.be/${s.videoId} ↗</a> <span style="color:var(--mu);font-size:10px">(synced)</span></div></div>`:''}
+      <div class="mu-edit-divider"></div>
+      <div class="fg"><label class="flbl">Lyrics Link</label><input class="fin" id="me-lyricslink" value="${esc(s.lyricsLink||'')}" placeholder="https://genius.com/..."></div>
+      <div class="fg"><label class="flbl">Lyrics</label><textarea class="fin mu-lyrics-input" id="me-lyrics" placeholder="Paste song lyrics here..." rows="8">${esc(s.lyrics||'')}</textarea></div>
+    </div>
+    <div class="panel-actions">
+      <button class="btn-del" onclick="delSong('${s.id}')">Remove</button>
+      <button class="btn-cancel" onclick="closePanel()">Cancel</button>
+      <button class="btn-save" onclick="saveEditSong('${s.id}')">Save Changes</button>
+    </div>`;
+}
+
+function saveEditSong(id) {
+  const s = MDATA.find(x => x.id === id); if (!s) return;
+  const title = document.getElementById('me-title')?.value?.trim();
+  if (!title) { showAlert('Please enter a song title', { title: 'Missing Title' }); return; }
+
+  s.title      = title;
+  s.artist     = document.getElementById('me-artist')?.value?.trim() || null;
+  s.album      = document.getElementById('me-album')?.value?.trim() || null;
+  s.lyricsLink = document.getElementById('me-lyricslink')?.value?.trim() || null;
+  s.lyrics     = document.getElementById('me-lyrics')?.value?.trim() || null;
+  s.updatedAt  = Date.now();
+
+  saveMusic(MDATA);
+  addLog('music', 'Edited', s.title, s.artist || null);
+  closePanel();
+  renderMusicBody();
+  toast('✓ Song updated');
+}
+
 // ── DASHBOARD ──
 function renderMusicDash(c) {
   const songs = MDATA.filter(s => !s.removedFromPlaylist);
   const totalSecs = songs.reduce((a, s) => a + (s.duration || 0), 0);
   const artists = new Set(songs.map(s => s.artist).filter(Boolean)).size;
   const syncedPl = MPLAYLISTS.filter(p => p.synced).length;
+  const manualCount = songs.filter(s => s.manual).length;
 
   // Top artists
   const artistCounts = {};
@@ -452,23 +508,22 @@ function renderMusicDash(c) {
   const maxCount = topArtists[0]?.[1] || 1;
 
   c.innerHTML = `
-    <div style="font-family:var(--fd);font-size:18px;font-weight:700;margin-bottom:16px;color:var(--ac)">♪ Music Dashboard</div>
-    <div class="dash-grid" style="margin-bottom:20px">
-      <div class="dc"><div class="dc-v">${songs.length}</div><div class="dc-l">Songs</div></div>
-      <div class="dc"><div class="dc-v">${artists}</div><div class="dc-l">Artists</div></div>
-      <div class="dc"><div class="dc-v">${syncedPl}</div><div class="dc-l">Playlists</div></div>
-      <div class="dc"><div class="dc-v">${fmtTotalDuration(totalSecs)||'—'}</div><div class="dc-l">Total Time</div></div>
+    <div style="font-family:var(--fd);font-size:18px;font-weight:800;margin-bottom:20px;color:var(--ac);text-shadow:0 0 15px rgba(var(--ac-rgb),0.3);letter-spacing:0.5px">♪ Music Dashboard</div>
+    <div class="mu-dash-grid">
+      <div class="mu-dash-stat" style="animation-delay:0s"><div class="mu-dash-stat-v">${songs.length}</div><div class="mu-dash-stat-l">Songs</div></div>
+      <div class="mu-dash-stat" style="animation-delay:0.08s"><div class="mu-dash-stat-v">${artists}</div><div class="mu-dash-stat-l">Artists</div></div>
+      <div class="mu-dash-stat" style="animation-delay:0.16s"><div class="mu-dash-stat-v">${syncedPl}</div><div class="mu-dash-stat-l">Playlists</div></div>
+      <div class="mu-dash-stat" style="animation-delay:0.24s"><div class="mu-dash-stat-v">${fmtTotalDuration(totalSecs)||'—'}</div><div class="mu-dash-stat-l">Total Time</div></div>
     </div>
     ${topArtists.length ? `
-    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);padding:16px;max-width:480px">
-      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--mu);margin-bottom:12px">Top Artists</div>
-      ${topArtists.map(([artist, count]) => `
-        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--brd)">
-          <span style="flex:1;font-size:13px;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(artist)}</span>
-          <div style="width:100px;height:4px;background:var(--surf3);border-radius:2px;overflow:hidden;flex-shrink:0">
-            <div style="height:100%;width:${Math.round(count/maxCount*100)}%;background:var(--ac);border-radius:2px"></div>
-          </div>
-          <span style="font-size:12px;font-weight:700;color:var(--tx2);min-width:24px;text-align:right">${count}</span>
+    <div class="mu-artists-card">
+      <div class="mu-artists-title">Top Artists</div>
+      ${topArtists.map(([artist, count], i) => `
+        <div class="mu-artist-row">
+          <span class="mu-artist-rank${i<3?' top':''}">${i+1}</span>
+          <span class="mu-artist-name">${esc(artist)}</span>
+          <div class="mu-artist-bar-wrap"><div class="mu-artist-bar" style="width:${Math.round(count/maxCount*100)}%"></div></div>
+          <span class="mu-artist-cnt">${count}</span>
         </div>`).join('')}
     </div>` : ''}`;
 }
@@ -483,6 +538,7 @@ Object.assign(window, {
   openSongDetail, delSong,
   renderMusicPlaylists, togglePlaylistSync,
   openAddSong, saveManualSong,
+  openEditSong, saveEditSong,
   renderMusicDash,
   initYTAuth, updateMusicSyncBtn,
   parseISO8601Duration, fmtDuration, extractArtist,

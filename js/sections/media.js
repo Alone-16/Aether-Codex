@@ -344,7 +344,7 @@ function renderMedia(c) {
 
   renderMediaBody();
 
-  // Media Background Canvas (Magical Glowing Cherry Petals)
+  // Media Background Canvas (Cinematic Bokeh)
   setTimeout(() => {
     document.getElementById('media-interactive-bg')?.remove();
     const cvs = document.createElement('canvas');
@@ -352,74 +352,39 @@ function renderMedia(c) {
     cvs.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:0; pointer-events:none; opacity:1;';
     document.body.appendChild(cvs);
 
-    const ctx = cvs.getContext('2d', { alpha: true });
+    const ctx = cvs.getContext('2d');
     let w = window.innerWidth, h = window.innerHeight;
-    
-    // High-DPI Scaling for Crystal Clear Leaves
-    function setSize() {
-      w = window.innerWidth;
-      h = window.innerHeight;
-      let dpr = window.devicePixelRatio || 1;
-      cvs.width = w * dpr;
-      cvs.height = h * dpr;
-      ctx.scale(dpr, dpr);
-    }
-    setSize();
+    cvs.width = w; cvs.height = h;
 
-    let p = [];
-    let num = w < 768 ? 40 : 80; // Optimized leaf density
     let style = getComputedStyle(document.documentElement);
     let acRgb = style.getPropertyValue('--ac-rgb').trim() || '125,211,252';
-    
-    // Pre-render the complex vector petal to an offscreen canvas
-    // This provides a massive performance boost by avoiding path/gradient/shadow calculations per frame
-    const pCvs = document.createElement('canvas');
-    const pr = 20; // Base radius for high-res prerender
-    pCvs.width = pr * 6; // Padding for shadow blur
-    pCvs.height = pr * 6;
-    const pCtx = pCvs.getContext('2d');
-    
-    pCtx.translate(pCvs.width / 2, pCvs.height / 2);
-    pCtx.beginPath();
-    pCtx.moveTo(0, -pr * 1.6);
-    pCtx.bezierCurveTo(pr * 1.2, -pr * 0.4, pr * 0.9, pr * 1.1, 0.25 * pr, pr * 1.3);
-    pCtx.lineTo(0, pr * 1.05); 
-    pCtx.lineTo(-0.25 * pr, pr * 1.3);
-    pCtx.bezierCurveTo(-pr * 0.9, pr * 1.1, -pr * 1.2, -pr * 0.4, 0, -pr * 1.6);
-    
-    pCtx.shadowColor = `rgba(${acRgb}, 0.8)`;
-    pCtx.shadowBlur = pr * 1.2;
-    
-    let baseGrad = pCtx.createLinearGradient(0, -pr * 1.6, 0, pr * 1.3);
-    baseGrad.addColorStop(0, `rgba(${acRgb}, 1)`);
-    baseGrad.addColorStop(0.6, `rgba(${acRgb}, 0.6)`);
-    baseGrad.addColorStop(1, `rgba(${acRgb}, 0.1)`);
-    pCtx.fillStyle = baseGrad; 
-    pCtx.fill();
-    
+
+    // Cinematic bokeh orbs — varying sizes, gentle upward drift, pulsing glow
+    let num = w < 768 ? 25 : 50;
+    let orbs = [];
     for (let i = 0; i < num; i++) {
-      p.push({
-        x: Math.random() * w, y: Math.random() * h,
-        r: Math.random() * 6 + 4, // Slightly larger base scale
-        vx: (Math.random() - 0.5) * 0.5, // Relaxed horizontal drift
-        vy: Math.random() * 0.5 + 0.3, // Greatly reduced fall speed for serenity
-        angle: Math.random() * Math.PI * 2,
-        spin: (Math.random() - 0.5) * 0.02, // Gentle rotation
-        swayAmp: Math.random() * 0.8 + 0.4, // Mellow pendulum swing
-        swaySpeed: Math.random() * 0.015 + 0.005,
-        time: Math.random() * 100,
-        glowPulse: Math.random() * Math.PI * 2,
-        glowSpeed: Math.random() * 0.02 + 0.01
+      orbs.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        r: Math.random() * 5 + 2,          // radius 2–7px
+        vy: -(Math.random() * 0.2 + 0.08),  // slow upward drift
+        vx: (Math.random() - 0.5) * 0.15,   // very gentle horizontal drift
+        swayAmp: Math.random() * 0.3 + 0.1,
+        swaySpeed: Math.random() * 0.008 + 0.003,
+        phase: Math.random() * Math.PI * 2,
+        pulsePhase: Math.random() * Math.PI * 2,
+        pulseSpeed: Math.random() * 0.015 + 0.008,
+        baseAlpha: Math.random() * 0.2 + 0.08, // 0.08–0.28 opacity
       });
     }
-    
+
     let mx = -999, my = -999;
     if (window._mediaBgListener) window.removeEventListener('mousemove', window._mediaBgListener);
     window._mediaBgListener = e => { mx = e.clientX; my = e.clientY; };
     window.addEventListener('mousemove', window._mediaBgListener);
-    
+
     if (window._mediaBgResize) window.removeEventListener('resize', window._mediaBgResize);
-    window._mediaBgResize = () => { if(cvs) setSize(); };
+    window._mediaBgResize = () => { if (cvs) { w = cvs.width = window.innerWidth; h = cvs.height = window.innerHeight; } };
     window.addEventListener('resize', window._mediaBgResize);
 
     function draw() {
@@ -430,65 +395,55 @@ function renderMedia(c) {
         return;
       }
       ctx.clearRect(0, 0, w, h);
-      
-      // Global comp to blend glowing petals beautifully
-      ctx.globalCompositeOperation = 'screen';
-      
-      for (let i = 0; i < p.length; i++) {
-        let a = p[i];
-        a.time += a.swaySpeed;
-        a.glowPulse += a.glowSpeed;
-        
-        let dx = a.x - mx, dy = a.y - my, dist = dx * dx + dy * dy;
-        
-        // Initialize momentum property if missing
-        a.pushX = a.pushX || 0;
-        
-        // Dynamic sideways wind scattering when mouse is near
-        if (dist < 50000) {
-          let force = (50000 - dist) / 50000;
-          let dir = dx > 0 ? 1 : -1;
-          // Add horizontal momentum (stronger closer to center)
-          a.pushX += dir * force * 0.8;
-          // Add a burst of spin due to the wind
-          a.spin += dir * force * 0.008;
+
+      for (let i = 0; i < orbs.length; i++) {
+        let o = orbs[i];
+        o.phase += o.swaySpeed;
+        o.pulsePhase += o.pulseSpeed;
+
+        // Gentle sway + drift
+        o.x += o.vx + Math.sin(o.phase) * o.swayAmp;
+        o.y += o.vy;
+
+        // Wrap: respawn at bottom when an orb drifts above top
+        if (o.y < -o.r * 4) {
+          o.y = h + o.r * 4;
+          o.x = Math.random() * w;
+        }
+        // Horizontal wrap
+        if (o.x < -30) o.x = w + 30;
+        if (o.x > w + 30) o.x = -30;
+
+        // Mouse attraction — gentle pull toward cursor
+        let dx = mx - o.x, dy = my - o.y;
+        let dist = dx * dx + dy * dy;
+        if (dist < 40000 && dist > 1) {
+          let pull = 0.3 / Math.sqrt(dist);
+          o.x += dx * pull;
+          o.y += dy * pull;
         }
 
-        // Apply air friction to wind push and spin burst
-        a.pushX *= 0.92;
-        // Slowly return spin to original normal gentle speed (-0.02 to 0.02)
-        if (a.spin > 0.02) a.spin -= 0.001;
-        if (a.spin < -0.02) a.spin += 0.001;
+        // Pulsing opacity
+        let pulse = (Math.sin(o.pulsePhase) + 1) * 0.5; // 0–1
+        let alpha = o.baseAlpha + pulse * 0.15;
 
-        let currentVx = a.vx + a.pushX + Math.sin(a.time) * a.swayAmp;
+        // Draw soft bokeh circle with radial gradient
+        let grad = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r * 2);
+        grad.addColorStop(0, `rgba(${acRgb}, ${alpha})`);
+        grad.addColorStop(0.5, `rgba(${acRgb}, ${alpha * 0.4})`);
+        grad.addColorStop(1, `rgba(${acRgb}, 0)`);
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, o.r * 2, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
 
-        a.x += currentVx; 
-        a.y += a.vy;
-        a.angle += a.spin;
-        
-        if (a.y > h + 50) {
-          a.y = -50;
-          a.x = Math.random() * w;
-        }
-        if (a.x < -50) a.x = w + 50;
-        if (a.x > w + 50) a.x = -50;
-        
-        ctx.save();
-        ctx.translate(a.x, a.y);
-        ctx.rotate(a.angle);
-        
-        // Scale according to particle radius vs pre-rendered radius
-        let scale = a.r / pr;
-        ctx.scale(scale, scale);
-        
-        // Dynamic magical glow effect via global alpha (hardware accelerated)
-        let currentGlow = (Math.sin(a.glowPulse) + 1) / 2; // 0 to 1
-        ctx.globalAlpha = 0.4 + currentGlow * 0.6;
-        
-        ctx.drawImage(pCvs, -pCvs.width / 2, -pCvs.height / 2);
-        ctx.restore();
+        // Bright inner core
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, o.r * 0.5, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${acRgb}, ${alpha * 1.2})`;
+        ctx.fill();
       }
-      ctx.globalCompositeOperation = 'source-over';
+
       requestAnimationFrame(draw);
     }
     draw();
@@ -612,6 +567,7 @@ function renderList(c) {
   });
 
   c.innerHTML = html;
+  _observeCardVisibility(c);
 }
 
 function toggleColl(s) {
@@ -646,9 +602,9 @@ function rowHtml(e, idx = 0) {
   const grpBadge = e.linkedGroupId
     ? `<span style="font-size:9px;font-weight:700;background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2);border-radius:3px;padding:1px 4px">🔗</span>` : '';
 
-  return `<div class="m-card${isA ? ' m-card-active' : ''}${e.pinned ? ' m-card-pinned' : ''}" id="row-${e.id}" style="--card-glow:${col};--status-col:${col};animation-delay:${idx*0.04}s"
+  return `<div class="m-card m-card-lazy${isA ? ' m-card-active' : ''}${e.pinned ? ' m-card-pinned' : ''}" id="row-${e.id}" style="--card-glow:${col};--status-col:${col}"
     onclick="if(window._HOLD_FIRED){window._HOLD_FIRED=false;return;}openDetail('${e.id}')"
-    onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-8+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*8+'deg')"
+    onmousemove="_throttledTilt(this,event)"
     onmousedown="startHold('${e.id}',event)"
     onmouseup="cancelHold()"
     onmouseleave="cancelHold();this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')"
@@ -750,15 +706,15 @@ function renderDash(c) {
   c.innerHTML = `
     <div class="m-dash-title">◉ ${esc(g.name)} <span>// dashboard</span></div>
     <div class="m-dash-grid">
-      ${stats.map((s,i) => `<div class="m-dash-stat" style="--card-glow:rgba(var(--ac-rgb),0.5);animation-delay:${i*0.04}s" onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-8+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*8+'deg')" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')"><div class="m-dash-stat-v">${s.v}</div><div class="m-dash-stat-l">${s.l}</div></div>`).join('')}
+      ${stats.map((s,i) => `<div class="m-dash-stat m-card-lazy" style="--card-glow:rgba(var(--ac-rgb),0.5)" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')"><div class="m-dash-stat-v">${s.v}</div><div class="m-dash-stat-l">${s.l}</div></div>`).join('')}
     </div>
     <div class="m-dash-time-row">
-      <div class="m-dash-tc" style="--card-glow:rgba(var(--ac-rgb),0.5);animation-delay:0.3s" onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-6+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*6+'deg')" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
+      <div class="m-dash-tc m-card-lazy" style="--card-glow:rgba(var(--ac-rgb),0.5)" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
         <div class="m-dash-tc-v">${fmtMin(totalMin)}</div>
         <div class="m-dash-tc-l">Time Watched</div>
         <div class="m-dash-tc-d">${(totalMin/60).toFixed(0)} hours total</div>
       </div>
-      <div class="m-dash-tc" style="--card-glow:rgba(var(--ac-rgb),0.5);animation-delay:0.38s" onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-6+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*6+'deg')" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
+      <div class="m-dash-tc m-card-lazy" style="--card-glow:rgba(var(--ac-rgb),0.5)" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
         <div class="m-dash-tc-v">${Math.floor(totalMin/1440)}</div>
         <div class="m-dash-tc-l">Days Watched</div>
         <div class="m-dash-tc-d">of continuous watching</div>
@@ -768,8 +724,8 @@ function renderDash(c) {
       <div class="m-dash-genres-title">All Genres</div>
       ${genreRows || '<div style="color:var(--mu);font-size:13px">No data</div>'}
     </div>`;
+  _observeCardVisibility(c);
 }
-
 /* ═══════════════════════════════
    UPCOMING
 ═══════════════════════════════ */
@@ -789,7 +745,7 @@ function renderUpcoming(c) {
     if (diff<=0)  { cls='m-up-past'; lbl='Released'; }
     else if (diff<=3)  { cls='m-up-soon'; lbl=`${diff}d left`; }
     else if (diff<=14) { cls='m-up-near'; lbl=`${diff}d`; }
-    return `<div class="m-up-card" onclick="openDetail('${it.id}')" style="--card-glow:#fb923c;animation-delay:${i*0.04}s" onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-6+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*6+'deg')" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
+    return `<div class="m-up-card m-card-lazy" onclick="openDetail('${it.id}')" style="--card-glow:#fb923c" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
       <div class="m-up-date"><div class="m-up-mon">${mon}</div><div class="m-up-day">${d.getDate()}</div></div>
       <div class="m-up-info">
         <div class="m-up-title">${esc(it.title)}</div>
@@ -802,6 +758,7 @@ function renderUpcoming(c) {
   c.innerHTML = `
     <div class="m-dash-title">🗓 Upcoming <span>// ${esc(gbyid(GACTIVE).name)}</span></div>
     ${rows || `<div class="m-empty"><p class="m-empty-title">Nothing scheduled</p><p class="m-empty-sub">Upcoming releases you add will show here</p></div>`}`;
+  _observeCardVisibility(c);
 }
 
 /* ═══════════════════════════════
@@ -829,7 +786,7 @@ function renderIncomplete(c) {
     const first = sorted[0];
     const done = members.filter(linkedPartIsComplete).length;
     const leadCol = _mediaStatusBar(lead.status);
-    return `<div class="m-card" onclick="openDetail('${first.id}')" style="--card-glow:${leadCol};--status-col:${leadCol};animation-delay:${i*0.04}s" onmousemove="const r=this.getBoundingClientRect(),x=event.clientX-r.left,y=event.clientY-r.top;this.style.setProperty('--mouse-x',x+'px');this.style.setProperty('--mouse-y',y+'px');this.style.setProperty('--rot-x',((y/r.height)-0.5)*-6+'deg');this.style.setProperty('--rot-y',((x/r.width)-0.5)*6+'deg')" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
+    return `<div class="m-card m-card-lazy" onclick="openDetail('${first.id}')" style="--card-glow:${leadCol};--status-col:${leadCol}" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
       <div class="m-card-strip" style="--strip-col:${leadCol}"></div>
       <div class="m-card-body">
         <div class="m-card-info">
@@ -848,6 +805,7 @@ function renderIncomplete(c) {
   c.innerHTML = `
     <div class="m-dash-title">⚠ Incomplete Series <span>// ${esc(gbyid(GACTIVE).name)}</span></div>
     ${rows || `<div class="m-empty"><p class="m-empty-title">All caught up</p><p class="m-empty-sub">No incomplete linked series in this list</p></div>`}`;
+  _observeCardVisibility(c);
 }
 
 /* ═══════════════════════════════
@@ -1558,6 +1516,70 @@ function askDel(id) {
    PIN + LONG-PRESS CONTEXT MENU
 ═══════════════════════════════ */
 
+/* ═══════════════════════════════
+   LAZY CARD VISIBILITY (IntersectionObserver)
+   Cards start hidden (.m-card-lazy) and animate in
+   only when they scroll into the viewport.
+═══════════════════════════════ */
+let _cardObserver = null;
+
+function _observeCardVisibility(container) {
+  // Disconnect any previous observer to avoid leaks
+  if (_cardObserver) _cardObserver.disconnect();
+
+  const lazyCards = container.querySelectorAll('.m-card-lazy');
+  if (!lazyCards.length) return;
+
+  // Stagger counter: cards entering the viewport at the same time
+  // get a small sequential delay for a wave effect
+  let batchIndex = 0;
+  let batchFrame = null;
+
+  _cardObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const el = entry.target;
+        // Assign a stagger delay within the current animation frame batch
+        const delay = batchIndex * 0.04;
+        el.style.animationDelay = delay + 's';
+        el.classList.add('m-card-visible');
+        batchIndex++;
+        _cardObserver.unobserve(el);
+
+        // Reset batch counter after a frame so the next scroll
+        // batch starts its own wave from 0
+        if (!batchFrame) {
+          batchFrame = requestAnimationFrame(() => {
+            batchIndex = 0;
+            batchFrame = null;
+          });
+        }
+      }
+    });
+  }, {
+    rootMargin: '100px 0px',  // Start animating 100px before entering viewport
+    threshold: 0
+  });
+
+  lazyCards.forEach(card => _cardObserver.observe(card));
+}
+
+/* ── Throttled 3D Tilt (rAF-based) ── */
+let _tiltFrame = null;
+function _throttledTilt(el, event) {
+  if (_tiltFrame) return;
+  _tiltFrame = requestAnimationFrame(() => {
+    const r = el.getBoundingClientRect();
+    const x = event.clientX - r.left;
+    const y = event.clientY - r.top;
+    el.style.setProperty('--mouse-x', x + 'px');
+    el.style.setProperty('--mouse-y', y + 'px');
+    el.style.setProperty('--rot-x', ((y / r.height) - 0.5) * -8 + 'deg');
+    el.style.setProperty('--rot-y', ((x / r.width) - 0.5) * 8 + 'deg');
+    _tiltFrame = null;
+  });
+}
+
 function _injectPremiumStyles() {
   if (document.getElementById('m-premium-styles')) return;
   const s = document.createElement('style');
@@ -1702,8 +1724,6 @@ function _injectPremiumStyles() {
     .m-card, .m-dash-stat, .m-dash-tc, .m-up-card {
       transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.5s ease, border-color 0.5s ease, background 0.5s ease;
       position: relative;
-      animation: staggeredFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) backwards;
-      animation-fill-mode: both;
       transform-style: preserve-3d;
       transform: perspective(1200px) rotateX(var(--rot-x, 0)) rotateY(var(--rot-y, 0)) translateY(0);
       
@@ -1713,6 +1733,17 @@ function _injectPremiumStyles() {
       border: 1px solid rgba(255, 255, 255, 0.08) !important;
       border-radius: 16px !important;
       overflow: hidden !important;
+      contain: layout style paint;
+      will-change: transform, opacity;
+    }
+
+    /* Lazy visibility: cards start hidden, animate in when observed */
+    .m-card-lazy {
+      opacity: 0;
+      transform: translateY(30px) scale(0.95);
+    }
+    .m-card-lazy.m-card-visible {
+      animation: staggeredFadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
     
     /* Glowing spotlight effect that follows mouse */
@@ -2268,4 +2299,7 @@ Object.assign(window, {
 
   // Filter chips
   _renderFilterChips,
+
+  // Performance: lazy visibility & throttled tilt
+  _throttledTilt, _observeCardVisibility,
 });
