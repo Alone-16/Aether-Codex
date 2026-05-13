@@ -433,6 +433,11 @@ function renderGames(c) {
       #games-body .row, .up-card, .dash-grid .dc {
         animation: gameCardEnter 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
       }
+      .m-card-slot { width: 100%; position: relative; contain: layout style; }
+      #games-body .row.m-card-lazy, .up-card.m-card-lazy { opacity: 0; transform: translateY(20px) scale(0.96); animation: none; }
+      #games-body .row.m-card-lazy.m-card-visible, .up-card.m-card-lazy.m-card-visible {
+        animation: gameCardEnter 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
       .prog-fill {
         transform-origin: left;
         animation: progFillEnter 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -611,10 +616,17 @@ function renderGamesLibrary(c) {
   GS_ORDER.forEach(s => { 
     byStatus[s] = publicGames.filter(g => g.status === s).sort((a,b) => (b.pinned?1:0) - (a.pinned?1:0)); 
   });
+
+  const cardHtmls = [];
   GS_ORDER.forEach(s => {
     const rows = byStatus[s]; if(!rows?.length) return;
     const [col, lbl] = GS_SECTION[s];
     const coll = GCOLLAPSED['g_'+s];
+    const rowSlots = rows.map((g, i) => {
+      const rHtml = gameRowHtml(g, i);
+      cardHtmls.push(rHtml);
+      return _cardSlot(rHtml, g.id);
+    }).join('');
     html += `<div class="ss-section">
       <div class="ss-head" onclick="toggleGColl('${s}')">
         <span class="ss-lbl" style="color:${col}">${lbl}</span>
@@ -623,7 +635,7 @@ function renderGamesLibrary(c) {
         <span class="ss-arr${coll?' coll':''}">▾</span>
       </div>
       <div class="ss-rows${coll?' coll':''}">
-        ${rows.map((g, i) => gameRowHtml(g, i)).join('')}
+        ${rowSlots}
       </div>
     </div>`;
   });
@@ -631,6 +643,11 @@ function renderGamesLibrary(c) {
   // 18+ section
   if (adultGames.length) {
     const sortedAdults = adultGames.sort((a,b) => (b.pinned?1:0) - (a.pinned?1:0));
+    const adultSlots = sortedAdults.map((g, i) => {
+      const rHtml = gameRowHtml(g, i);
+      cardHtmls.push(rHtml);
+      return _cardSlot(rHtml, g.id);
+    }).join('');
     html += `<div class="ss-section" style="margin-top:16px">
       <div style="display:flex;align-items:center;gap:10px;padding:10px 0 8px;border-top:1px solid var(--brd)">
         <span style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:#fb7185">🔞 Adult Games</span>
@@ -638,12 +655,14 @@ function renderGamesLibrary(c) {
         ${!GAMES_UNLOCKED ? `<button onclick="unlockGames()" style="background:rgba(251,113,133,.1);color:#fb7185;border:1px solid rgba(251,113,133,.25);border-radius:4px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer">🔒 Unlock</button>` : ''}
       </div>
       <div style="display:flex;flex-direction:column;gap:2px;${!GAMES_UNLOCKED?'filter:blur(6px);pointer-events:none;user-select:none':''}">
-        ${sortedAdults.map((g, i) => gameRowHtml(g, i)).join('')}
+        ${adultSlots}
       </div>
     </div>`;
   }
 
   c.innerHTML = html;
+  _hydrateSlots(c, cardHtmls);
+  _observeCardVisibility(c);
 }
 
 function gameRowHtml(g, idx = 0) {
@@ -654,7 +673,7 @@ function gameRowHtml(g, idx = 0) {
   const activePart = pt.find(p => p.status === 'playing') || pt.find(p=>p.status==='on_hold') || pt[pt.length-1];
   const hours = g.totalHours || 0;
 
-  return `<div class="row${isActive?' active-row':''}${g.pinned?' m-card-pinned':''}" id="grow-${g.id}" style="animation-delay:${idx * 0.04}s" 
+  return `<div class="row m-card-lazy${isActive?' active-row':''}${g.pinned?' m-card-pinned':''}" id="grow-${g.id}"
     onclick="if(window._G_HOLD_FIRED){window._G_HOLD_FIRED=false;return;}openGameDetail('${g.id}')"
     onmousedown="startGamesHold('${g.id}',event)"
     onmouseup="cancelGamesHold()"
@@ -1388,6 +1407,7 @@ function renderGamesUpcoming(c) {
   const now = new Date(); now.setHours(0,0,0,0);
   const items = GDATA.filter(g=>g.upcomingDate).map(g=>({...g, date:g.upcomingDate}));
   items.sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const cardHtmls = [];
   const rows = items.map((g, i) => {
     const d = new Date(g.date+'T00:00:00');
     const diff = Math.ceil((d-now)/86400000);
@@ -1396,14 +1416,18 @@ function renderGamesUpcoming(c) {
     if(diff<=0){cls='up-past';lbl='Released';}
     else if(diff<=3){cls='up-soon';lbl=`${diff}d left`;}
     else if(diff<=14){cls='up-near';lbl=`${diff}d`;}
-    return `<div class="up-card" style="animation-delay:${i * 0.04}s" onclick="openGameDetail('${g.id}')">
+    const html = `<div class="up-card m-card-lazy" onclick="openGameDetail('${g.id}')">
       <div class="up-date-box"><div class="up-mon">${mon}</div><div class="up-day">${d.getDate()}</div></div>
       <div class="up-info"><div class="up-title">${esc(g.title)}</div><div class="up-sub">${PLAT_LABEL[g.platform]||''}</div></div>
       <div class="up-pill ${cls}">${lbl}</div>
     </div>`;
+    cardHtmls.push(html);
+    return _cardSlot(html, g.id);
   }).join('');
   c.innerHTML = `<div style="font-family:var(--fd);font-size:18px;font-weight:700;margin-bottom:16px;letter-spacing:2px;text-transform:uppercase;color:var(--ac)">🗓 Upcoming Games</div>
     ${rows||`<div class="empty"><div class="empty-ico">📅</div><p>No upcoming games</p></div>`}`;
+  _hydrateSlots(c, cardHtmls);
+  _observeCardVisibility(c);
 }
 
 

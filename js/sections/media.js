@@ -2363,5 +2363,5 @@ Object.assign(window, {
   _renderFilterChips,
 
   // Performance: lazy visibility & throttled tilt
-  _throttledTilt, _observeCardVisibility,
+  _throttledTilt, _observeCardVisibility, _cardSlot, _hydrateSlots,
 });

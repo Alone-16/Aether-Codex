@@ -209,6 +209,13 @@ function updateMusicSyncBtn(state) {
 function renderMusic(c) {
   const tabs = ['Library', 'Playlists', 'Dashboard'];
   c.innerHTML = `
+    <style>
+      .m-card-slot { width: 100%; position: relative; contain: layout style; }
+      .mu-row.m-card-lazy, .mu-pl-card.m-card-lazy { opacity: 0; transform: translateY(20px) scale(0.96); animation: none; }
+      .mu-row.m-card-lazy.m-card-visible, .mu-pl-card.m-card-lazy.m-card-visible {
+        animation: mu-cardEnter 0.5s cubic-bezier(0.16,1,0.3,1) both;
+      }
+    </style>
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
       <div class="sub-tabs">
         ${tabs.map((t,i) => `<button class="stab${MUSIC_PAGE===['library','playlists','dashboard'][i]?' active':''}" onclick="setMusicPage('${['library','playlists','dashboard'][i]}')">${t}</button>`).join('')}
@@ -261,16 +268,25 @@ function renderMusicLibrary(c) {
   }
 
   const totalSecs = songs.reduce((a, s) => a + (s.duration || 0), 0);
+  const cardHtmls = [];
+  const rows = songs.map((s, i) => {
+    const html = songRowHtml(s, i);
+    cardHtmls.push(html);
+    return _cardSlot(html, s.id);
+  }).join('');
+
   c.innerHTML = `
     <div class="mu-cnt-lbl">${songs.length} song${songs.length!==1?'s':''} · ${fmtTotalDuration(totalSecs)}</div>
     <div style="display:flex;flex-direction:column;gap:0">
-      ${songs.map((s,i) => songRowHtml(s,i)).join('')}
+      ${rows}
     </div>`;
+  _hydrateSlots(c, cardHtmls);
+  _observeCardVisibility(c);
 }
 
 function songRowHtml(s, idx=0) {
   const hasLyrics = !!(s.lyrics || s.lyricsLink);
-  return `<div class="mu-row" style="animation-delay:${idx*0.04}s" onclick="openSongDetail('${s.id}')">
+  return `<div class="mu-row m-card-lazy" onclick="openSongDetail('${s.id}')">
     <div class="mu-row-bar" style="background:var(--ac)"></div>
     ${s.thumbnail ? `<img src="${esc(s.thumbnail)}" class="mu-thumb" onerror="this.style.display='none'">` : '<div class="mu-thumb-ph">♪</div>'}
     <div class="mu-info">
@@ -363,10 +379,11 @@ function renderMusicPlaylists(c) {
     return;
   }
 
+  const cardHtmls = [];
   const cards = MPLAYLISTS.map((pl,i) => {
     const songCount = MDATA.filter(s => s.playlistId === pl.id && !s.removedFromPlaylist).length;
     const isSynced = pl.synced;
-    return `<div class="mu-pl-card" style="animation-delay:${i*0.06}s">
+    const cardHtml = `<div class="mu-pl-card m-card-lazy">
       ${pl.thumbnail?`<img src="${esc(pl.thumbnail)}" class="mu-pl-thumb" onerror="this.style.display='none'">`:'<div class="mu-pl-thumb-ph">♪</div>'}
       <div class="mu-pl-info">
         <div class="mu-pl-title">${esc(pl.title)}</div>
@@ -377,9 +394,13 @@ function renderMusicPlaylists(c) {
         ${isSynced?'✓ Synced':'+ Sync'}
       </button>
     </div>`;
+    cardHtmls.push(cardHtml);
+    return _cardSlot(cardHtml, pl.id);
   }).join('');
 
   c.innerHTML = `<div class="mu-cnt-lbl">${MPLAYLISTS.length} playlist${MPLAYLISTS.length!==1?'s':''} found</div>${cards}`;
+  _hydrateSlots(c, cardHtmls);
+  _observeCardVisibility(c);
 }
 
 async function togglePlaylistSync(id) {
