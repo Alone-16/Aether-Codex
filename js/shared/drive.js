@@ -239,14 +239,14 @@ function _showRedirectingOverlay(service = 'Google') {
   d.id = '_oauth_overlay';
   d.style.cssText = [
     'position:fixed;inset:0;z-index:99999',
-    'background:#070d0b',
+    'background:var(--bg)',
     'display:flex;flex-direction:column;align-items:center;justify-content:center',
-    'gap:16px;color:#7aab95;font-family:Outfit,sans-serif;font-size:14px',
+    'gap:16px;color:var(--tx2);font-family:Outfit,sans-serif;font-size:14px',
   ].join(';');
   d.innerHTML = `
-    <div style="font-family:'Outfit',sans-serif;font-size:22px;font-weight:700;color:#38bdf8">The Aether Codex</div>
+    <div style="font-family:'Outfit',sans-serif;font-size:22px;font-weight:700;color:var(--ac)">The Aether Codex</div>
     <div style="display:flex;align-items:center;gap:8px">
-      <div style="width:18px;height:18px;border:2px solid rgba(255,255,255,.1);border-top-color:#38bdf8;border-radius:50%;animation:_spin .7s linear infinite"></div>
+      <div style="width:18px;height:18px;border:2px solid rgba(255,255,255,.1);border-top-color:var(--ac);border-radius:50%;animation:_spin .7s linear infinite"></div>
       Redirecting to ${service}…
     </div>
     <style>@keyframes _spin{to{transform:rotate(360deg)}}</style>`;
@@ -337,12 +337,12 @@ function _showSigningInBanner() {
   d.id = '_oauth_banner';
   d.style.cssText = [
     'position:fixed;top:0;left:0;right:0;z-index:99999',
-    'background:#0d1512;border-bottom:1px solid #1e3329',
+    'background:var(--surf);border-bottom:1px solid var(--brd)',
     'padding:10px 16px;display:flex;align-items:center;gap:10px',
-    'font-family:Outfit,sans-serif;font-size:13px;color:#7aab95',
+    'font-family:Outfit,sans-serif;font-size:13px;color:var(--tx2)',
   ].join(';');
   d.innerHTML = `
-    <div style="width:16px;height:16px;border:2px solid rgba(255,255,255,.1);border-top-color:#38bdf8;border-radius:50%;animation:_spin .7s linear infinite;flex-shrink:0"></div>
+    <div style="width:16px;height:16px;border:2px solid rgba(255,255,255,.1);border-top-color:var(--ac);border-radius:50%;animation:_spin .7s linear infinite;flex-shrink:0"></div>
     Completing Google sign-in…`;
   document.body.prepend(d);
 }
