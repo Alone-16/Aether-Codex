@@ -548,10 +548,19 @@ function renderList(c) {
   const byS = {};
   SO.forEach(s => { byS[s] = flat.filter(r => r.status === s); });
 
+  // Collect card HTML for slot hydration
+  const allCardHtmls = [];
+
   SO.forEach(s => {
     const rows = byS[s]; if (!rows?.length) return;
     const meta = STATUS_META[s] || { lbl:s, cls:'not_started' };
     const coll = COLLAPSED[GACTIVE + '_' + s];
+    // Generate slots instead of full card HTML
+    const slotHtmls = rows.map((r, i) => {
+      const cardHtml = rowHtml(r.e, i);
+      allCardHtmls.push(cardHtml);
+      return _cardSlot(cardHtml, r.e.id);
+    });
     html += `
       <div class="m-section">
         <div class="m-sec-head" onclick="toggleColl('${s}')">
@@ -561,12 +570,13 @@ function renderList(c) {
           <span class="m-sec-arr${coll ? ' coll' : ''}">▾</span>
         </div>
         <div class="m-rows${coll ? ' coll' : ''}">
-          ${rows.map((r, i) => rowHtml(r.e, i)).join('')}
+          ${slotHtmls.join('')}
         </div>
       </div>`;
   });
 
   c.innerHTML = html;
+  _hydrateSlots(c, allCardHtmls);
   _observeCardVisibility(c);
 }
 
@@ -737,6 +747,7 @@ function renderUpcoming(c) {
   });
   items.sort((a,b) => new Date(a.date)-new Date(b.date));
 
+  const cardHtmls = [];
   const rows = items.map((it, i) => {
     const d    = new Date(it.date + 'T00:00:00');
     const diff = Math.ceil((d-now)/86400000);
@@ -745,7 +756,7 @@ function renderUpcoming(c) {
     if (diff<=0)  { cls='m-up-past'; lbl='Released'; }
     else if (diff<=3)  { cls='m-up-soon'; lbl=`${diff}d left`; }
     else if (diff<=14) { cls='m-up-near'; lbl=`${diff}d`; }
-    return `<div class="m-up-card m-card-lazy" onclick="openDetail('${it.id}')" style="--card-glow:#fb923c" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
+    const cardHtml = `<div class="m-up-card m-card-lazy" onclick="openDetail('${it.id}')" style="--card-glow:#fb923c" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
       <div class="m-up-date"><div class="m-up-mon">${mon}</div><div class="m-up-day">${d.getDate()}</div></div>
       <div class="m-up-info">
         <div class="m-up-title">${esc(it.title)}</div>
@@ -753,11 +764,14 @@ function renderUpcoming(c) {
       </div>
       <div class="m-up-pill ${cls}">${lbl}</div>
     </div>`;
+    cardHtmls.push(cardHtml);
+    return _cardSlot(cardHtml, it.id);
   }).join('');
 
   c.innerHTML = `
     <div class="m-dash-title">🗓 Upcoming <span>// ${esc(gbyid(GACTIVE).name)}</span></div>
     ${rows || `<div class="m-empty"><p class="m-empty-title">Nothing scheduled</p><p class="m-empty-sub">Upcoming releases you add will show here</p></div>`}`;
+  _hydrateSlots(c, cardHtmls);
   _observeCardVisibility(c);
 }
 
@@ -779,6 +793,7 @@ function renderIncomplete(c) {
     return someDone && someLeft;
   });
 
+  const cardHtmls = [];
   const rows = incompleteGroups.map((members, i) => {
     const sorted = [...members].sort((a, b) => (a.linkedGroupOrder ?? 0) - (b.linkedGroupOrder ?? 0));
     const firstIncomplete = sorted.find(e => !linkedPartIsComplete(e));
@@ -786,7 +801,7 @@ function renderIncomplete(c) {
     const first = sorted[0];
     const done = members.filter(linkedPartIsComplete).length;
     const leadCol = _mediaStatusBar(lead.status);
-    return `<div class="m-card m-card-lazy" onclick="openDetail('${first.id}')" style="--card-glow:${leadCol};--status-col:${leadCol}" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
+    const cardHtml = `<div class="m-card m-card-lazy" onclick="openDetail('${first.id}')" style="--card-glow:${leadCol};--status-col:${leadCol}" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
       <div class="m-card-strip" style="--strip-col:${leadCol}"></div>
       <div class="m-card-body">
         <div class="m-card-info">
@@ -800,11 +815,14 @@ function renderIncomplete(c) {
         </div>
       </div>
     </div>`;
+    cardHtmls.push(cardHtml);
+    return _cardSlot(cardHtml, first.id);
   }).join('');
 
   c.innerHTML = `
     <div class="m-dash-title">⚠ Incomplete Series <span>// ${esc(gbyid(GACTIVE).name)}</span></div>
     ${rows || `<div class="m-empty"><p class="m-empty-title">All caught up</p><p class="m-empty-sub">No incomplete linked series in this list</p></div>`}`;
+  _hydrateSlots(c, cardHtmls);
   _observeCardVisibility(c);
 }
 
@@ -1517,51 +1535,88 @@ function askDel(id) {
 ═══════════════════════════════ */
 
 /* ═══════════════════════════════
-   LAZY CARD VISIBILITY (IntersectionObserver)
-   Cards start hidden (.m-card-lazy) and animate in
-   only when they scroll into the viewport.
+   VIRTUAL SCROLL (IntersectionObserver)
+   Cards load when scrolling into view AND unload
+   when scrolling out, keeping only visible cards
+   in the DOM for maximum smoothness.
 ═══════════════════════════════ */
 let _cardObserver = null;
+// Map of slot element -> { html, height } for re-hydration
+const _slotCache = new WeakMap();
 
 function _observeCardVisibility(container) {
-  // Disconnect any previous observer to avoid leaks
   if (_cardObserver) _cardObserver.disconnect();
 
-  const lazyCards = container.querySelectorAll('.m-card-lazy');
-  if (!lazyCards.length) return;
+  const slots = container.querySelectorAll('.m-card-slot');
+  if (!slots.length) return;
 
-  // Stagger counter: cards entering the viewport at the same time
-  // get a small sequential delay for a wave effect
   let batchIndex = 0;
   let batchFrame = null;
 
   _cardObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const el = entry.target;
-        // Assign a stagger delay within the current animation frame batch
-        const delay = batchIndex * 0.04;
-        el.style.animationDelay = delay + 's';
-        el.classList.add('m-card-visible');
-        batchIndex++;
-        _cardObserver.unobserve(el);
+      const slot = entry.target;
+      const cache = _slotCache.get(slot);
+      if (!cache) return;
 
-        // Reset batch counter after a frame so the next scroll
-        // batch starts its own wave from 0
+      if (entry.isIntersecting) {
+        // ── LOAD: populate card HTML into the slot ──
+        if (slot.dataset.loaded === '1') return;
+        slot.style.minHeight = '';
+        slot.innerHTML = cache.html;
+        slot.dataset.loaded = '1';
+
+        // Animate in with stagger
+        const card = slot.firstElementChild;
+        if (card) {
+          const delay = batchIndex * 0.035;
+          card.style.animationDelay = delay + 's';
+          card.classList.add('m-card-visible');
+          batchIndex++;
+        }
         if (!batchFrame) {
           batchFrame = requestAnimationFrame(() => {
             batchIndex = 0;
             batchFrame = null;
           });
         }
+      } else {
+        // ── UNLOAD: replace with height placeholder ──
+        if (slot.dataset.loaded !== '1') return;
+        // Save measured height so scroll position stays stable
+        cache.height = slot.offsetHeight;
+        slot.style.minHeight = cache.height + 'px';
+        slot.innerHTML = '';
+        slot.dataset.loaded = '0';
       }
     });
   }, {
-    rootMargin: '100px 0px',  // Start animating 100px before entering viewport
+    // Pre-load 300px ahead so cards are ready before user sees them,
+    // unload 600px after leaving to avoid flicker on small scrolls
+    rootMargin: '600px 0px',
     threshold: 0
   });
 
-  lazyCards.forEach(card => _cardObserver.observe(card));
+  slots.forEach(slot => _cardObserver.observe(slot));
+}
+
+/** Wraps a card HTML string into a virtual-scroll slot div */
+function _cardSlot(cardHtml, entryId) {
+  const slotId = entryId ? `slot-${entryId}` : '';
+  return `<div class="m-card-slot" id="${slotId}" data-loaded="0" data-card-html style="min-height:62px"></div>`;
+}
+
+/** After innerHTML is set, hydrate slot elements with their card HTML */
+function _hydrateSlots(container, htmlMap) {
+  const slots = container.querySelectorAll('.m-card-slot[data-card-html]');
+  let i = 0;
+  slots.forEach(slot => {
+    if (i < htmlMap.length) {
+      _slotCache.set(slot, { html: htmlMap[i], height: 62 });
+      slot.removeAttribute('data-card-html');
+    }
+    i++;
+  });
 }
 
 /* ── Throttled 3D Tilt (rAF-based) ── */
@@ -1744,6 +1799,13 @@ function _injectPremiumStyles() {
     }
     .m-card-lazy.m-card-visible {
       animation: staggeredFadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    
+    /* Virtual scroll wrapper slot */
+    .m-card-slot {
+      width: 100%;
+      position: relative;
+      contain: layout style;
     }
     
     /* Glowing spotlight effect that follows mouse */
