@@ -1,5 +1,5 @@
 import {
-  K, DATA_VERSION, CLIENT_ID, DRIVE_SCOPE, YT_SCOPE_CONST, DRIVE_FOLDER, DRIVE_FILE,
+  K, DATA_VERSION, CLIENT_ID, DRIVE_SCOPE, DRIVE_FOLDER, DRIVE_FILE,
   ls,
   DATA, setDATA,
   GENRES,
@@ -208,7 +208,7 @@ function _startOAuthFlow() {
     client_id:     CLIENT_ID,
     redirect_uri:  redirectUri,
     response_type: 'code',
-    scope:         DRIVE_SCOPE + ' ' + YT_SCOPE_CONST,
+    scope:         DRIVE_SCOPE,
     access_type:   'offline',
     prompt:        'consent',
     state:         stateParam,

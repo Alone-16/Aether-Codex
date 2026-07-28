@@ -5,6 +5,30 @@ const MUSIC_KEY     = 'ac_v4_music';
 const MUSIC_PL_KEY  = 'ac_v4_music_playlists';
 const YT_SCOPE      = 'https://www.googleapis.com/auth/youtube.readonly';
 
+const YT_TOKEN_KEY  = 'ac_v4_yt_token';
+const YT_EXP_KEY    = 'ac_v4_yt_exp';
+
+function _getYTToken() {
+  try {
+    const exp = localStorage.getItem(YT_EXP_KEY);
+    const tok = localStorage.getItem(YT_TOKEN_KEY);
+    return tok && Date.now() < parseInt(exp || '0') ? tok : null;
+  } catch(e) { return null; }
+}
+
+function _setYTToken(token, expMs) {
+  try { localStorage.setItem(YT_TOKEN_KEY, token); } catch(e){}
+  try { localStorage.setItem(YT_EXP_KEY, String(expMs)); } catch(e){}
+}
+
+function _clearYTToken() {
+  try { localStorage.removeItem(YT_TOKEN_KEY); } catch(e){}
+  try { localStorage.removeItem(YT_EXP_KEY); } catch(e){}
+}
+
+function _isYTConnected() { return !!_getYTToken(); }
+
+
 function loadMusic()      { return ls.get(MUSIC_KEY) || []; }
 function saveMusic(d) { MDATA = d; window.MDATA = d; ls.set(MUSIC_KEY, d); ls.setStr(K.SAVED, String(Date.now())); window.scheduleDriveSync('music'); }
 function loadPlaylists()  { return ls.get(MUSIC_PL_KEY) || []; }
@@ -25,20 +49,17 @@ function initYTAuth() {
   if (!window.google?.accounts?.oauth2) { setTimeout(initYTAuth, 600); return; }
   YT_TOKEN_CLIENT = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
-    scope: DRIVE_SCOPE + ' ' + YT_SCOPE,
+    scope: YT_SCOPE,
     callback: async resp => {
       if (resp.error) { toast('YouTube auth failed: ' + resp.error, 'var(--err)'); return; }
-      // Store token (reuse drive token storage — same account)
-      ls.setStr(K.DTOKEN, resp.access_token);
-      ls.setStr(K.DEXP, String(Date.now() + (resp.expires_in - 60) * 1000));
-      _updateDriveBtn('syncing');
-      await _driveInit();
+      _setYTToken(resp.access_token, Date.now() + (resp.expires_in - 60) * 1000);
+      updateMusicSyncBtn('syncing');
       await syncYouTubePlaylists();
     }
   });
   YT_READY = true;
   // Auto-sync on open if connected
-  if (_isConnected()) syncYouTubePlaylists();
+  if (_isYTConnected()) syncYouTubePlaylists();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -50,7 +71,7 @@ async function syncYouTubePlaylists() {
   updateMusicSyncBtn('syncing');
 
   try {
-    const token = _getToken(); if (!token) throw new Error('Not connected');
+    const token = _getYTToken(); if (!token) throw new Error('Not connected');
 
     // Fetch user's playlists
     const plRes = await fetch(
@@ -248,7 +269,7 @@ function renderMusicBody() {
 }
 
 function handleMusicSync() {
-  if (!_isConnected()) {
+  if (!_isYTConnected()) {
     if (!YT_READY) { toast('Google API loading...', 'var(--ch)'); return; }
     YT_TOKEN_CLIENT.requestAccessToken();
   } else {
@@ -413,7 +434,7 @@ async function togglePlaylistSync(id) {
   } else {
     pl.synced = true; savePlaylists(MPLAYLISTS);
     toast('Syncing playlist...', 'var(--ac)');
-    const token = _getToken();
+    const token = _getYTToken();
     if (token) {
       await syncPlaylistSongs(id, token);
       renderMusicBody();
@@ -550,6 +571,9 @@ function renderMusicDash(c) {
 }
 
 
+// Auto-initialize YouTube Auth
+initYTAuth();
+
 // ── Register all music functions as globals ───────────────────────────────
 Object.assign(window, {
   renderMusic, renderMusicBody, setMusicPage,
@@ -563,4 +587,5 @@ Object.assign(window, {
   renderMusicDash,
   initYTAuth, updateMusicSyncBtn,
   parseISO8601Duration, fmtDuration, extractArtist,
+  _isYTConnected, _clearYTToken,
 });
