@@ -17,6 +17,8 @@ import { handleSearchRoutes } from './routes/search.js';
 import { handleFilesRoutes } from './routes/files.js';
 import { handleHealthRoute } from './routes/health.js';
 import { upsertUser } from './services/d1.js';
+import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
+import manifestJSON from '__STATIC_CONTENT_MANIFEST';
 
 export default {
   async fetch(request, env, ctx) {
@@ -28,6 +30,34 @@ export default {
 
     const url = new URL(request.url);
     const pathname = url.pathname;
+
+    // Serve static website frontend if route is non-API
+    if (!pathname.startsWith('/v1/') && !pathname.startsWith('/mal/') && !pathname.startsWith('/ai/')) {
+      if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+        return env.ASSETS.fetch(request);
+      }
+      if (env.__STATIC_CONTENT) {
+        try {
+          const assetManifest = typeof manifestJSON === 'string' ? JSON.parse(manifestJSON) : manifestJSON;
+          return await getAssetFromKV(
+            { request, waitUntil: (p) => ctx.waitUntil(p) },
+            {
+              ASSET_NAMESPACE: env.__STATIC_CONTENT,
+              ASSET_MANIFEST: assetManifest,
+              mapRequestToAsset: (req) => {
+                const u = new URL(req.url);
+                if (u.pathname === '/' || !u.pathname.includes('.')) {
+                  u.pathname = '/index.html';
+                }
+                return new Request(u.toString(), req);
+              }
+            }
+          );
+        } catch (e) {
+          console.warn('[Worker Site Asset Fallback Error]', e.message);
+        }
+      }
+    }
 
     try {
       // 1.5 Health check route
