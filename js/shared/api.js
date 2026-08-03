@@ -138,7 +138,10 @@ export async function apiReq(endpoint, opts = {}, retries = 3, backoffMs = 500) 
   }
 
   setSyncStatus('error');
-  showErrorBanner(`⚠ Unable to connect to Cloud API. ${lastError?.message || ''}`);
+  const errText = lastError?.message || '';
+  if (errText && !errText.includes('Authentication required') && !errText.includes('401')) {
+    showErrorBanner(`⚠ Unable to connect to Cloud API. ${errText}`);
+  }
   throw lastError || new Error('Request failed after retries');
 }
 

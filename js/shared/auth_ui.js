@@ -45,7 +45,7 @@ export function initGoogleAuth(retries = 0) {
   google.accounts.id.initialize({
     client_id: clientId,
     callback: handleGoogleCredentialResponse,
-    auto_select: true,
+    auto_select: false,
   });
 
   googleInitialized = true;
@@ -60,7 +60,7 @@ function ensureGoogleInitialized() {
     google.accounts.id.initialize({
       client_id: clientId,
       callback: handleGoogleCredentialResponse,
-      auto_select: true,
+      auto_select: false,
     });
     googleInitialized = true;
     return true;
