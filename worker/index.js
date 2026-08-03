@@ -57,6 +57,10 @@ export default {
           console.warn('[Worker Site Asset Fallback Error]', e.message);
         }
       }
+      // Ultimate fallback: Proxy non-API website request to Cloudflare Pages
+      const pagesUrl = new URL(request.url);
+      pagesUrl.hostname = 'aether-codex-cj7.pages.dev';
+      return fetch(new Request(pagesUrl.toString(), request));
     }
 
     try {
