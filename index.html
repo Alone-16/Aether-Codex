@@ -58,7 +58,7 @@
     // Preview and Production values are injected during CI/CD build.
     // Fallback for direct file opens or misconfigured deploys:
     window.ENV = window.ENV || {
-      API_URL: 'https://aether-codex-api.workers.dev',
+      API_URL: location.origin,
       ENVIRONMENT: 'production',
       VERSION: '1.0.0'
     };
