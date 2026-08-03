@@ -13,7 +13,15 @@ export async function handleMusicRoutes(request, env, ctx, requestId, pathname, 
   if (method === 'GET' && pathname === '/v1/music') {
     const { results: tracks } = await env.DB.prepare('SELECT * FROM music WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
     const { results: playlists } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
-    return successResponse({ tracks: tracks || [], playlists: playlists || [] }, requestId);
+    const mappedTracks = (tracks || []).map(t => ({
+      ...t,
+      durationSec: t.duration_sec,
+      youtubeId: t.youtube_id,
+      playlistId: t.playlist_id,
+      addedAt: t.created_at,
+      updatedAt: t.updated_at,
+    }));
+    return successResponse({ tracks: mappedTracks, playlists: playlists || [] }, requestId);
   }
 
   // ── POST /v1/music — Create music track ──

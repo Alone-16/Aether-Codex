@@ -29,6 +29,19 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
 
     const items = (results || []).map(m => ({
       ...m,
+      // Map snake_case DB columns to camelCase for frontend compatibility
+      genreId: m.genre_id,
+      titleEn: m.title_en,
+      titleJp: m.title_jp,
+      epCur: m.ep_cur,
+      epTot: m.ep_tot,
+      epDuration: m.ep_duration,
+      rewatchCount: m.rewatch_count,
+      malId: m.mal_id,
+      linkedGroupId: m.linked_group_id,
+      linkedGroupOrder: m.linked_group_order,
+      addedAt: m.created_at,
+      updatedAt: m.updated_at,
       rewatches: rewatchMap[m.id] || [],
     }));
 

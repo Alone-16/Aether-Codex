@@ -12,7 +12,14 @@ export async function handleBooksRoutes(request, env, ctx, requestId, pathname, 
 
   if (method === 'GET' && pathname === '/v1/books') {
     const { results } = await env.DB.prepare('SELECT * FROM books WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
-    return successResponse(results || [], requestId);
+    const items = (results || []).map(b => ({
+      ...b,
+      progressCur: b.progress_cur,
+      progressTot: b.progress_tot,
+      addedAt: b.created_at,
+      updatedAt: b.updated_at,
+    }));
+    return successResponse(items, requestId);
   }
 
   if (method === 'POST' && pathname === '/v1/books') {

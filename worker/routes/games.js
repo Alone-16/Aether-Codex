@@ -12,7 +12,13 @@ export async function handleGamesRoutes(request, env, ctx, requestId, pathname, 
 
   if (method === 'GET' && pathname === '/v1/games') {
     const { results } = await env.DB.prepare('SELECT * FROM games WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
-    return successResponse(results || [], requestId);
+    const items = (results || []).map(g => ({
+      ...g,
+      hoursPlayed: g.hours_played,
+      addedAt: g.created_at,
+      updatedAt: g.updated_at,
+    }));
+    return successResponse(items, requestId);
   }
 
   if (method === 'POST' && pathname === '/v1/games') {
