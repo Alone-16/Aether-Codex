@@ -3,6 +3,7 @@
 // ═══════════════════════════════
 
 import { toast, showConfirm, showAlert, closePanel } from '../shared/ui.js';
+import { mediaApi } from '../shared/api.js';
 
 /* ---------- visual helpers ---------- */
 function _mediaStatusBar(s) {
@@ -2151,6 +2152,7 @@ function ctxPin(id) {
   e.pinned = !e.pinned;
   e.updatedAt = Date.now();
   saveData(DATA);
+  mediaApi.patch(id, { pinned: e.pinned ? 1 : 0 }).catch(err => console.warn('[Pin Sync Fail]', err));
   hideCtxMenu();
   renderMediaBody();
   toast(e.pinned ? '📌 Pinned to top' : 'Unpinned');

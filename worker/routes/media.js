@@ -40,6 +40,7 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
       malId: m.mal_id,
       linkedGroupId: m.linked_group_id,
       linkedGroupOrder: m.linked_group_order,
+      pinned: Boolean(m.pinned),
       addedAt: m.created_at,
       updatedAt: m.updated_at,
       rewatches: rewatchMap[m.id] || [],
@@ -103,6 +104,7 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
     if (body.ep_cur !== undefined || body.epCur !== undefined) { updates.push('ep_cur = ?'); params.push(validateInt(body.ep_cur ?? body.epCur, 0, 0)); }
     if (body.ep_tot !== undefined || body.epTot !== undefined) { updates.push('ep_tot = ?'); params.push(validateInt(body.ep_tot ?? body.epTot, 0, 0)); }
     if (body.notes !== undefined) { updates.push('notes = ?'); params.push(sanitizeString(body.notes, 5000)); }
+    if (body.pinned !== undefined) { updates.push('pinned = ?'); params.push(body.pinned ? 1 : 0); }
 
     if (updates.length === 0) return errorResponse('INVALID_INPUT', 'No fields to update', requestId, 400);
 

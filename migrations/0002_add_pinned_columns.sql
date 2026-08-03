@@ -1,0 +1,6 @@
+-- Migration 0002: Add pinned column to media, games, books, notes, vault
+ALTER TABLE media ADD COLUMN pinned INTEGER DEFAULT 0;
+ALTER TABLE games ADD COLUMN pinned INTEGER DEFAULT 0;
+ALTER TABLE books ADD COLUMN pinned INTEGER DEFAULT 0;
+ALTER TABLE notes ADD COLUMN pinned INTEGER DEFAULT 0;
+ALTER TABLE vault ADD COLUMN pinned INTEGER DEFAULT 0;

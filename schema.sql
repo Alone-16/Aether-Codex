@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS media (
     mal_id INTEGER,
     linked_group_id TEXT,
     linked_group_order INTEGER,
+    pinned INTEGER DEFAULT 0,
     notes TEXT,
     created_at INTEGER DEFAULT (unixepoch()),
     updated_at INTEGER DEFAULT (unixepoch()),
