@@ -8,7 +8,7 @@ export const API_BASE = (function() {
   if (typeof window !== 'undefined' && window.ENV && window.ENV.API_URL) {
     return window.ENV.API_URL;
   }
-  return 'https://aether-codex-api.nadeempubgmobile2-0.workers.dev';
+  return 'https://aether-codex.nadeempubgmobile2-0.workers.dev';
 })();
 
 // ── SYNC STATUS STATE ──────────────────────────────────────────────
