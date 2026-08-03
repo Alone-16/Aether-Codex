@@ -86,7 +86,8 @@ async function handleGoogleCredentialResponse(response) {
     // Refresh active section data
     if (typeof window.bootApp === 'function') window.bootApp();
   } catch (err) {
-    showAlert('Google Sign-In Failed', err.message || 'Could not authenticate with server.');
+    console.warn('[Auth UI] Google Sign-In error:', err.message);
+    toast('Google Sign-In failed: ' + (err.message || 'Auth error'), '#fb7185');
   }
 }
 

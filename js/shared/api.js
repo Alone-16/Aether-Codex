@@ -8,6 +8,12 @@ export const API_BASE = (function() {
   if (typeof window !== 'undefined' && window.ENV && window.ENV.API_URL) {
     return window.ENV.API_URL;
   }
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+    if (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')) {
+      return 'http://127.0.0.1:8787';
+    }
+    return window.location.origin;
+  }
   return 'https://aether-codex.nadeempubgmobile2-0.workers.dev';
 })();
 
