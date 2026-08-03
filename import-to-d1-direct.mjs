@@ -31,14 +31,27 @@ for (const m of items) {
   const id = m.id || crypto.randomUUID();
   const genreId = m.genreId || m.genre_id || 'anime';
   const title = m.title || 'Untitled';
+  const titleEn = m.titleEn || m.title_en || null;
+  const titleJp = m.titleJp || m.title_jp || null;
   const status = m.status || 'watching';
   const score = m.score !== undefined ? m.score : null;
   const epCur = m.epCur || m.ep_cur || 0;
   const epTot = m.epTot || m.ep_tot || 0;
+  const epDuration = m.epDuration || m.ep_duration || 24;
+  const startDate = m.startDate || m.start_date || null;
+  const endDate = m.endDate || m.end_date || null;
+  const airingDay = m.airingDay !== undefined ? m.airingDay : (m.airing_day !== undefined ? m.airing_day : null);
+  const airingTime = m.airingTime || m.airing_time || null;
+  const coverImage = m.coverImage || m.cover_image || null;
+  const watchUrl = m.watchUrl || m.watch_url || null;
+  const malId = m.malId || m.mal_id || null;
+  const linkedGroupId = m.linkedGroupId || m.linked_group_id || null;
+  const linkedGroupOrder = m.linkedGroupOrder || m.linked_group_order || null;
+  const pinned = m.pinned ? 1 : 0;
   const notes = m.notes || null;
   sqlLines.push(
-    `INSERT OR REPLACE INTO media (id, user_id, genre_id, title, status, score, ep_cur, ep_tot, notes) ` +
-    `VALUES (${esc(id)}, ${esc(USER_ID)}, ${esc(genreId)}, ${esc(title)}, ${esc(status)}, ${esc(score)}, ${esc(epCur)}, ${esc(epTot)}, ${esc(notes)});`
+    `INSERT OR REPLACE INTO media (id, user_id, genre_id, title, title_en, title_jp, status, score, ep_cur, ep_tot, ep_duration, start_date, end_date, airing_day, airing_time, cover_image, watch_url, mal_id, linked_group_id, linked_group_order, pinned, notes) ` +
+    `VALUES (${esc(id)}, ${esc(USER_ID)}, ${esc(genreId)}, ${esc(title)}, ${esc(titleEn)}, ${esc(titleJp)}, ${esc(status)}, ${esc(score)}, ${esc(epCur)}, ${esc(epTot)}, ${esc(epDuration)}, ${esc(startDate)}, ${esc(endDate)}, ${esc(airingDay)}, ${esc(airingTime)}, ${esc(coverImage)}, ${esc(watchUrl)}, ${esc(malId)}, ${esc(linkedGroupId)}, ${esc(linkedGroupOrder)}, ${esc(pinned)}, ${esc(notes)});`
   );
 }
 
