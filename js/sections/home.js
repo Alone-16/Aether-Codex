@@ -101,14 +101,7 @@ function renderHome(c){
       <div class="dc"><div class="dc-icon-bg">⏱</div><div class="dc-v">${fmtMin(totalMin)}</div><div class="dc-l">Time Watched</div></div>
       <div class="dc"><div class="dc-icon-bg">🗓</div><div class="dc-v">${Math.floor(totalMin/1440)}</div><div class="dc-l">Days Watched</div></div>
     </div>
-    <div id="drive-hint-inner" style="display:none;align-items:center;gap:14px;background:rgba(var(--ac-rgb),.06);border:1px solid rgba(var(--ac-rgb),.2);border-radius:12px;padding:16px 20px;margin-bottom:20px">
-      <div style="font-size:24px">☁</div>
-      <div style="flex:1">
-        <div style="font-size:14px;font-weight:600;color:var(--tx)">Connect Google Drive to load your data</div>
-        <div style="font-size:12px;color:var(--tx2);margin-top:2px">Your data is stored privately in your Drive. Connect to sync across all devices.</div>
-      </div>
-      <button onclick="driveAction()" style="background:var(--ac);color:#000;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:opacity 0.2s" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Connect Drive</button>
-    </div>
+
     <div class="home-two-col" style="display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start">
       <div>
         ${renderAiringWidget()}

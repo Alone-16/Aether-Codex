@@ -399,16 +399,34 @@ function renderSettingsSync(el) {
   const malLabel  = malConnected ? 'Disconnect MAL Account' : 'Connect MAL Account';
   const malAction = malConnected ? 'disconnectMALAccount()' : 'connectMALAccount()';
 
+  const currentUser = (typeof window.getCurrentUser === 'function') ? window.getCurrentUser() : null;
+
   el.innerHTML = `
+    <div style="background:var(--surf);border:1px solid rgba(74,222,128,.3);border-radius:var(--cr);overflow:hidden;margin-bottom:16px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--tx)">⚡ Cloudflare D1 Database (Primary)</div>
+          <div style="font-size:12px;color:var(--tx2);margin-top:2px">Live relational cloud database syncing across all devices</div>
+        </div>
+        <span style="font-size:11px;font-weight:700;color:#4ade80;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.3);border-radius:4px;padding:3px 8px">🟢 Active & Connected</span>
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+          <div><div style="color:var(--mu);margin-bottom:2px">Database Name</div><div style="color:var(--tx);font-weight:600">aether_codex_db (Cloudflare D1)</div></div>
+          <div><div style="color:var(--mu);margin-bottom:2px">Account Email</div><div style="color:var(--tx);font-weight:600">${currentUser ? currentUser.email : 'Signed In'}</div></div>
+        </div>
+      </div>
+    </div>
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
       <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
-        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Google Drive</div>
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Google Drive (Optional Manual File Backup)</div>
+        <div style="font-size:12px;color:var(--mu)">Optional secondary backup for exporting raw JSON files into Google Drive</div>
       </div>
       <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <div>
             <div style="font-size:13px;font-weight:600;color:var(--tx)">Status</div>
-            <div style="font-size:12px;color:${connected?'#4ade80':'#fb7185'};margin-top:2px">${connected?'✓ Connected':'✗ Not connected'}</div>
+            <div style="font-size:12px;color:${connected?'#4ade80':'var(--mu)'};margin-top:2px">${connected?'✓ Connected':'Optional — Not Connected'}</div>
           </div>
           <button onclick="driveAction()" style="background:${connected?'rgba(251,113,133,.1)':'rgba(var(--ac-rgb),.12)'};color:${connected?'#fb7185':'var(--ac)'};border:1px solid ${connected?'rgba(251,113,133,.25)':'rgba(var(--ac-rgb),.3)'};border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
             ${connected?'Disconnect':'Connect'}
