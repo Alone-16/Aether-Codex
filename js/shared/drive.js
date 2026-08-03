@@ -209,6 +209,7 @@ function _startOAuthFlow() {
     redirect_uri:  redirectUri,
     response_type: 'code',
     scope:         DRIVE_SCOPE,
+    include_granted_scopes: 'false',
     access_type:   'offline',
     prompt:        'consent',
     state:         stateParam,

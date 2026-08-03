@@ -59,6 +59,7 @@ function initYTAuth() {
   YT_TOKEN_CLIENT = google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: YT_SCOPE,
+    include_granted_scopes: false,
     callback: async resp => {
       if (resp.error) { toast('YouTube auth failed: ' + resp.error, 'var(--err)'); return; }
       _setYTToken(resp.access_token, Date.now() + (resp.expires_in - 60) * 1000);

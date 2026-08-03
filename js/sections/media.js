@@ -667,6 +667,7 @@ function quickEp(id, delta) {
     }
   }
   e.updatedAt = Date.now(); saveData(DATA); renderMediaBody();
+  mediaApi.patch(id, { ep_cur: e.epCur, epCur: e.epCur, status: e.status }).catch(err => console.warn('[quickEp Sync Fail]', err));
   if (PANEL === 'detail' && PEDIT === id) renderDetailPanel(DATA.find(x => x.id === id));
   _malSyncQuiet(e);
 }
@@ -1067,6 +1068,7 @@ function linkedEpDelta(parentId, linkedId, delta) {
 
   linked.updatedAt = Date.now();
   saveData(DATA);
+  mediaApi.patch(linkedId, { ep_cur: linked.epCur, epCur: linked.epCur, status: linked.status }).catch(err => console.warn('[linkedEpDelta Sync Fail]', err));
 
   const parent = DATA.find(x => x.id === parentId);
   if (parent) renderDetailPanel(parent);
@@ -1428,7 +1430,14 @@ function saveEntry(eid) {
     }
   }
   if (entry.status==='completed'&&!entry.endDate) entry.endDate=today();
-  if (eid) { const i=DATA.findIndex(x=>x.id===eid); DATA[i]=entry; } else DATA.unshift(entry);
+  if (eid) {
+    const i = DATA.findIndex(x => x.id === eid);
+    DATA[i] = entry;
+    mediaApi.patch(eid, entry).catch(err => console.warn('[saveEntry Sync Fail]', err));
+  } else {
+    DATA.unshift(entry);
+    mediaApi.create(entry).catch(err => console.warn('[createEntry Sync Fail]', err));
+  }
   saveData(DATA); closePanel(); render(); toast('✓ Saved');
   if (entry.malId) {
     if (!window.window.SETTINGS?.malRefreshToken) {
