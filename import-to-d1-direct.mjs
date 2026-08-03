@@ -11,7 +11,7 @@ const vaultData  = JSON.parse(readFileSync(`${B}/ac_vault.json`, 'utf8'));
 const logData    = JSON.parse(readFileSync(`${B}/ac_log.json`, 'utf8'));
 const settsData  = JSON.parse(readFileSync(`${B}/ac_settings.json`, 'utf8'));
 
-const USER_ID = 'test-user-001'; // Default test user ID for local & cloud DB
+const USER_ID = '102162217390277277420'; // Actual Google user ID (nadeempubgmobile2.0@gmail.com)
 
 function esc(val) {
   if (val === null || val === undefined) return 'NULL';
