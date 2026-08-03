@@ -6,13 +6,6 @@
 <title>The Aether Codex</title>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="shortcut icon" href="favicon.ico">
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#000000">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Aether Codex">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600;700&family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@400;500;600;700&family=Bangers&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
@@ -47,15 +40,34 @@
 
   document.documentElement.setAttribute('data-section', section);
   document.documentElement.style.background      = col;
-  document.documentElement.style.backgroundColor = col;
 })();
 </script>
-<style>html,body{visibility:hidden}</style>
-<link rel="stylesheet" href="style.css" onload="document.body.style.visibility='visible'">
-<noscript><style>body{visibility:visible}</style></noscript>
-
+<script>
+// ── Environment Configuration ──────────────────────────────────
+// Injected at build/deploy time. For local dev, detect localhost.
+// For preview/production, these values are replaced during deployment.
+(function() {
+  var host = location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1') {
+    window.ENV = {
+      API_URL: 'http://127.0.0.1:8787',
+      ENVIRONMENT: 'development',
+      VERSION: '1.0.0'
+    };
+  } else {
+    // Preview and Production values are injected during CI/CD build.
+    // Fallback for direct file opens or misconfigured deploys:
+    window.ENV = window.ENV || {
+      API_URL: 'https://aether-codex-api.workers.dev',
+      ENVIRONMENT: 'production',
+      VERSION: '1.0.0'
+    };
+  }
+})();
+</script>
+<link rel="stylesheet" href="style.css">
 </head>
-<body style="visibility:hidden">
+<body>
 <div id="mob-ov" onclick="closeMob()"></div>
 <div id="mob-sb">
   <div class="mob-logo">The <em style="color:var(--ac);font-style:normal">Aether Codex</em></div>
@@ -102,7 +114,8 @@
         <input class="srch" id="srch" placeholder="Search everything..." oninput="onSearch(this.value)">
       </div>
       <div class="nb-r">
-        <button class="nb-btn" id="drive-btn" onclick="driveAction()" title="Drive" style="min-width:64px;gap:5px"><span style="font-size:14px">☁</span><span class="drive-status-txt" style="font-size:11px;font-weight:700">Drive</span></button>
+        <div id="user-auth-wrap" style="display:flex;align-items:center;margin-right:4px"></div>
+        <button class="nb-btn" id="sync-btn" onclick="if(typeof window.showSyncModal==='function')window.showSyncModal()" title="Cloud Status" style="min-width:64px;gap:5px"><span id="sync-icon" style="font-size:12px;color:#4ade80">●</span><span id="sync-status-txt" class="drive-status-txt" style="font-size:11px;font-weight:700">Saved</span></button>
         <div class="cdd mob-hide">
           <button class="nb-btn" onclick="openCDD('nb-data')" style="gap:5px">
             <span style="font-size:14px;color:var(--tx2)">🗃</span>
@@ -187,16 +200,6 @@
 </style>
 
 <script type="module" src="js/main.js"></script>
-
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js')
-      .then(reg => console.log('SW registered:', reg.scope))
-      .catch(err => console.log('SW failed:', err));
-  });
-}
-</script>
 
 </body>
 </html>

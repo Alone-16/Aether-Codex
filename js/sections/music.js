@@ -8,31 +8,29 @@ const YT_SCOPE      = 'https://www.googleapis.com/auth/youtube.readonly';
 const YT_TOKEN_KEY  = 'ac_v4_yt_token';
 const YT_EXP_KEY    = 'ac_v4_yt_exp';
 
+let YT_ACCESS_TOKEN = null;
+let YT_TOKEN_EXP = 0;
+
 function _getYTToken() {
-  try {
-    const exp = localStorage.getItem(YT_EXP_KEY);
-    const tok = localStorage.getItem(YT_TOKEN_KEY);
-    return tok && Date.now() < parseInt(exp || '0') ? tok : null;
-  } catch(e) { return null; }
+  return YT_ACCESS_TOKEN && Date.now() < YT_TOKEN_EXP ? YT_ACCESS_TOKEN : null;
 }
 
 function _setYTToken(token, expMs) {
-  try { localStorage.setItem(YT_TOKEN_KEY, token); } catch(e){}
-  try { localStorage.setItem(YT_EXP_KEY, String(expMs)); } catch(e){}
+  YT_ACCESS_TOKEN = token;
+  YT_TOKEN_EXP = expMs;
 }
 
 function _clearYTToken() {
-  try { localStorage.removeItem(YT_TOKEN_KEY); } catch(e){}
-  try { localStorage.removeItem(YT_EXP_KEY); } catch(e){}
+  YT_ACCESS_TOKEN = null;
+  YT_TOKEN_EXP = 0;
 }
 
 function _isYTConnected() { return !!_getYTToken(); }
 
-
-function loadMusic()      { return ls.get(MUSIC_KEY) || []; }
-function saveMusic(d) { MDATA = d; window.MDATA = d; ls.set(MUSIC_KEY, d); ls.setStr(K.SAVED, String(Date.now())); window.scheduleDriveSync('music'); }
-function loadPlaylists()  { return ls.get(MUSIC_PL_KEY) || []; }
-function savePlaylists(p) { MPLAYLISTS = p; window.MPLAYLISTS = p; ls.set(MUSIC_PL_KEY, p); }
+function loadMusic()      { return window.MDATA || []; }
+function saveMusic(d)     { MDATA = d; window.MDATA = d; }
+function loadPlaylists()  { return window.MPLAYLISTS || []; }
+function savePlaylists(p) { MPLAYLISTS = p; window.MPLAYLISTS = p; if (window.musicApi?.putPlaylists) window.musicApi.putPlaylists(p).catch(() => {}); }
 
 let MDATA      = loadMusic();
 window.MDATA = MDATA;

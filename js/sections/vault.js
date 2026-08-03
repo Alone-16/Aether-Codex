@@ -33,14 +33,15 @@ async function vaultDecrypt(stored, password) {
   return JSON.parse(new TextDecoder().decode(plainBuf));
 }
 
+let VAULT_ENC_STORE = null;
+
 // ── Persist encrypted private-links array ──
 async function saveVaultEncrypted(data) {
   if (!VAULT_CRYPTO_KEY || !VAULT_CRYPTO_SALT) { console.warn('Vault not unlocked — cannot save encrypted'); return; }
   const iv  = crypto.getRandomValues(new Uint8Array(12));
   const buf = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, VAULT_CRYPTO_KEY, new TextEncoder().encode(JSON.stringify(data)));
-  ls.set(VAULT_ENC_KEY, { salt:_b64(VAULT_CRYPTO_SALT), iv:_b64(iv), data:_b64(buf), v:1 });
-  ls.setStr(K.SAVED, String(Date.now()));
-  if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync('vault');
+  VAULT_ENC_STORE = { salt:_b64(VAULT_CRYPTO_SALT), iv:_b64(iv), data:_b64(buf), v:1 };
+  window.VAULT_ENC_STORE = VAULT_ENC_STORE;
 }
 
 
@@ -184,25 +185,14 @@ function lockVault() {
 const VAULT_KEY        = 'ac_v4_vault';         // legacy plain store (migrated away)
 const VAULT_PUBLIC_KEY = 'ac_v4_vault_public';  // non-private links (plain, always visible)
 
-function loadVaultPublic()  { return ls.get(VAULT_PUBLIC_KEY) || []; }
-function saveVaultPublic(d) { ls.set(VAULT_PUBLIC_KEY, d); ls.setStr(K.SAVED, String(Date.now())); if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync('vault'); }
+function loadVaultPublic()  { return window.VAULT_PUBLIC_KEY || window.VDATA_PUBLIC || []; }
+function saveVaultPublic(d) { VDATA_PUBLIC = d; window.VDATA_PUBLIC = d; window.VAULT_PUBLIC_KEY = d; }
 function reloadVaultPublicFromStorage() { VDATA_PUBLIC = loadVaultPublic(); }
 function loadVault()  { return []; }   // kept for call-site compat
 function saveVault(d) { /* disabled — use saveVaultPublic or saveVaultEncrypted */ }
 
-// ── Auto-migrate legacy VAULT_KEY plain data → public store on first load ──
-(function _migrateOldVault() {
-  const old = ls.get(VAULT_KEY) || [];
-  if (!old.length) return;
-  const existing    = ls.get(VAULT_PUBLIC_KEY) || [];
-  const existingIds = new Set(existing.map(l => l.id));
-  const fresh = old.filter(l => !existingIds.has(l.id)).map(l => ({...l, locked:false}));
-  if (fresh.length) ls.set(VAULT_PUBLIC_KEY, [...existing, ...fresh]);
-  localStorage.removeItem(VAULT_KEY);
-  ls.setStr('ac_vault_pw_set', '1');
-})();
-
 let VDATA_PUBLIC   = loadVaultPublic(); // always accessible, no password needed
+window.VDATA_PUBLIC = VDATA_PUBLIC;
 let VDATA_PRIVATE  = [];                // decrypted private links (password required)
 let VSEARCH        = '';
 let VAULT_IDLE_TIMER = null;

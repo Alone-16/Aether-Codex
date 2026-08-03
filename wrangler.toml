@@ -1,0 +1,41 @@
+name = "aether-codex-api"
+main = "worker/index.js"
+compatibility_date = "2026-07-01"
+
+[vars]
+ENVIRONMENT = "development"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "aether_codex_db"
+database_id = "707efb23-2b15-4c56-95e3-3aaed94abb93"
+
+# [[r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "aether-codex-files-dev"
+
+[env.preview]
+vars = { ENVIRONMENT = "preview" }
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "aether_codex_db_preview"
+database_id = "707efb23-2b15-4c56-95e3-3aaed94abb93"
+
+# [[env.preview.r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "aether-codex-files-preview"
+
+[env.production]
+vars = { ENVIRONMENT = "production" }
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "aether_codex_db"
+database_id = "707efb23-2b15-4c56-95e3-3aaed94abb93"
+
+# [[env.production.r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "aether-codex-files-prod"
+
+

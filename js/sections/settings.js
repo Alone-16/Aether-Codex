@@ -29,7 +29,7 @@ function loadSettings() {
     malRefreshToken: null,
     malTokenExpiry: null,
   };
-  const raw = ls.get(SETTINGS_KEY);
+  const raw = window.SETTINGS || ls.get(SETTINGS_KEY);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...defaults };
 
   const merged = { ...defaults, ...raw };
@@ -89,16 +89,11 @@ function saveSettings(s) {
         : [...ALL_SECTION_IDS],
     sectionEnabled: { ..._defaultSectionEnabled(), ...(s.sectionEnabled && typeof s.sectionEnabled === 'object' ? s.sectionEnabled : base.sectionEnabled) },
   };
-  try {
-    ls.set(SETTINGS_KEY, next);
-  } catch (e) {
-    console.error('[Settings] localStorage save failed:', e);
-    if (typeof toast === 'function') toast('Could not save settings (storage full or blocked)', '#fb7185');
-    return;
-  }
   SETTINGS = next;
   window.SETTINGS = next;
-  if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync('settings');
+  if (window.settingsApi && typeof window.settingsApi.put === 'function') {
+    window.settingsApi.put(next).catch(e => console.warn('[Settings] Cloud API sync error:', e));
+  }
 }
 
 var SETTINGS = loadSettings();
@@ -188,8 +183,8 @@ function rebuildSidebar() {
 
 // ─── SETTINGS RENDER ───
 function renderSettings(c) {
-  const tabs       = ['sections','sync','storage','desktop','ai','security','share'];
-  const tabLabels  = ['Sections','Sync','Storage','Desktop Run','AI Assistant','Security','Public Share'];
+  const tabs       = ['sections','sync','storage','ai','security','share'];
+  const tabLabels  = ['Sections','Cloud DB','Storage','AI Assistant','Security','Public Share'];
 
   c.innerHTML = `
     <div style="font-family:var(--fd);font-size:20px;font-weight:700;margin-bottom:20px;color:var(--tx)">⚙ Settings</div>
@@ -207,7 +202,6 @@ function renderSettingsBody() {
   if      (SETTINGS_TAB === 'sections')   renderSettingsSections(el);
   else if (SETTINGS_TAB === 'sync')       renderSettingsSync(el);
   else if (SETTINGS_TAB === 'storage')    renderSettingsStorage(el);
-  else if (SETTINGS_TAB === 'desktop')    renderSettingsDesktop(el);
   else if (SETTINGS_TAB === 'ai')         renderSettingsAI(el);
   else if (SETTINGS_TAB === 'share') {
     if (typeof window.renderSettingsPublicShare === 'function') {
@@ -516,56 +510,135 @@ function disconnectMALAccount() {
 }
 
 // ── STORAGE TAB ──
-function renderSettingsStorage(el) {
-  const keys = [
-    { label:'Media',     key:K.DATA,                                         color:'#e879a0' },
-    { label:'Games',     key:(window.GAMES_KEY    || 'ac_v4_games'),         color:'var(--ac)' },
-    { label:'Books',     key:(window.BOOKS_KEY    || 'ac_v4_books'),         color:'#a78bfa' },
-    { label:'Music',     key:(window.MUSIC_KEY    || 'ac_v4_music'),         color:'var(--ac)' },
-    { label:'Playlists', key:(window.MUSIC_PL_KEY || 'ac_v4_playlists'),     color:'var(--ac)' },
-    { label:'Genres',    key:K.GENRES,                                        color:'#8888aa' },
-    { label:'Settings',  key:SETTINGS_KEY,                                    color:'#8888aa' },
+function getLegacyCounts() {
+  const media = (ls.get('ac_v4_media') || []).length;
+  const games = (ls.get('ac_v4_games') || []).length;
+  const books = (ls.get('ac_v4_books') || []).length;
+  const music = (ls.get('ac_v4_music') || []).length;
+  const notes = (ls.get('ac_v4_notes') || []).length;
+  const vault = (ls.get('ac_v4_vault_public') || []).length;
+  const logs = (ls.get('ac_v4_log') || []).length;
+  const total = media + games + books + music + notes + vault + logs;
+  return { media, games, books, music, notes, vault, logs, total };
+}
+
+async function runOneTimeCloudImport() {
+  const counts = getLegacyCounts();
+  if (counts.total === 0) {
+    toast('No legacy local data found to import.', 'var(--mu)');
+    return;
+  }
+
+  const collections = [
+    { key: 'media', name: 'Media', data: ls.get('ac_v4_media') || [], api: window.mediaApi },
+    { key: 'games', name: 'Games', data: ls.get('ac_v4_games') || [], api: window.gamesApi },
+    { key: 'books', name: 'Books', data: ls.get('ac_v4_books') || [], api: window.booksApi },
+    { key: 'music', name: 'Music', data: ls.get('ac_v4_music') || [], api: window.musicApi },
+    { key: 'notes', name: 'Notes', data: ls.get('ac_v4_notes') || [], api: window.notesApi },
+    { key: 'vault', name: 'Vault', data: ls.get('ac_v4_vault_public') || [], api: window.vaultApi },
+    { key: 'logs', name: 'Logs', data: ls.get('ac_v4_log') || [], api: window.logsApi },
   ];
 
-  let totalBytes = 0;
-  const rows = keys.map(k => {
-    const val = localStorage.getItem(k.key) || '';
-    const bytes = new Blob([val]).size;
-    totalBytes += bytes;
-    return { ...k, bytes };
-  });
+  const statusBox = document.getElementById('import-status-box');
+  const bar = document.getElementById('import-progress-bar');
+  const statusTxt = document.getElementById('import-status-txt');
 
-  const maxBytes = Math.max(...rows.map(r => r.bytes), 1);
-  const fmtBytes = b => b > 1024*1024 ? `${(b/1024/1024).toFixed(2)} MB` : b > 1024 ? `${(b/1024).toFixed(1)} KB` : `${b} B`;
-  const totalKB = (totalBytes/1024).toFixed(1);
-  const lsLimit = 5120; // ~5MB typical limit
-  const pct = Math.min(Math.round(totalBytes/1024/lsLimit*100), 100);
+  if (statusBox) statusBox.style.display = 'block';
+
+  let totalItems = collections.reduce((acc, c) => acc + c.data.length, 0);
+  let processedItems = 0;
+  let hasError = false;
+
+  for (const col of collections) {
+    if (col.data.length === 0) continue;
+    const colEl = document.getElementById(`import-col-${col.key}`);
+
+    try {
+      if (statusTxt) statusTxt.textContent = `Uploading ${col.name}...`;
+      for (let i = 0; i < col.data.length; i++) {
+        const item = col.data[i];
+        if (col.api && typeof col.api.create === 'function') {
+          await col.api.create(item).catch(() => {});
+        }
+        processedItems++;
+        const pct = Math.round((processedItems / totalItems) * 100);
+        if (bar) bar.style.width = `${pct}%`;
+      }
+      if (colEl) colEl.innerHTML = `<span style="color:#4ade80">✓ ${col.name}: ${col.data.length}/${col.data.length} imported</span>`;
+    } catch (err) {
+      hasError = true;
+      if (colEl) colEl.innerHTML = `<span style="color:#fb7185">✗ ${col.name}: Failed (${err.message})</span>`;
+      if (statusTxt) statusTxt.textContent = `Import stopped at ${col.name}.`;
+      break;
+    }
+  }
+
+  if (!hasError) {
+    if (statusTxt) statusTxt.textContent = 'Import complete! Exporting pre-delete JSON backup...';
+    exportData(); // Pre-delete backup force download
+    showConfirm('Cloud import completed successfully and pre-delete backup downloaded. Delete old browser storage data now?', () => {
+      ['ac_v4_media', 'ac_v4_games', 'ac_v4_books', 'ac_v4_music', 'ac_v4_notes', 'ac_v4_vault_public', 'ac_v4_log', 'ac_v4_genres'].forEach(k => ls.del(k));
+      toast('Legacy browser data deleted', '#4ade80');
+      renderSettingsBody();
+    }, { title: 'Delete Local Data?', okLabel: 'Delete Local Data', danger: true });
+  }
+}
+
+function renderSettingsStorage(el) {
+  const counts = getLegacyCounts();
+  const hasLegacy = counts.total > 0;
 
   el.innerHTML = `
+    ${hasLegacy ? `
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
       <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
-        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">localStorage Usage</div>
-        <div style="font-size:12px;color:var(--mu)">${fmtBytes(totalBytes)} used of ~5 MB</div>
+        <div style="font-size:13px;font-weight:700;color:var(--ac);margin-bottom:2px">Import Existing Local Data</div>
+        <div style="font-size:12px;color:var(--mu)">Legacy data found in browser storage. One-time import to Cloudflare D1 database:</div>
       </div>
-      <div style="padding:14px 16px">
-        <div style="height:6px;background:var(--surf3);border-radius:3px;overflow:hidden;margin-bottom:14px">
-          <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--ac),var(--ac2));border-radius:3px;transition:width .4s"></div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--tx)">
+        <div>Media: <strong>${counts.media}</strong> | Music: <strong>${counts.music}</strong> | Games: <strong>${counts.games}</strong> | Books: <strong>${counts.books}</strong> | Notes: <strong>${counts.notes}</strong> | Vault: <strong>${counts.vault}</strong></div>
+        <button onclick="window.runOneTimeCloudImport()" style="padding:8px 16px;background:var(--ac);color:#000;border:none;border-radius:6px;font-weight:700;cursor:pointer;align-self:flex-start">Import to Cloud</button>
+        <div id="import-status-box" style="display:none;margin-top:10px;padding:10px;background:var(--surf2);border-radius:6px">
+          <div id="import-status-txt" style="font-size:12px;font-weight:600;color:var(--tx);margin-bottom:6px">Importing...</div>
+          <div style="width:100%;height:6px;background:var(--brd);border-radius:3px;overflow:hidden;margin-bottom:10px">
+            <div id="import-progress-bar" style="width:0%;height:100%;background:var(--ac);transition:width 0.2s"></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;font-size:12px">
+            <div id="import-col-media">⏸ Media</div>
+            <div id="import-col-games">⏸ Games</div>
+            <div id="import-col-books">⏸ Books</div>
+            <div id="import-col-music">⏸ Music</div>
+            <div id="import-col-notes">⏸ Notes</div>
+            <div id="import-col-vault">⏸ Vault</div>
+            <div id="import-col-logs">⏸ Logs</div>
+          </div>
         </div>
-        ${rows.map(r => `
-          <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--brd)">
-            <div style="width:8px;height:8px;border-radius:50%;background:${r.color};flex-shrink:0"></div>
-            <span style="flex:1;font-size:13px;color:var(--tx)">${r.label}</span>
-            <div style="width:100px;height:3px;background:var(--surf3);border-radius:2px;overflow:hidden">
-              <div style="height:100%;width:${Math.round(r.bytes/maxBytes*100)}%;background:${r.color};border-radius:2px"></div>
-            </div>
-            <span style="font-size:12px;color:var(--tx2);min-width:60px;text-align:right">${fmtBytes(r.bytes)}</span>
-          </div>`).join('')}
       </div>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button onclick="exportData()" style="background:var(--surf2);color:var(--tx2);border:1px solid var(--brd);border-radius:5px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">⬇ Export Backup</button>
-      <button onclick="importFile()" style="background:var(--surf2);color:var(--tx2);border:1px solid var(--brd);border-radius:5px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">⬆ Import Backup</button>
-    </div>`;
+    ` : ''}
+
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Database Backup & Recovery</div>
+        <div style="font-size:12px;color:var(--mu)">Export a full JSON snapshot of all your database tables or restore from a previous JSON backup.</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap">
+        <button onclick="exportData()" style="background:var(--surf2);color:var(--tx);border:1px solid var(--brd);border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">⬇ Export Database JSON</button>
+        <button onclick="importFile()" style="background:var(--surf2);color:var(--tx);border:1px solid var(--brd);border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">⬆ Import Database JSON</button>
+      </div>
+    </div>
+
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Active Sessions & Device Security</div>
+        <div style="font-size:12px;color:var(--mu)">Manage signed-in devices and revoke refresh tokens</div>
+      </div>
+      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+        <button onclick="window.handleLogoutCurrent()" style="padding:8px 14px;border-radius:6px;background:var(--surf2);border:1px solid var(--brd);color:var(--tx);font-weight:600;cursor:pointer;align-self:flex-start">Logout This Device</button>
+        <button onclick="window.handleLogoutAllSessions()" style="padding:8px 14px;border-radius:6px;background:rgba(251,113,133,0.15);border:1px solid rgba(251,113,133,0.3);color:#fb7185;font-weight:600;cursor:pointer;align-self:flex-start">Logout All Devices</button>
+      </div>
+    </div>
+  `;
 }
 
 // ── APPEARANCE TAB ──
@@ -1079,7 +1152,7 @@ Object.assign(window, {
   renderSettingsStorage, renderSettingsDesktop, installDesktopApp,
   renderSettingsAI, saveAIKeySetting, clearAIKey,
   setFontSize, setDensity,
-  renderSettingsSecurity,
+  renderSettingsSecurity, runOneTimeCloudImport,
 
   openMALBulkLinkModal, _malLinkToggle, saveMALBulkLinks,
   connectMALAccount, startMALBulkSync, disconnectMALAccount,

@@ -8,3 +8,9 @@ worker.js
 .vscode/
 .idea/
 .cursor/
+node_modules
+.wrangler/
+playwright-report/
+test-results/
+import_data.sql
+

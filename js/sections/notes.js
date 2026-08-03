@@ -13,8 +13,8 @@ import {
 const NOTES_KEY     = 'ac_v4_notes';
 const NOTES_ENC_KEY = 'ac_v4_notes_enc';
 
-function loadNotes()  { return ls.get(NOTES_KEY) || []; }
-function saveNotes(d) { NDATA = d; window.NDATA = d; ls.set(NOTES_KEY, d); ls.setStr(K.SAVED, String(Date.now())); if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync('notes'); }
+function loadNotes()  { return window.NDATA || []; }
+function saveNotes(d) { NDATA = d; window.NDATA = d; }
 
 let NDATA          = loadNotes();
 window.NDATA = NDATA;
@@ -23,6 +23,7 @@ let NPANEL         = null;
 let NEDIT_ID       = null;
 let NOTES_UNLOCKED = false;
 let NDATA_PRIVATE  = [];
+let NDATA_ENC      = null;
 let _noteAutoSaveTimer = null;
 
 const NOTE_COLORS = {
@@ -43,14 +44,13 @@ async function saveNotesEncrypted(data) {
       {name:'AES-GCM', iv}, VAULT_CRYPTO_KEY,
       new TextEncoder().encode(JSON.stringify(data))
     );
-    ls.set(NOTES_ENC_KEY, {salt:_b64(VAULT_CRYPTO_SALT), iv:_b64(iv), data:_b64(buf), v:1});
-    ls.setStr(K.SAVED, String(Date.now()));
-    if (typeof window.scheduleDriveSync === 'function') window.scheduleDriveSync('notes');
+    NDATA_ENC = {salt:_b64(VAULT_CRYPTO_SALT), iv:_b64(iv), data:_b64(buf), v:1};
+    window.NDATA_ENC = NDATA_ENC;
   } catch(e) { console.warn('Notes encrypt failed:', e); }
 }
 
 async function _decryptPrivateNotes() {
-  const stored = ls.get(NOTES_ENC_KEY);
+  const stored = NDATA_ENC || window.NDATA_ENC;
   if (!stored?.data || !VAULT_CRYPTO_KEY) return [];
   try {
     const buf = await crypto.subtle.decrypt(
@@ -76,8 +76,8 @@ async function unlockPrivateNotes() {
     await import('./vault.js').catch(e => console.error('[Notes] Vault module load failed:', e));
   }
 
-  const hasPw  = ls.str('ac_vault_pw_set');
-  const hasEnc = !!ls.get('ac_v4_vault_enc');
+  const hasPw  = window.VAULT_PW_SET || localStorage.getItem('ac_vault_pw_set');
+  const hasEnc = !!(NDATA_ENC || window.NDATA_ENC || window.VAULT_ENC_STORE);
   if (hasPw && hasEnc) showVaultPasswordUnlock(_afterUnlock);
   else                 showVaultPasswordSetup(_afterUnlock);
 }

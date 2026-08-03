@@ -4,9 +4,9 @@
 const SHARE_KEY = 'ac_v4_share';
 
 function loadShareSettings() {
-  return ls.get(SHARE_KEY) || { fileId: null, sections: ['media'], enabled: false };
+  return window.SHARE_SETTINGS || { fileId: null, sections: ['media'], enabled: false };
 }
-function saveShareSettings(s) { ls.set(SHARE_KEY, s); }
+function saveShareSettings(s) { window.SHARE_SETTINGS = s; }
 
 // ── Check if we're in public view mode ──
 function checkPublicView() {

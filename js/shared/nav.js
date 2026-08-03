@@ -63,13 +63,13 @@ export function nav(id, push = true) {
     if (CURRENT !== 'vault' && typeof lockVaultOnNav === 'function') lockVaultOnNav();
 
     // Section-specific search handlers
-    if      (id === 'games') srch.oninput = e => { GSEARCH = e.target.value.toLowerCase(); renderGamesBody(); };
-    else if (id === 'music') srch.oninput = e => { MSEARCH = e.target.value.toLowerCase(); renderMusicBody(); };
-    else if (id === 'books') srch.oninput = e => { BSEARCH = e.target.value.toLowerCase(); renderBooksBody(); };
-    else if (id === 'vault') srch.oninput = e => { VSEARCH = e.target.value.toLowerCase(); renderVaultBody(); };
-    else if (id === 'log')   srch.oninput = e => { LSEARCH = e.target.value.toLowerCase(); renderLogBody();   };
-    else if (id === 'notes') srch.oninput = e => { NSEARCH = e.target.value.toLowerCase(); renderNotesBody(); };
-    else                     srch.oninput = e => { onSearch(e.target.value); };
+    if      (id === 'games') srch.oninput = e => { window.GSEARCH = e.target.value.toLowerCase(); if (typeof window.renderGamesBody==='function') window.renderGamesBody(); };
+    else if (id === 'music') srch.oninput = e => { window.MSEARCH = e.target.value.toLowerCase(); if (typeof window.renderMusicBody==='function') window.renderMusicBody(); };
+    else if (id === 'books') srch.oninput = e => { window.BSEARCH = e.target.value.toLowerCase(); if (typeof window.renderBooksBody==='function') window.renderBooksBody(); };
+    else if (id === 'vault') srch.oninput = e => { window.VSEARCH = e.target.value.toLowerCase(); if (typeof window.renderVaultBody==='function') window.renderVaultBody(); };
+    else if (id === 'log')   srch.oninput = e => { window.LSEARCH = e.target.value.toLowerCase(); if (typeof window.renderLogBody==='function') window.renderLogBody();   };
+    else if (id === 'notes') srch.oninput = e => { window.NSEARCH = e.target.value.toLowerCase(); if (typeof window.renderNotesBody==='function') window.renderNotesBody(); };
+    else                     srch.oninput = e => { if (typeof window.onSearch==='function') window.onSearch(e.target.value); };
 
     // Apply genre CSS vars for media section
     if (id === 'media') {

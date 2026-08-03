@@ -1,4 +1,5 @@
-'use strict';
+import { debounce, onSyncStatusChange, settingsApi } from './api.js';
+
 // ═══════════════════════════════
 //  STORAGE
 // ═══════════════════════════════
@@ -73,27 +74,48 @@ export function setCOLLAPSED(v)    { COLLAPSED  = v; window.COLLAPSED  = v; }
 export function setDDRG(v)         { DDRG       = v; window.DDRG       = v; }
 export function setFDRG(v)         { FDRG       = v; window.FDRG       = v; }
 
-// ── Persist helpers ───────────────────────────────────────────────────────────
 export function saveData(d) {
-  ls.set(K.DATA, d);
-  ls.setStr(K.SAVED, String(Date.now()));
-  scheduleDriveSync('media');   // defined in drive.js; call via lazy import below
-}
-export function saveGenres(g) {
-  ls.set(K.GENRES, g);
-  scheduleDriveSync('media');
+  setDATA(d);
+  debounce('save_media', async () => {
+    // Media section mutations handled via mediaApi in media.js
+  }, 800);
 }
 
-// Lazy reference patched in by drive.js after module graph settles.
-// This avoids a hard circular import while keeping saveData/saveGenres here.
-let _scheduleDriveSync = () => {};
-/** >0 while drive.js is running a full pull/merge/push — avoids re-scheduling sync from those writes. */
+export function saveGenres(g) {
+  setGENRES(g);
+  debounce('save_genres', async () => {
+    await settingsApi.put(window.SETTINGS || {}, g).catch(() => {});
+  }, 1000);
+}
+
+// ── Live Sync Status Badge Listener ──
+if (typeof window !== 'undefined') {
+  onSyncStatusChange(state => {
+    const iconEl = document.getElementById('sync-icon');
+    const txtEl = document.getElementById('sync-status-txt');
+    if (!iconEl || !txtEl) return;
+
+    const map = {
+      saved: ['●', 'Saved', '#4ade80'],
+      saving: ['●', 'Saving...', '#fbbf24'],
+      offline: ['●', 'Offline', '#94a3b8'],
+      error: ['●', 'Sync Error', '#fb7185'],
+      uploading: ['●', 'Uploading...', '#60a5fa'],
+    };
+    const [ico, txt, col] = map[state] || map.saved;
+    iconEl.textContent = ico;
+    iconEl.style.color = col;
+    txtEl.textContent = txt;
+  });
+}
 let _driveSyncSchedulePauseDepth = 0;
 
 export function pauseDriveSyncScheduling() { _driveSyncSchedulePauseDepth++; }
 export function resumeDriveSyncScheduling() {
   _driveSyncSchedulePauseDepth = Math.max(0, _driveSyncSchedulePauseDepth - 1);
 }
+
+let _scheduleDriveSync = () => {};
 
 export function scheduleDriveSync(sectionKey) {
   if (_driveSyncSchedulePauseDepth > 0) return;

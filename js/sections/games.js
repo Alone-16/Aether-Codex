@@ -1,6 +1,8 @@
 // ═══════════════════════════════════════════════════════
 //  GAMES DATA
 // ═══════════════════════════════════════════════════════
+import { uploadSaveFile as apiUploadSaveFile } from '../shared/api.js';
+
 const GAMES_KEY = 'ac_v4_games';
 const GAMES_VER = '1.0';
 
@@ -1333,34 +1335,13 @@ async function _getOrCreateDriveFolder(name, parentId) {
 
 async function uploadSaveFile(gameTitle, file) {
   try {
-    const rootId = await _getOrCreateFolder(); if (!rootId) return null;
-    // game-saves folder
-    const savesId = await _getOrCreateDriveFolder('game-saves', rootId); if (!savesId) return null;
-
-    // Use webkitRelativePath to preserve folder structure
-    // e.g. "MySaveFolder/slot1/save.dat" → create each folder level
     const relPath = file.webkitRelativePath || file.name;
-    const parts = relPath.split('/');
-    const fileName = parts.pop(); // last part is the file name
-
-    // Navigate/create folder hierarchy under game-saves
-    let currentParent = savesId;
-    for (const folderName of parts) {
-      currentParent = await _getOrCreateDriveFolder(folderName, currentParent);
-      if (!currentParent) return null;
-    }
-
-    // Upload file into the correct folder
-    const formData = new FormData();
-    formData.append('metadata', new Blob([JSON.stringify({name: fileName, parents:[currentParent]})], {type:'application/json'}));
-    formData.append('file', file);
-    const token = _getToken();
-    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-      method:'POST', headers:{Authorization:`Bearer ${token}`}, body:formData
-    });
-    if (!res.ok) return null;
-    return (await res.json()).id;
-  } catch { return null; }
+    const result = await apiUploadSaveFile(gameTitle, file, relPath);
+    return result?.id || null;
+  } catch (e) {
+    console.error('[R2 Save Upload Failed]', e);
+    return null;
+  }
 }
 
 // ── DASHBOARD ──

@@ -4,7 +4,7 @@
 
 // ── Shared infrastructure (must come first) ──────────────────────
 import {
-  DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K,
+  DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K, CLIENT_ID, DATA_VERSION,
   uid, esc, today, fmtDate, h2r, gbyid, estTime, entryStats, fmtMin,
   saveData, saveGenres, scheduleDriveSync,
   setDATA, setGENRES, setGACTIVE, setCURRENT, setSEARCH, setMEDIA_PAGE,
@@ -29,7 +29,7 @@ Object.assign(window, {
   nav, render, renderPage,
   toast, showConfirm, showAlert, closePanel,
   openMob, closeMob, driveAction, syncDrive,
-  DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K,
+  DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K, CLIENT_ID, DATA_VERSION,
   uid, esc, today, fmtDate, h2r, gbyid, estTime, entryStats, fmtMin,
   saveData, saveGenres, scheduleDriveSync,
   setDATA, setGENRES, setGACTIVE, setCURRENT, setSEARCH, setMEDIA_PAGE,
@@ -46,9 +46,16 @@ Object.assign(window, {
 //    down the whole app.
 const sections = [
   './sections/home.js',
+  './sections/media.js',
+  './sections/games.js',
+  './sections/books.js',
+  './sections/music.js',
+  './sections/notes.js',
+  './sections/vault.js',
+  './sections/tools.js',
+  './sections/log.js',
   './sections/settings.js',
-  './sections/ai.js',
-  './sections/log.js'
+  './sections/ai.js'
 ];
 
 await Promise.all(
@@ -76,55 +83,39 @@ window.onunhandledrejection = function(e) {
   }
 };
 
-// ── Service Worker & PWA Install ──────────────────────────────────
-window.deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  window.deferredPrompt = e;
-  if (window.CURRENT === 'settings' && typeof window.renderSettingsDesktop === 'function') {
-    const el = document.getElementById('settings-body');
-    if (el) window.renderSettingsDesktop(el);
-  }
-});
+import {
+  refreshAuth, getAccessToken, checkHealth,
+  mediaApi, gamesApi, booksApi, musicApi, notesApi, vaultApi, logsApi, settingsApi
+} from './shared/api.js';
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('[ServiceWorker] Registered:', reg.scope))
-      .catch(err => console.error('[ServiceWorker] Failed:', err));
-  });
-}
+import { initGoogleAuth, updateNavbarUserUI } from './shared/auth_ui.js';
 
 // ── Shared extras ─────────────────────────────────────────────────
 await import('./shared/extras.js').catch(e =>
   console.warn('[main] extras.js failed to load:', e.message)
 );
 
-// ── Migration ─────────────────────────────────────────────────────
-const migration = await import('./shared/migration.js').catch(() => null);
-
 // ── Boot ──────────────────────────────────────────────────────────
-(async function boot() {
+async function boot() {
 
-  // ── Run schema migration before first render ───────────────────
-  if (migration?.runMigrationV1) {
-    try {
-      const result = await migration.runMigrationV1();
-      if (result?.ran && typeof window.toast === 'function') {
-        window.toast(
-          `✓ Schema updated: ${result.entriesAfter} flat entries ` +
-          `(${result.groups} group${result.groups !== 1 ? 's' : ''} expanded)`,
-          'var(--ac)'
-        );
-      }
-    } catch(e) {
-      console.error('[Migration V1] Fatal error:', e);
-    }
+  // 1. Check Worker Health Endpoint
+  const health = await checkHealth();
+  if (health) {
+    console.info(`[Boot] Worker Connected (${health.environment || 'dev'}, v${health.version || '1.0.0'})`);
+  } else {
+    console.warn('[Boot] Worker Health Check unreachable. Will retry on request.');
   }
 
-  // ── Determine initial section ──────────────────────────────────
-  //    Priority: URL hash → last saved section → home
-  //    On first ever visit (no hash, no saved section) → always home.
+  // 2. Initialize Google Identity & Auth UI
+  initGoogleAuth();
+
+  // 3. Attempt silent refresh of auth tokens
+  if (!getAccessToken()) {
+    await refreshAuth().catch(() => {});
+  }
+  updateNavbarUserUI();
+
+  // Determine initial section
   const VALID_SECTIONS = [
     'home','media','games','books','music',
     'vault','notes','log','tools','settings',
@@ -134,7 +125,6 @@ const migration = await import('./shared/migration.js').catch(() => null);
   const rawHash = location.hash.replace('#/', '').replace('#', '').trim();
   const hash    = VALID_SECTIONS.includes(rawHash) ? rawHash : '';
 
-  // Clear any stale / invalid hash from the URL bar
   if (rawHash && !hash) {
     history.replaceState({}, '', location.pathname);
   }
@@ -142,21 +132,47 @@ const migration = await import('./shared/migration.js').catch(() => null);
   const saved   = localStorage.getItem('ac_last_section');
   const isFirstVisit = !hash && !saved;
 
-  // On first visit stamp home so returning visits remember it
   if (isFirstVisit) {
     localStorage.setItem('ac_last_section', 'home');
   }
 
   const initial = hash || (VALID_SECTIONS.includes(saved) ? saved : 'home');
 
-  // ── First render ───────────────────────────────────────────────
+  // Render shell
   nav(initial, false);
 
-  // ── Drive auth (non-blocking) ──────────────────────────────────
-  driveBootstrap().catch(e => console.error('[Drive] bootstrap error:', e));
-
-  // ── Reveal app ────────────────────────────────────────────────
+  // Reveal app
   document.body.style.visibility            = 'visible';
   document.documentElement.style.visibility = 'visible';
 
-})();
+  // 4. Fetch User Data directly into JS memory (No LocalStorage / IndexedDB Caching)
+  if (getAccessToken()) {
+    try {
+      await Promise.all([
+        mediaApi.getAll().then(d => { if (Array.isArray(d)) window.setDATA(d); }).catch(() => {}),
+        gamesApi.getAll().then(d => { if (Array.isArray(d)) window.GDATA = d; }).catch(() => {}),
+        booksApi.getAll().then(d => { if (Array.isArray(d)) window.BDATA = d; }).catch(() => {}),
+        musicApi.getAll().then(d => {
+          if (d.tracks) window.MDATA = d.tracks;
+          if (d.playlists) window.MPLAYLISTS = d.playlists;
+        }).catch(() => {}),
+        notesApi.getAll().then(d => { if (Array.isArray(d)) window.NDATA = d; }).catch(() => {}),
+        vaultApi.getAll().then(d => { if (Array.isArray(d)) window.VAULT_PUBLIC_KEY = d; }).catch(() => {}),
+        logsApi.getAll().then(d => { if (Array.isArray(d)) window.LDATA = d; }).catch(() => {}),
+        settingsApi.get().then(d => {
+          if (d.settings) window.SETTINGS = { ...(window.SETTINGS || {}), ...d.settings };
+          if (d.genres && Array.isArray(d.genres)) window.setGENRES(d.genres);
+        }).catch(() => {}),
+      ]);
+    } catch (e) {
+      console.warn('[Boot] Data fetch error:', e.message);
+    }
+  }
+
+  // Re-render active section with memory data
+  if (typeof window.render === 'function') window.render();
+}
+
+window.bootApp = boot;
+boot();
+
