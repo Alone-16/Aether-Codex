@@ -193,6 +193,13 @@ function saveVault(d) { /* disabled — use saveVaultPublic or saveVaultEncrypte
 
 let VDATA_PUBLIC   = loadVaultPublic(); // always accessible, no password needed
 window.VDATA_PUBLIC = VDATA_PUBLIC;
+
+export function setVDATA_PUBLIC(d) {
+  VDATA_PUBLIC = Array.isArray(d) ? d : [];
+  window.VDATA_PUBLIC = VDATA_PUBLIC;
+  window.VAULT_PUBLIC_KEY = VDATA_PUBLIC;
+}
+window.setVDATA_PUBLIC = setVDATA_PUBLIC;
 let VDATA_PRIVATE  = [];                // decrypted private links (password required)
 let VSEARCH        = '';
 let VAULT_IDLE_TIMER = null;

@@ -18,6 +18,12 @@ function saveNotes(d) { NDATA = d; window.NDATA = d; }
 
 let NDATA          = loadNotes();
 window.NDATA = NDATA;
+
+export function setNDATA(d) {
+  NDATA = Array.isArray(d) ? d : [];
+  window.NDATA = NDATA;
+}
+window.setNDATA = setNDATA;
 let NSEARCH        = '';
 let NPANEL         = null;
 let NEDIT_ID       = null;

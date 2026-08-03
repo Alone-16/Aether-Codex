@@ -8,6 +8,12 @@ function saveBooks(d) { BDATA = d; window.BDATA = d; ls.set(BOOKS_KEY, d); ls.se
 
 let BDATA      = loadBooks();
 window.BDATA = BDATA;
+
+export function setBDATA(d) {
+  BDATA = Array.isArray(d) ? d : [];
+  window.BDATA = BDATA;
+}
+window.setBDATA = setBDATA;
 let BOOKS_PAGE = 'list';
 let BSEARCH    = '';
 let BGENRE     = 'novel'; // sub-category: novel | audiobook

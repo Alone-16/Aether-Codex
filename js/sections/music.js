@@ -36,6 +36,17 @@ let MDATA      = loadMusic();
 window.MDATA = MDATA;
 let MPLAYLISTS = loadPlaylists();
 window.MPLAYLISTS = MPLAYLISTS;
+
+export function setMDATA(d) {
+  MDATA = Array.isArray(d) ? d : [];
+  window.MDATA = MDATA;
+}
+export function setMPLAYLISTS(p) {
+  MPLAYLISTS = Array.isArray(p) ? p : [];
+  window.MPLAYLISTS = MPLAYLISTS;
+}
+window.setMDATA = setMDATA;
+window.setMPLAYLISTS = setMPLAYLISTS;
 let MUSIC_PAGE = 'library';
 let MSEARCH    = '';
 let YT_TOKEN_CLIENT = null;

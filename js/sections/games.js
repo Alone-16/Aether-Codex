@@ -11,6 +11,12 @@ function saveGames(d) { GDATA = d; window.GDATA = d; ls.set(GAMES_KEY, d); ls.se
 
 let GDATA       = loadGames();
 window.GDATA = GDATA;
+
+export function setGDATA(d) {
+  GDATA = Array.isArray(d) ? d : [];
+  window.GDATA = GDATA;
+}
+window.setGDATA = setGDATA;
 let GAMES_PAGE  = 'library';
 let GSEARCH     = '';
 let GPANEL      = null;

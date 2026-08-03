@@ -149,15 +149,15 @@ async function boot() {
   if (getAccessToken()) {
     try {
       await Promise.all([
-        mediaApi.getAll().then(d => { if (Array.isArray(d)) window.setDATA(d); }).catch(() => {}),
-        gamesApi.getAll().then(d => { if (Array.isArray(d)) window.GDATA = d; }).catch(() => {}),
-        booksApi.getAll().then(d => { if (Array.isArray(d)) window.BDATA = d; }).catch(() => {}),
+        mediaApi.getAll().then(d => { if (Array.isArray(d)) (typeof window.setDATA === 'function' ? window.setDATA(d) : window.DATA = d); }).catch(() => {}),
+        gamesApi.getAll().then(d => { if (Array.isArray(d)) (typeof window.setGDATA === 'function' ? window.setGDATA(d) : window.GDATA = d); }).catch(() => {}),
+        booksApi.getAll().then(d => { if (Array.isArray(d)) (typeof window.setBDATA === 'function' ? window.setBDATA(d) : window.BDATA = d); }).catch(() => {}),
         musicApi.getAll().then(d => {
-          if (d.tracks) window.MDATA = d.tracks;
-          if (d.playlists) window.MPLAYLISTS = d.playlists;
+          if (d.tracks) (typeof window.setMDATA === 'function' ? window.setMDATA(d.tracks) : window.MDATA = d.tracks);
+          if (d.playlists) (typeof window.setMPLAYLISTS === 'function' ? window.setMPLAYLISTS(d.playlists) : window.MPLAYLISTS = d.playlists);
         }).catch(() => {}),
-        notesApi.getAll().then(d => { if (Array.isArray(d)) window.NDATA = d; }).catch(() => {}),
-        vaultApi.getAll().then(d => { if (Array.isArray(d)) window.VAULT_PUBLIC_KEY = d; }).catch(() => {}),
+        notesApi.getAll().then(d => { if (Array.isArray(d)) (typeof window.setNDATA === 'function' ? window.setNDATA(d) : window.NDATA = d); }).catch(() => {}),
+        vaultApi.getAll().then(d => { if (Array.isArray(d)) (typeof window.setVDATA_PUBLIC === 'function' ? window.setVDATA_PUBLIC(d) : window.VDATA_PUBLIC = d); }).catch(() => {}),
         logsApi.getAll().then(d => { if (Array.isArray(d)) window.LDATA = d; }).catch(() => {}),
         settingsApi.get().then(d => {
           if (d.settings) window.SETTINGS = { ...(window.SETTINGS || {}), ...d.settings };
