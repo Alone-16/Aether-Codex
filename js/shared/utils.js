@@ -141,7 +141,7 @@ export function esc(s)        { return String(s || '').replace(/&/g,'&amp;').rep
 export function today()       { return new Date().toISOString().slice(0, 10); }
 export function fmtDate(d)    { if (!d) return '—'; return new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }); }
 export function h2r(hex, a)   { const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16); return `rgba(${r},${g},${b},${a})`; }
-export function gbyid(id)     { return GENRES.find(g => g.id === id) || GENRES[0]; }
+export function gbyid(id)     { if (!GENRES || !GENRES.length) setGENRES(DEFAULT_GENRES()); return GENRES.find(g => g.id === id) || GENRES[0] || { id: id || 'all', name: 'All Media', color: '#60a5fa' }; }
 export function estTime(eps, dur) { if (!eps) return '—'; const tot=eps*((parseInt(dur)||24)/60); const h=Math.floor(tot),m=Math.round((tot-h)*60); return h ? `~${h}h${m>0?' '+m+'m':''}` : ` ~${m}m`; }
 
 /** Flat entries only (after V3 migration). */

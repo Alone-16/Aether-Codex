@@ -312,7 +312,7 @@ function renderMedia(c) {
   _injectPremiumStyles();
   _initMediaDropdownClose();
   const tabs = ['List', 'Dashboard', 'Upcoming', 'Incomplete'];
-  const g    = gbyid(GACTIVE);
+  const g    = gbyid(GACTIVE) || { id: 'all', name: 'All Media', color: '#60a5fa' };
 
   c.innerHTML = `
     <div class="m-topbar">
