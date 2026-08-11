@@ -60,16 +60,20 @@ export function promptServerSignIn() {
 
   panelInner.innerHTML = `
     <div class="ph">
-      <div class="ph-title">Cloudflare Server Sign In</div>
+      <div class="ph-title">Account Sign In</div>
       <button class="ph-close" onclick="closePanel()">✕</button>
     </div>
     <div class="form-wrap" style="padding:20px">
       <div style="font-size:13px;color:var(--tx2);margin-bottom:16px">
-        Sign in to your server-side Aether Codex account handled directly by Cloudflare.
+        Sign in to your Aether Codex account with your email and password.
       </div>
       <div class="fg">
         <label class="flbl">Email Address *</label>
         <input class="fin" id="cf-auth-email" type="email" placeholder="user@example.com" autofocus>
+      </div>
+      <div class="fg">
+        <label class="flbl">Password *</label>
+        <input class="fin" id="cf-auth-password" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')submitServerSignIn()">
       </div>
       <div class="fg">
         <label class="flbl">Display Name (optional)</label>
@@ -85,32 +89,40 @@ export function promptServerSignIn() {
 
 export async function submitServerSignIn() {
   const emailInput = document.getElementById('cf-auth-email');
+  const passInput = document.getElementById('cf-auth-password');
   const nameInput = document.getElementById('cf-auth-name');
   const email = emailInput?.value?.trim();
+  const password = passInput?.value || '';
   const name = nameInput?.value?.trim();
 
   if (!email || !email.includes('@')) {
     showAlert('Please enter a valid email address.', { title: 'Invalid Email' });
     return;
   }
+  if (!password) {
+    showAlert('Please enter your password.', { title: 'Password Required' });
+    return;
+  }
 
   try {
-    toast('Authenticating with Cloudflare Worker...', 'var(--ac)');
-    const user = await loginServerAuth(email, name, navigator.userAgent || 'Web Browser');
+    toast('Authenticating...', 'var(--ac)');
+    const user = await loginServerAuth(email, password, name, navigator.userAgent || 'Web Browser');
     setCurrentUser(user);
     closePanel();
     toast(`Welcome back, ${user.name || user.email}!`, '#4ade80');
     if (typeof window.bootApp === 'function') window.bootApp();
   } catch (err) {
-    console.warn('[Auth UI] Cloudflare Server Auth error:', err.message);
+    console.warn('[Auth UI] Server Auth error:', err.message);
     toast('Sign in failed: ' + (err.message || 'Auth error'), '#fb7185');
   }
 }
 
 async function handleDirectSignIn(email) {
+  const password = prompt('Enter your password:');
+  if (!password) return;
   try {
-    toast('Authenticating with Cloudflare Worker...', 'var(--ac)');
-    const user = await loginServerAuth(email, null, navigator.userAgent || 'Web Browser');
+    toast('Authenticating...', 'var(--ac)');
+    const user = await loginServerAuth(email, password, null, navigator.userAgent || 'Web Browser');
     setCurrentUser(user);
     toast(`Welcome back, ${user.name || user.email}!`, '#4ade80');
     if (typeof window.bootApp === 'function') window.bootApp();

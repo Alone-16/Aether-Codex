@@ -405,8 +405,8 @@ function renderSettingsSync(el) {
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:14px">
       <div style="padding:14px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between">
         <div>
-          <div style="font-size:14px;font-weight:700;color:var(--tx)">Google Account</div>
-          <div style="font-size:12px;color:var(--tx2);margin-top:2px">${currentUser ? `Signed in as <b>${esc(currentUser.email)}</b>` : 'Not signed in with Google'}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--tx)">User Account</div>
+          <div style="font-size:12px;color:var(--tx2);margin-top:2px">${currentUser ? `Signed in as <b>${esc(currentUser.email)}</b>` : 'Not signed in'}</div>
         </div>
         <span style="font-size:11px;font-weight:700;color:${currentUser ? '#4ade80' : '#fb7185'};background:${currentUser ? 'rgba(74,222,128,.12)' : 'rgba(251,113,133,.12)'};border:1px solid ${currentUser ? 'rgba(74,222,128,.3)' : 'rgba(251,113,133,.3)'};border-radius:4px;padding:3px 8px">${currentUser ? '✓ Logged In' : '✗ Not Logged In'}</span>
       </div>
@@ -415,9 +415,9 @@ function renderSettingsSync(el) {
           ${currentUser ? `User profile: ${esc(currentUser.name || currentUser.email)}` : 'Sign in to synchronize your data across devices'}
         </div>
         ${currentUser ? `
-          <button onclick="if(window.logoutUser)window.logoutUser()" style="background:rgba(251,113,133,.1);color:#fb7185;border:1px solid rgba(251,113,133,.25);border-radius:5px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">Sign Out</button>
+          <button onclick="if(window.handleLogoutCurrent)window.handleLogoutCurrent()" style="background:rgba(251,113,133,.1);color:#fb7185;border:1px solid rgba(251,113,133,.25);border-radius:5px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">Sign Out</button>
         ` : `
-          <button onclick="if(window.promptGoogleSignIn)window.promptGoogleSignIn()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">Sign In with Google</button>
+          <button onclick="if(window.promptServerSignIn)window.promptServerSignIn()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">Sign In</button>
         `}
       </div>
     </div>

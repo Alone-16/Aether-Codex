@@ -57,9 +57,12 @@ export async function handleAuth(request, env, ctx, requestId, pathname) {
     let body = {};
     try { body = await request.json(); } catch (e) {}
 
-    const { email, name, device_name } = body;
+    const { email, password, name, device_name } = body;
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       return errorResponse('INVALID_INPUT', 'Valid email address required', requestId, 400);
+    }
+    if (!password || typeof password !== 'string') {
+      return errorResponse('INVALID_INPUT', 'Password required', requestId, 400);
     }
 
     const cleanEmail = email.toLowerCase().trim();
