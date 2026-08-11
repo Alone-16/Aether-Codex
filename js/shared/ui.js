@@ -2,7 +2,24 @@
 
 import { setPANEL, setPEDIT, render } from './utils.js';
 
-export function showConfirm(msg, onOk, opts = {}) {
+export function showConfirm(arg1, arg2, arg3) {
+  let msg = '';
+  let onOk = null;
+  let opts = {};
+
+  if (typeof arg2 === 'function') {
+    msg = arg1;
+    onOk = arg2;
+    opts = arg3 || {};
+  } else if (typeof arg3 === 'function') {
+    msg = arg2;
+    onOk = arg3;
+    opts = { title: arg1 };
+  } else {
+    msg = typeof arg2 === 'string' ? arg2 : (arg1 || '');
+    opts = typeof arg1 === 'string' && typeof arg2 === 'string' ? { title: arg1 } : {};
+  }
+
   const isDanger = opts.danger !== false;
   const title    = opts.title || (isDanger ? '⚠ Confirm' : 'Confirm');
   const okLabel  = opts.okLabel || (isDanger ? 'Delete' : 'OK');
@@ -19,7 +36,7 @@ export function showConfirm(msg, onOk, opts = {}) {
     </div>`;
   document.body.appendChild(el);
   el.querySelector('#modal-cancel').onclick = () => el.remove();
-  el.querySelector('#modal-ok').onclick     = () => { el.remove(); onOk(); };
+  el.querySelector('#modal-ok').onclick     = () => { el.remove(); if (typeof onOk === 'function') onOk(); };
   el.addEventListener('click', e => { if (e.target === el) el.remove(); });
   setTimeout(() => el.querySelector('#modal-ok').focus(), 50);
 }
