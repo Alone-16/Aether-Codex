@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════════
-//  js/shared/auth_ui.js — Cloudflare Server-Side & Navbar Account UI
+//  js/shared/auth_ui.js — Account Sign In / Sign Up & Navbar UI
 // ═══════════════════════════════════════════════════════════════════
 
-import { loginServerAuth, loginCFAccess, logout, logoutAllSessions, getAccessToken } from './api.js';
+import { loginServerAuth, registerUser, logout, logoutAllSessions, getAccessToken } from './api.js';
 import { toast, showAlert, showConfirm, closePanel } from './ui.js';
 
 let currentUser = null;
@@ -29,30 +29,21 @@ export function setCurrentUser(user) {
 }
 
 export async function initServerAuth() {
-  // Silent check for Cloudflare Access Edge headers auto-auth if no token exists
-  if (!getAccessToken()) {
-    try {
-      const user = await loginCFAccess();
-      if (user) {
-        setCurrentUser(user);
-        console.info('[Auth UI] Authenticated via Cloudflare Access Edge.');
-      }
-    } catch (e) {}
-  }
+  // Just restore user from storage and update UI — no auto network calls
+  getCurrentUser();
   updateNavbarUserUI();
 }
 
+// ═══════════════════════════════════════════════════════════════════
+//  SIGN IN PANEL
+// ═══════════════════════════════════════════════════════════════════
 export function promptServerSignIn() {
   const panelInner = document.getElementById('panel-inner');
   const rpanel = document.getElementById('rpanel');
   const poverlay = document.getElementById('poverlay');
   const content = document.getElementById('content');
 
-  if (!panelInner || !rpanel) {
-    const email = prompt('Enter your email address to sign in via Cloudflare Worker:');
-    if (email) handleDirectSignIn(email);
-    return;
-  }
+  if (!panelInner || !rpanel) return;
 
   rpanel.classList.add('open');
   if (poverlay) poverlay.classList.add('show');
@@ -60,12 +51,12 @@ export function promptServerSignIn() {
 
   panelInner.innerHTML = `
     <div class="ph">
-      <div class="ph-title">Account Sign In</div>
+      <div class="ph-title">Sign In</div>
       <button class="ph-close" onclick="closePanel()">✕</button>
     </div>
     <div class="form-wrap" style="padding:20px">
       <div style="font-size:13px;color:var(--tx2);margin-bottom:16px">
-        Sign in to your Aether Codex account with your email and password.
+        Sign in to your Aether Codex account.
       </div>
       <div class="fg">
         <label class="flbl">Email Address *</label>
@@ -75,14 +66,15 @@ export function promptServerSignIn() {
         <label class="flbl">Password *</label>
         <input class="fin" id="cf-auth-password" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')submitServerSignIn()">
       </div>
-      <div class="fg">
-        <label class="flbl">Display Name (optional)</label>
-        <input class="fin" id="cf-auth-name" type="text" placeholder="Your Name">
-      </div>
     </div>
-    <div class="panel-actions">
-      <button class="btn-cancel" onclick="closePanel()">Cancel</button>
-      <button class="btn-save" onclick="submitServerSignIn()">Sign In</button>
+    <div class="panel-actions" style="flex-direction:column;gap:8px">
+      <div style="display:flex;gap:8px;width:100%">
+        <button class="btn-cancel" onclick="closePanel()" style="flex:1">Cancel</button>
+        <button class="btn-save" onclick="submitServerSignIn()" style="flex:1">Sign In</button>
+      </div>
+      <div style="text-align:center;font-size:12px;color:var(--tx2);padding-top:4px">
+        Don't have an account? <a href="#" onclick="event.preventDefault();window.promptServerSignUp()" style="color:var(--ac);font-weight:700;text-decoration:none">Sign Up</a>
+      </div>
     </div>
   `;
 }
@@ -90,10 +82,8 @@ export function promptServerSignIn() {
 export async function submitServerSignIn() {
   const emailInput = document.getElementById('cf-auth-email');
   const passInput = document.getElementById('cf-auth-password');
-  const nameInput = document.getElementById('cf-auth-name');
   const email = emailInput?.value?.trim();
   const password = passInput?.value || '';
-  const name = nameInput?.value?.trim();
 
   if (!email || !email.includes('@')) {
     showAlert('Please enter a valid email address.', { title: 'Invalid Email' });
@@ -105,32 +95,110 @@ export async function submitServerSignIn() {
   }
 
   try {
-    toast('Authenticating...', 'var(--ac)');
-    const user = await loginServerAuth(email, password, name, navigator.userAgent || 'Web Browser');
+    toast('Signing in...', 'var(--ac)');
+    const user = await loginServerAuth(email, password, null, navigator.userAgent || 'Web Browser');
     setCurrentUser(user);
     closePanel();
     toast(`Welcome back, ${user.name || user.email}!`, '#4ade80');
     if (typeof window.bootApp === 'function') window.bootApp();
   } catch (err) {
-    console.warn('[Auth UI] Server Auth error:', err.message);
+    console.warn('[Auth UI] Sign in error:', err.message);
     toast('Sign in failed: ' + (err.message || 'Auth error'), '#fb7185');
   }
 }
 
-async function handleDirectSignIn(email) {
-  const password = prompt('Enter your password:');
-  if (!password) return;
+// ═══════════════════════════════════════════════════════════════════
+//  SIGN UP PANEL
+// ═══════════════════════════════════════════════════════════════════
+export function promptServerSignUp() {
+  const panelInner = document.getElementById('panel-inner');
+  const rpanel = document.getElementById('rpanel');
+  const poverlay = document.getElementById('poverlay');
+  const content = document.getElementById('content');
+
+  if (!panelInner || !rpanel) return;
+
+  rpanel.classList.add('open');
+  if (poverlay) poverlay.classList.add('show');
+  if (content) content.classList.add('pushed');
+
+  panelInner.innerHTML = `
+    <div class="ph">
+      <div class="ph-title">Create Account</div>
+      <button class="ph-close" onclick="closePanel()">✕</button>
+    </div>
+    <div class="form-wrap" style="padding:20px">
+      <div style="font-size:13px;color:var(--tx2);margin-bottom:16px">
+        Create a new Aether Codex account.
+      </div>
+      <div class="fg">
+        <label class="flbl">Display Name</label>
+        <input class="fin" id="reg-name" type="text" placeholder="Your Name" autofocus>
+      </div>
+      <div class="fg">
+        <label class="flbl">Email Address *</label>
+        <input class="fin" id="reg-email" type="email" placeholder="user@example.com">
+      </div>
+      <div class="fg">
+        <label class="flbl">Password * (min 6 chars)</label>
+        <input class="fin" id="reg-password" type="password" placeholder="••••••••">
+      </div>
+      <div class="fg">
+        <label class="flbl">Confirm Password *</label>
+        <input class="fin" id="reg-password2" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')submitServerSignUp()">
+      </div>
+    </div>
+    <div class="panel-actions" style="flex-direction:column;gap:8px">
+      <div style="display:flex;gap:8px;width:100%">
+        <button class="btn-cancel" onclick="closePanel()" style="flex:1">Cancel</button>
+        <button class="btn-save" onclick="submitServerSignUp()" style="flex:1">Sign Up</button>
+      </div>
+      <div style="text-align:center;font-size:12px;color:var(--tx2);padding-top:4px">
+        Already have an account? <a href="#" onclick="event.preventDefault();window.promptServerSignIn()" style="color:var(--ac);font-weight:700;text-decoration:none">Sign In</a>
+      </div>
+    </div>
+  `;
+}
+
+export async function submitServerSignUp() {
+  const nameInput = document.getElementById('reg-name');
+  const emailInput = document.getElementById('reg-email');
+  const passInput = document.getElementById('reg-password');
+  const pass2Input = document.getElementById('reg-password2');
+  const name = nameInput?.value?.trim();
+  const email = emailInput?.value?.trim();
+  const password = passInput?.value || '';
+  const password2 = pass2Input?.value || '';
+
+  if (!email || !email.includes('@')) {
+    showAlert('Please enter a valid email address.', { title: 'Invalid Email' });
+    return;
+  }
+  if (!password || password.length < 6) {
+    showAlert('Password must be at least 6 characters.', { title: 'Weak Password' });
+    return;
+  }
+  if (password !== password2) {
+    showAlert('Passwords do not match.', { title: 'Mismatch' });
+    return;
+  }
+
   try {
-    toast('Authenticating...', 'var(--ac)');
-    const user = await loginServerAuth(email, password, null, navigator.userAgent || 'Web Browser');
+    toast('Creating account...', 'var(--ac)');
+    const user = await registerUser(email, password, name, navigator.userAgent || 'Web Browser');
     setCurrentUser(user);
-    toast(`Welcome back, ${user.name || user.email}!`, '#4ade80');
+    closePanel();
+    toast(`Welcome, ${user.name || user.email}! Account created.`, '#4ade80');
     if (typeof window.bootApp === 'function') window.bootApp();
   } catch (err) {
-    toast('Sign in failed: ' + err.message, '#fb7185');
+    console.warn('[Auth UI] Sign up error:', err.message);
+    toast('Sign up failed: ' + (err.message || 'Registration error'), '#fb7185');
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+//  NAVBAR USER UI
+// ═══════════════════════════════════════════════════════════════════
 export function updateNavbarUserUI() {
   const container = document.getElementById('user-auth-wrap');
   if (!container) return;
@@ -146,11 +214,17 @@ export function updateNavbarUserUI() {
     `;
   } else {
     container.innerHTML = `
-      <button class="nb-btn" onclick="window.promptServerSignIn()" style="font-size:11px;font-weight:700;padding:4px 10px;background:var(--ac);color:#000;border:none">Sign In</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="nb-btn" onclick="window.promptServerSignIn()" style="font-size:11px;font-weight:700;padding:4px 10px;background:transparent;color:var(--ac);border:1px solid var(--ac)">Sign In</button>
+        <button class="nb-btn" onclick="window.promptServerSignUp()" style="font-size:11px;font-weight:700;padding:4px 10px;background:var(--ac);color:#000;border:none">Sign Up</button>
+      </div>
     `;
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+//  ACCOUNT MODAL
+// ═══════════════════════════════════════════════════════════════════
 export function openAccountModal() {
   const user = getCurrentUser();
   if (!user) {
@@ -216,7 +290,9 @@ if (typeof window !== 'undefined') {
   Object.assign(window, {
     initServerAuth,
     promptServerSignIn,
+    promptServerSignUp,
     submitServerSignIn,
+    submitServerSignUp,
     openAccountModal,
     handleLogoutCurrent,
     handleLogoutAllSessions,

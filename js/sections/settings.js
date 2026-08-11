@@ -417,7 +417,10 @@ function renderSettingsSync(el) {
         ${currentUser ? `
           <button onclick="if(window.handleLogoutCurrent)window.handleLogoutCurrent()" style="background:rgba(251,113,133,.1);color:#fb7185;border:1px solid rgba(251,113,133,.25);border-radius:5px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">Sign Out</button>
         ` : `
-          <button onclick="if(window.promptServerSignIn)window.promptServerSignIn()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">Sign In</button>
+          <div style="display:flex;gap:8px">
+            <button onclick="if(window.promptServerSignIn)window.promptServerSignIn()" style="background:transparent;color:var(--ac);border:1px solid var(--ac);border-radius:5px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">Sign In</button>
+            <button onclick="if(window.promptServerSignUp)window.promptServerSignUp()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">Sign Up</button>
+          </div>
         `}
       </div>
     </div>

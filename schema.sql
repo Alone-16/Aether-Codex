@@ -4,10 +4,11 @@
 
 -- 1. Users table
 CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,               -- Google User ID (sub)
+    id TEXT PRIMARY KEY,               -- User ID
     email TEXT NOT NULL,
     name TEXT,
     picture TEXT,
+    password_hash TEXT,                -- PBKDF2 hashed password (salt:hash)
     created_at INTEGER DEFAULT (unixepoch())
 );
 

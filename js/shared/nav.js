@@ -74,12 +74,14 @@ export function nav(id, push = true) {
     // Apply genre CSS vars for media section
     if (id === 'media') {
       const g   = gbyid(GACTIVE);
-      const c2  = g.color;
-      const nbSec = document.getElementById('nb-sec');
-      if (nbSec) nbSec.textContent = g.name;
-      document.documentElement.style.setProperty('--ac', c2);
-      const [r, gg, b] = [parseInt(c2.slice(1,3),16), parseInt(c2.slice(3,5),16), parseInt(c2.slice(5,7),16)];
-      document.documentElement.style.setProperty('--ac-rgb', `${r},${gg},${b}`);
+      if (g) {
+        const c2  = g.color || '#a78bfa';
+        const nbSec = document.getElementById('nb-sec');
+        if (nbSec) nbSec.textContent = g.name;
+        document.documentElement.style.setProperty('--ac', c2);
+        const [r, gg, b] = [parseInt(c2.slice(1,3),16), parseInt(c2.slice(3,5),16), parseInt(c2.slice(5,7),16)];
+        document.documentElement.style.setProperty('--ac-rgb', `${r},${gg},${b}`);
+      }
     } else {
       document.documentElement.style.removeProperty('--ac');
       document.documentElement.style.removeProperty('--ac-rgb');

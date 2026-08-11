@@ -161,10 +161,10 @@ export async function loginServerAuth(email, password, name, deviceName) {
   return data.user;
 }
 
-export async function loginCFAccess(email, name, deviceName) {
-  const data = await apiReq('/v1/auth/cf-access', {
+export async function registerUser(email, password, name, deviceName) {
+  const data = await apiReq('/v1/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, name, device_name: deviceName }),
+    body: JSON.stringify({ email, password, name, device_name: deviceName }),
   });
   if (data.access_token) setTokens(data.access_token, data.refresh_token);
   return data.user;

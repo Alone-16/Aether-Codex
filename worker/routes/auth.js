@@ -2,58 +2,59 @@ import { successResponse, errorResponse } from '../utils/response.js';
 import { signJWT, hashToken } from '../services/jwt.js';
 import { upsertUser, storeRefreshToken, findRefreshToken, deleteRefreshToken, deleteAllUserRefreshTokens, getUserRefreshTokens } from '../services/d1.js';
 
+// ── Password Hashing (PBKDF2 via WebCrypto) ──────────────────────
+async function hashPassword(password) {
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
+  const hashArr = Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
+  const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+  return saltHex + ':' + hashArr;
+}
+
+async function verifyPassword(password, stored) {
+  if (!stored || !stored.includes(':')) return false;
+  const [saltHex, expectedHash] = stored.split(':');
+  const salt = new Uint8Array(saltHex.match(/.{2}/g).map(b => parseInt(b, 16)));
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
+  const hashArr = Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashArr === expectedHash;
+}
+
+// ── Helper: issue tokens ──────────────────────────────────────────
+async function issueTokens(request, env, requestId, user, deviceName) {
+  const jwtSecret = env.JWT_SECRET || 'aether-codex-jwt-secret-key-change-in-prod-vars';
+  const accessToken = await signJWT({ sub: user.id, email: user.email }, jwtSecret, 900);
+  const rawRefreshToken = crypto.randomUUID() + '-' + crypto.randomUUID();
+  const tokenHash = await hashToken(rawRefreshToken);
+  const expiresAt = Math.floor(Date.now() / 1000) + (30 * 24 * 3600);
+  const ipAddress = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
+
+  await storeRefreshToken(env.DB, {
+    id: crypto.randomUUID(),
+    userId: user.id,
+    tokenHash,
+    deviceName: deviceName || request.headers.get('User-Agent') || 'Web Browser',
+    ipAddress,
+    expiresAt,
+  });
+
+  return successResponse({
+    user,
+    access_token: accessToken,
+    refresh_token: rawRefreshToken,
+    expires_in: 900,
+  }, requestId);
+}
+
 export async function handleAuth(request, env, ctx, requestId, pathname) {
   const method = request.method;
 
-  // ── POST /v1/auth/cf-access — Cloudflare Access Edge Auth ──
-  if (method === 'POST' && pathname === '/v1/auth/cf-access') {
-    const cfEmail = request.headers.get('CF-Access-Authenticated-User-Email');
-    const cfUserId = request.headers.get('CF-Access-Authenticated-User-Id');
-
-    let body = {};
-    try { body = await request.json(); } catch (e) {}
-    const email = cfEmail || body.email;
-    if (!email) {
-      return errorResponse('UNAUTHORIZED', 'Cloudflare Access headers or email required', requestId, 401);
-    }
-
-    const userId = cfUserId || 'cf_' + btoa(email.toLowerCase().trim()).replace(/=/g, '');
-    const user = {
-      id: userId,
-      email: email.toLowerCase().trim(),
-      name: body.name || email.split('@')[0],
-      picture: body.picture || null,
-    };
-
-    await upsertUser(env.DB, user);
-
-    const jwtSecret = env.JWT_SECRET || 'aether-codex-jwt-secret-key-change-in-prod-vars';
-    const accessToken = await signJWT({ sub: user.id, email: user.email }, jwtSecret, 900);
-
-    const rawRefreshToken = crypto.randomUUID() + '-' + crypto.randomUUID();
-    const tokenHash = await hashToken(rawRefreshToken);
-    const expiresAt = Math.floor(Date.now() / 1000) + (30 * 24 * 3600);
-    const ipAddress = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
-
-    await storeRefreshToken(env.DB, {
-      id: crypto.randomUUID(),
-      userId: user.id,
-      tokenHash,
-      deviceName: body.device_name || request.headers.get('User-Agent') || 'Cloudflare Device',
-      ipAddress,
-      expiresAt,
-    });
-
-    return successResponse({
-      user,
-      access_token: accessToken,
-      refresh_token: rawRefreshToken,
-      expires_in: 900,
-    }, requestId);
-  }
-
-  // ── POST /v1/auth/login — Server-Side Cloudflare Direct Login ──
-  if (method === 'POST' && pathname === '/v1/auth/login') {
+  // ── POST /v1/auth/register — Create New Account ──
+  if (method === 'POST' && pathname === '/v1/auth/register') {
     let body = {};
     try { body = await request.json(); } catch (e) {}
 
@@ -61,12 +62,20 @@ export async function handleAuth(request, env, ctx, requestId, pathname) {
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       return errorResponse('INVALID_INPUT', 'Valid email address required', requestId, 400);
     }
-    if (!password || typeof password !== 'string') {
-      return errorResponse('INVALID_INPUT', 'Password required', requestId, 400);
+    if (!password || typeof password !== 'string' || password.length < 6) {
+      return errorResponse('INVALID_INPUT', 'Password must be at least 6 characters', requestId, 400);
     }
 
     const cleanEmail = email.toLowerCase().trim();
     const userId = 'usr_' + btoa(cleanEmail).replace(/=/g, '').replace(/[^a-zA-Z0-9]/g, '');
+
+    // Check if user already exists
+    const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?;').bind(cleanEmail).first();
+    if (existing) {
+      return errorResponse('USER_EXISTS', 'An account with this email already exists. Please sign in.', requestId, 409);
+    }
+
+    const passwordHash = await hashPassword(password);
 
     const user = {
       id: userId,
@@ -75,31 +84,55 @@ export async function handleAuth(request, env, ctx, requestId, pathname) {
       picture: null,
     };
 
-    await upsertUser(env.DB, user);
+    // Insert user with password hash
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, name, picture, password_hash, created_at)
+       VALUES (?, ?, ?, ?, ?, unixepoch())
+       ON CONFLICT(id) DO UPDATE SET email = excluded.email, name = excluded.name, password_hash = excluded.password_hash;`
+    ).bind(user.id, user.email, user.name, null, passwordHash).run();
 
-    const jwtSecret = env.JWT_SECRET || 'aether-codex-jwt-secret-key-change-in-prod-vars';
-    const accessToken = await signJWT({ sub: user.id, email: user.email }, jwtSecret, 900);
+    return await issueTokens(request, env, requestId, user, device_name);
+  }
 
-    const rawRefreshToken = crypto.randomUUID() + '-' + crypto.randomUUID();
-    const tokenHash = await hashToken(rawRefreshToken);
-    const expiresAt = Math.floor(Date.now() / 1000) + (30 * 24 * 3600);
-    const ipAddress = request.headers.get('CF-Connecting-IP') || '127.0.0.1';
+  // ── POST /v1/auth/login — Sign In with Email & Password ──
+  if (method === 'POST' && pathname === '/v1/auth/login') {
+    let body = {};
+    try { body = await request.json(); } catch (e) {}
 
-    await storeRefreshToken(env.DB, {
-      id: crypto.randomUUID(),
-      userId: user.id,
-      tokenHash,
-      deviceName: device_name || request.headers.get('User-Agent') || 'Web Browser',
-      ipAddress,
-      expiresAt,
-    });
+    const { email, password, device_name } = body;
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      return errorResponse('INVALID_INPUT', 'Valid email address required', requestId, 400);
+    }
+    if (!password || typeof password !== 'string') {
+      return errorResponse('INVALID_INPUT', 'Password required', requestId, 400);
+    }
 
-    return successResponse({
-      user,
-      access_token: accessToken,
-      refresh_token: rawRefreshToken,
-      expires_in: 900,
-    }, requestId);
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Find user by email
+    const userRow = await env.DB.prepare('SELECT id, email, name, picture, password_hash FROM users WHERE email = ?;').bind(cleanEmail).first();
+    if (!userRow) {
+      return errorResponse('USER_NOT_FOUND', 'No account found with this email. Please sign up first.', requestId, 401);
+    }
+
+    // Verify password
+    if (!userRow.password_hash) {
+      return errorResponse('NO_PASSWORD', 'This account was created before passwords were required. Please sign up again.', requestId, 401);
+    }
+
+    const valid = await verifyPassword(password, userRow.password_hash);
+    if (!valid) {
+      return errorResponse('WRONG_PASSWORD', 'Incorrect password', requestId, 401);
+    }
+
+    const user = {
+      id: userRow.id,
+      email: userRow.email,
+      name: userRow.name,
+      picture: userRow.picture,
+    };
+
+    return await issueTokens(request, env, requestId, user, device_name);
   }
 
   // ── POST /v1/auth/refresh — Refresh Access Token ──
@@ -118,7 +151,6 @@ export async function handleAuth(request, env, ctx, requestId, pathname) {
       return errorResponse('INVALID_REFRESH_TOKEN', 'Refresh token expired or revoked', requestId, 401);
     }
 
-    // Issue new 15-minute Access Token
     const jwtSecret = env.JWT_SECRET || 'aether-codex-jwt-secret-key-change-in-prod-vars';
     const accessToken = await signJWT({ sub: record.user_id }, jwtSecret, 900);
 
