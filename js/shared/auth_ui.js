@@ -1,9 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════
-//  js/shared/auth_ui.js — Google Sign-In & Navbar Account UI
+//  js/shared/auth_ui.js — Cloudflare Server-Side & Navbar Account UI
 // ═══════════════════════════════════════════════════════════════════
 
-import { loginWithGoogle, logout, logoutAllSessions, getAccessToken } from './api.js';
-import { toast, showAlert, showConfirm } from './ui.js';
+import { loginServerAuth, loginCFAccess, logout, logoutAllSessions, getAccessToken } from './api.js';
+import { toast, showAlert, showConfirm, closePanel } from './ui.js';
 
 let currentUser = null;
 
@@ -28,66 +28,94 @@ export function setCurrentUser(user) {
   updateNavbarUserUI();
 }
 
-let googleInitialized = false;
-
-export function initGoogleAuth(retries = 0) {
-  if (typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
-    if (retries < 15) {
-      setTimeout(() => initGoogleAuth(retries + 1), 600);
-    } else {
-      console.warn('[Auth UI] Google Identity Services failed to load after retries.');
-    }
-    return;
+export async function initServerAuth() {
+  // Silent check for Cloudflare Access Edge headers auto-auth if no token exists
+  if (!getAccessToken()) {
+    try {
+      const user = await loginCFAccess();
+      if (user) {
+        setCurrentUser(user);
+        console.info('[Auth UI] Authenticated via Cloudflare Access Edge.');
+      }
+    } catch (e) {}
   }
-
-  const clientId = window.CLIENT_ID || '750528266098-oudtbb5dcmf4c167sf7l3fu46luqeq11.apps.googleusercontent.com';
-
-  google.accounts.id.initialize({
-    client_id: clientId,
-    callback: handleGoogleCredentialResponse,
-    auto_select: false,
-  });
-
-  googleInitialized = true;
-  console.info('[Auth UI] Google Identity Services initialized.');
   updateNavbarUserUI();
 }
 
-function ensureGoogleInitialized() {
-  if (googleInitialized) return true;
-  if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-    const clientId = window.CLIENT_ID || '750528266098-oudtbb5dcmf4c167sf7l3fu46luqeq11.apps.googleusercontent.com';
-    google.accounts.id.initialize({
-      client_id: clientId,
-      callback: handleGoogleCredentialResponse,
-      auto_select: false,
-    });
-    googleInitialized = true;
-    return true;
+export function promptServerSignIn() {
+  const panelInner = document.getElementById('panel-inner');
+  const rpanel = document.getElementById('rpanel');
+  const poverlay = document.getElementById('poverlay');
+  const content = document.getElementById('content');
+
+  if (!panelInner || !rpanel) {
+    const email = prompt('Enter your email address to sign in via Cloudflare Worker:');
+    if (email) handleDirectSignIn(email);
+    return;
   }
-  return false;
+
+  rpanel.classList.add('open');
+  if (poverlay) poverlay.classList.add('show');
+  if (content) content.classList.add('pushed');
+
+  panelInner.innerHTML = `
+    <div class="ph">
+      <div class="ph-title">Cloudflare Server Sign In</div>
+      <button class="ph-close" onclick="closePanel()">✕</button>
+    </div>
+    <div class="form-wrap" style="padding:20px">
+      <div style="font-size:13px;color:var(--tx2);margin-bottom:16px">
+        Sign in to your server-side Aether Codex account handled directly by Cloudflare.
+      </div>
+      <div class="fg">
+        <label class="flbl">Email Address *</label>
+        <input class="fin" id="cf-auth-email" type="email" placeholder="user@example.com" autofocus>
+      </div>
+      <div class="fg">
+        <label class="flbl">Display Name (optional)</label>
+        <input class="fin" id="cf-auth-name" type="text" placeholder="Your Name">
+      </div>
+    </div>
+    <div class="panel-actions">
+      <button class="btn-cancel" onclick="closePanel()">Cancel</button>
+      <button class="btn-save" onclick="submitServerSignIn()">Sign In</button>
+    </div>
+  `;
 }
 
-export function promptGoogleSignIn() {
-  if (ensureGoogleInitialized()) {
-    google.accounts.id.prompt();
-  } else {
-    showAlert('Google Sign-In', 'Google Sign-In library is still loading. Please try again in a moment.');
-  }
-}
+export async function submitServerSignIn() {
+  const emailInput = document.getElementById('cf-auth-email');
+  const nameInput = document.getElementById('cf-auth-name');
+  const email = emailInput?.value?.trim();
+  const name = nameInput?.value?.trim();
 
-async function handleGoogleCredentialResponse(response) {
-  if (!response.credential) return;
+  if (!email || !email.includes('@')) {
+    showAlert('Please enter a valid email address.', { title: 'Invalid Email' });
+    return;
+  }
+
   try {
-    toast('Signing in with Google...', '#60a5fa');
-    const user = await loginWithGoogle(response.credential, navigator.userAgent || 'Web Browser');
+    toast('Authenticating with Cloudflare Worker...', 'var(--ac)');
+    const user = await loginServerAuth(email, name, navigator.userAgent || 'Web Browser');
     setCurrentUser(user);
+    closePanel();
     toast(`Welcome back, ${user.name || user.email}!`, '#4ade80');
-    // Refresh active section data
     if (typeof window.bootApp === 'function') window.bootApp();
   } catch (err) {
-    console.warn('[Auth UI] Google Sign-In error:', err.message);
-    toast('Google Sign-In failed: ' + (err.message || 'Auth error'), '#fb7185');
+    console.warn('[Auth UI] Cloudflare Server Auth error:', err.message);
+    toast('Sign in failed: ' + (err.message || 'Auth error'), '#fb7185');
+  }
+}
+
+async function handleDirectSignIn(email) {
+  try {
+    toast('Authenticating with Cloudflare Worker...', 'var(--ac)');
+    const user = await loginServerAuth(email, null, navigator.userAgent || 'Web Browser');
+    setCurrentUser(user);
+    toast(`Welcome back, ${user.name || user.email}!`, '#4ade80');
+    if (typeof window.bootApp === 'function') window.bootApp();
+  } catch (err) {
+    toast('Sign in failed: ' + err.message, '#fb7185');
   }
 }
 
@@ -97,31 +125,32 @@ export function updateNavbarUserUI() {
 
   const user = getCurrentUser();
   if (user) {
+    const initial = (user.name || user.email || 'A').charAt(0).toUpperCase();
     container.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="window.openAccountModal()" title="${user.email}">
-        <img src="${user.picture || 'favicon.png'}" style="width:28px;height:28px;border-radius:50%;border:1px solid var(--ac)" alt="${user.name || 'User'}">
+        <div style="width:28px;height:28px;border-radius:50%;border:1px solid var(--ac);background:var(--surf2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${initial}</div>
         <span style="font-size:12px;font-weight:600;color:var(--tx)" class="mob-hide">${user.name ? user.name.split(' ')[0] : 'Account'}</span>
       </div>
     `;
   } else {
     container.innerHTML = `
-      <button class="nb-btn" onclick="window.promptGoogleSignIn()" style="font-size:11px;font-weight:700;padding:4px 10px;background:var(--ac);color:#000;border:none">Sign In</button>
+      <button class="nb-btn" onclick="window.promptServerSignIn()" style="font-size:11px;font-weight:700;padding:4px 10px;background:var(--ac);color:#000;border:none">Sign In</button>
     `;
   }
 }
 
-
 export function openAccountModal() {
   const user = getCurrentUser();
   if (!user) {
-    promptGoogleSignIn();
+    promptServerSignIn();
     return;
   }
 
+  const initial = (user.name || user.email || 'A').charAt(0).toUpperCase();
   const html = `
     <div style="padding:20px;max-width:400px;margin:0 auto;color:var(--tx);font-family:var(--fd)">
       <div style="text-align:center;margin-bottom:20px">
-        <img src="${user.picture || 'favicon.png'}" style="width:64px;height:64px;border-radius:50%;border:2px solid var(--ac);margin-bottom:8px" alt="Avatar">
+        <div style="width:64px;height:64px;border-radius:50%;border:2px solid var(--ac);background:var(--surf2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;margin:0 auto 8px">${initial}</div>
         <div style="font-size:16px;font-weight:700;color:var(--tx)">${user.name || 'User'}</div>
         <div style="font-size:12px;color:var(--mu)">${user.email}</div>
       </div>
@@ -132,8 +161,22 @@ export function openAccountModal() {
     </div>
   `;
 
-  if (typeof window.showPanelHtml === 'function') {
-    window.showPanelHtml('Account Settings', html);
+  const panelInner = document.getElementById('panel-inner');
+  const rpanel = document.getElementById('rpanel');
+  const poverlay = document.getElementById('poverlay');
+  const content = document.getElementById('content');
+
+  if (panelInner && rpanel) {
+    panelInner.innerHTML = `
+      <div class="ph">
+        <div class="ph-title">Account Settings</div>
+        <button class="ph-close" onclick="closePanel()">✕</button>
+      </div>
+      ${html}
+    `;
+    rpanel.classList.add('open');
+    if (poverlay) poverlay.classList.add('show');
+    if (content) content.classList.add('pushed');
   } else {
     alert(`Account: ${user.name} (${user.email})`);
   }
@@ -159,8 +202,9 @@ export async function handleLogoutAllSessions() {
 
 if (typeof window !== 'undefined') {
   Object.assign(window, {
-    initGoogleAuth,
-    promptGoogleSignIn,
+    initServerAuth,
+    promptServerSignIn,
+    submitServerSignIn,
     openAccountModal,
     handleLogoutCurrent,
     handleLogoutAllSessions,

@@ -152,10 +152,19 @@ export async function apiReq(endpoint, opts = {}, retries = 3, backoffMs = 500) 
 }
 
 // ── AUTH APIS ──────────────────────────────────────────────────────
-export async function loginWithGoogle(idToken, deviceName) {
-  const data = await apiReq('/v1/auth/google', {
+export async function loginServerAuth(email, name, deviceName) {
+  const data = await apiReq('/v1/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ id_token: idToken, device_name: deviceName }),
+    body: JSON.stringify({ email, name, device_name: deviceName }),
+  });
+  if (data.access_token) setTokens(data.access_token, data.refresh_token);
+  return data.user;
+}
+
+export async function loginCFAccess(email, name, deviceName) {
+  const data = await apiReq('/v1/auth/cf-access', {
+    method: 'POST',
+    body: JSON.stringify({ email, name, device_name: deviceName }),
   });
   if (data.access_token) setTokens(data.access_token, data.refresh_token);
   return data.user;
@@ -227,6 +236,8 @@ export const musicApi = {
   patch: (id, changes) => apiReq(`/v1/music/${id}`, { method: 'PATCH', body: JSON.stringify(changes) }),
   delete: id => apiReq(`/v1/music/${id}`, { method: 'DELETE' }),
   putPlaylists: playlists => apiReq('/v1/playlists', { method: 'PUT', body: JSON.stringify({ playlists }) }),
+  syncPlaylist: (playlistUrl, syncIntervalDays = 7) => apiReq('/v1/music/sync-playlist', { method: 'POST', body: JSON.stringify({ playlist_url: playlistUrl, sync_interval_days: syncIntervalDays }) }),
+  syncDuePlaylists: () => apiReq('/v1/music/sync-due', { method: 'POST' }),
 };
 
 // ── NOTES RESOURCE APIS ────────────────────────────────────────────

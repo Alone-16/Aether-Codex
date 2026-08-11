@@ -128,6 +128,9 @@ CREATE TABLE IF NOT EXISTS playlists (
     thumbnail TEXT,
     item_count INTEGER DEFAULT 0,
     synced INTEGER DEFAULT 0,
+    playlist_url TEXT,
+    sync_interval_days INTEGER DEFAULT 7,
+    last_synced_at INTEGER DEFAULT 0,
     updated_at INTEGER DEFAULT (unixepoch()),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );

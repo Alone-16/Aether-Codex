@@ -4,7 +4,7 @@
 
 // ── Shared infrastructure (must come first) ──────────────────────
 import {
-  DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K, CLIENT_ID, DATA_VERSION,
+  DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K, DATA_VERSION,
   uid, esc, today, fmtDate, h2r, gbyid, estTime, entryStats, fmtMin,
   saveData, saveGenres, scheduleDriveSync,
   setDATA, setGENRES, setGACTIVE, setCURRENT, setSEARCH, setMEDIA_PAGE,
@@ -29,7 +29,7 @@ Object.assign(window, {
   nav, render, renderPage,
   toast, showConfirm, showAlert, closePanel,
   openMob, closeMob, driveAction, syncDrive,
-  DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K, CLIENT_ID, DATA_VERSION,
+  DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K, DATA_VERSION,
   uid, esc, today, fmtDate, h2r, gbyid, estTime, entryStats, fmtMin,
   saveData, saveGenres, scheduleDriveSync,
   setDATA, setGENRES, setGACTIVE, setCURRENT, setSEARCH, setMEDIA_PAGE,
@@ -88,7 +88,7 @@ import {
   mediaApi, gamesApi, booksApi, musicApi, notesApi, vaultApi, logsApi, settingsApi
 } from './shared/api.js';
 
-import { initGoogleAuth, updateNavbarUserUI } from './shared/auth_ui.js';
+import { initServerAuth, updateNavbarUserUI } from './shared/auth_ui.js';
 
 // ── Shared extras ─────────────────────────────────────────────────
 await import('./shared/extras.js').catch(e =>
@@ -106,8 +106,8 @@ async function boot() {
     console.warn('[Boot] Worker Health Check unreachable. Will retry on request.');
   }
 
-  // 2. Initialize Google Identity & Auth UI
-  initGoogleAuth();
+  // 2. Initialize Server Auth & Auth UI
+  await initServerAuth();
 
   // 3. Attempt silent refresh of auth tokens
   if (!getAccessToken()) {

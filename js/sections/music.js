@@ -1,31 +1,8 @@
 // ═══════════════════════════════════════════════════════
-//  MUSIC DATA & STATE
+//  MUSIC DATA & STATE — YouTube Music Link Sync via Cloudflare Worker
 // ═══════════════════════════════════════════════════════
 const MUSIC_KEY     = 'ac_v4_music';
 const MUSIC_PL_KEY  = 'ac_v4_music_playlists';
-const YT_SCOPE      = 'https://www.googleapis.com/auth/youtube.readonly';
-
-const YT_TOKEN_KEY  = 'ac_v4_yt_token';
-const YT_EXP_KEY    = 'ac_v4_yt_exp';
-
-let YT_ACCESS_TOKEN = null;
-let YT_TOKEN_EXP = 0;
-
-function _getYTToken() {
-  return YT_ACCESS_TOKEN && Date.now() < YT_TOKEN_EXP ? YT_ACCESS_TOKEN : null;
-}
-
-function _setYTToken(token, expMs) {
-  YT_ACCESS_TOKEN = token;
-  YT_TOKEN_EXP = expMs;
-}
-
-function _clearYTToken() {
-  YT_ACCESS_TOKEN = null;
-  YT_TOKEN_EXP = 0;
-}
-
-function _isYTConnected() { return !!_getYTToken(); }
 
 function loadMusic()      { return window.MDATA || []; }
 function saveMusic(d)     { MDATA = d; window.MDATA = d; }
@@ -47,165 +24,123 @@ export function setMPLAYLISTS(p) {
 }
 window.setMDATA = setMDATA;
 window.setMPLAYLISTS = setMPLAYLISTS;
+
 let MUSIC_PAGE = 'library';
 let MSEARCH    = '';
-let YT_TOKEN_CLIENT = null;
-let YT_READY   = false;
 let YT_SYNCING = false;
 
-// ── YT OAuth (shares GIS client, adds youtube scope) ──
-function initYTAuth() {
-  if (!window.google?.accounts?.oauth2) { setTimeout(initYTAuth, 600); return; }
-  YT_TOKEN_CLIENT = google.accounts.oauth2.initTokenClient({
-    client_id: CLIENT_ID,
-    scope: YT_SCOPE,
-    include_granted_scopes: false,
-    callback: async resp => {
-      if (resp.error) { toast('YouTube auth failed: ' + resp.error, 'var(--err)'); return; }
-      _setYTToken(resp.access_token, Date.now() + (resp.expires_in - 60) * 1000);
-      updateMusicSyncBtn('syncing');
-      await syncYouTubePlaylists();
-    }
-  });
-  YT_READY = true;
-  // Auto-sync on open if connected
-  if (_isYTConnected()) syncYouTubePlaylists();
+// ═══════════════════════════════════════════════════════
+//  YOUTUBE PLAYLIST LINK SYNC (SERVER API)
+// ═══════════════════════════════════════════════════════
+
+export function openAddPlaylistModal() {
+  const rpanel = document.getElementById('rpanel');
+  const poverlay = document.getElementById('poverlay');
+  const content = document.getElementById('content');
+  const panelInner = document.getElementById('panel-inner');
+
+  if (!rpanel || !panelInner) return;
+
+  panelInner.innerHTML = `
+    <div class="ph">
+      <div class="ph-title">Sync YouTube Playlist</div>
+      <button class="ph-close" onclick="closePanel()">✕</button>
+    </div>
+    <div class="form-wrap">
+      <div class="fg">
+        <label class="flbl">YouTube / YT Music Playlist Link *</label>
+        <input class="fin" id="pl-sync-url" placeholder="https://music.youtube.com/playlist?list=PL..." autofocus>
+        <div style="font-size:11px;color:var(--mu);margin-top:4px">Paste any public or unlisted YouTube or YT Music playlist URL</div>
+      </div>
+      <div class="fg">
+        <label class="flbl">Sync Interval</label>
+        <select class="fsel" id="pl-sync-interval">
+          <option value="5" selected>Every 5 Days</option>
+          <option value="7">Every 1 Week (7 Days)</option>
+          <option value="10">Every 10 Days</option>
+          <option value="1">Daily (Every 1 Day)</option>
+          <option value="14">Every 2 Weeks (14 Days)</option>
+          <option value="30">Monthly (30 Days)</option>
+          <option value="0">Manual Only</option>
+        </select>
+      </div>
+    </div>
+    <div class="panel-actions">
+      <button class="btn-cancel" onclick="closePanel()">Cancel</button>
+      <button class="btn-save" onclick="submitAddPlaylistSync()">Import & Sync</button>
+    </div>
+  `;
+
+  rpanel.classList.add('open');
+  if (poverlay) poverlay.classList.add('show');
+  if (content) content.classList.add('pushed');
 }
 
-// ═══════════════════════════════════════════════════════
-//  YOUTUBE SYNC
-// ═══════════════════════════════════════════════════════
-async function syncYouTubePlaylists() {
-  if (YT_SYNCING) return;
-  YT_SYNCING = true;
-  updateMusicSyncBtn('syncing');
+export async function submitAddPlaylistSync() {
+  const urlInput = document.getElementById('pl-sync-url');
+  const intervalInput = document.getElementById('pl-sync-interval');
+
+  const url = urlInput?.value?.trim();
+  const interval = parseInt(intervalInput?.value || '7', 10);
+
+  if (!url) {
+    showAlert('Please enter a YouTube playlist link or ID.', { title: 'Missing Playlist Link' });
+    return;
+  }
 
   try {
-    const token = _getYTToken(); if (!token) throw new Error('Not connected');
+    YT_SYNCING = true;
+    updateMusicSyncBtn('syncing');
+    toast('Fetching YouTube playlist & tracks...', 'var(--ac)');
 
-    // Fetch user's playlists
-    const plRes = await fetch(
-      'https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&mine=true&maxResults=50',
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (!plRes.ok) throw new Error('Failed to fetch playlists');
-    const plData = await plRes.json();
-    const playlists = (plData.items || []).map(p => ({
-      id:    p.id,
-      title: p.snippet.title,
-      description: p.snippet.description || '',
-      thumbnail: p.snippet.thumbnails?.medium?.url || p.snippet.thumbnails?.default?.url || '',
-      itemCount: p.contentDetails.itemCount,
-      synced: MPLAYLISTS.find(x => x.id === p.id)?.synced || false,
-    }));
-
-    // Merge with existing (keep synced flag)
-    MPLAYLISTS = playlists.map(p => {
-      const existing = MPLAYLISTS.find(x => x.id === p.id);
-      return { ...p, synced: existing?.synced || false };
-    });
-    savePlaylists(MPLAYLISTS);
-
-    // Auto-sync playlists that were previously synced
-    const toSync = MPLAYLISTS.filter(p => p.synced);
-    for (const pl of toSync) {
-      await syncPlaylistSongs(pl.id, token);
+    const res = await window.musicApi.syncPlaylist(url, interval);
+    if (res) {
+      if (res.tracks) setMDATA(res.tracks);
+      if (res.playlists) setMPLAYLISTS(res.playlists);
+      closePanel();
+      toast(`✓ Synced ${res.tracksCount || 0} tracks from playlist!`, '#4ade80');
+      renderMusicBody();
     }
-
-    updateMusicSyncBtn('synced');
-    if (CURRENT === 'music') renderMusicBody();
-  } catch(e) {
-    updateMusicSyncBtn('error');
-    if (e.message !== 'Not connected') toast('YouTube sync failed: ' + e.message, 'var(--err)');
+  } catch (e) {
+    console.error('[Music Sync Error]', e);
+    toast('Playlist sync failed: ' + (e.message || 'Error'), '#fb7185');
   } finally {
     YT_SYNCING = false;
+    updateMusicSyncBtn('idle');
   }
 }
 
-async function syncPlaylistSongs(playlistId, token) {
-  const allItems = [];
-  let pageToken = '';
-  do {
-    const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${playlistId}&maxResults=50${pageToken ? '&pageToken=' + pageToken : ''}`;
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) break;
-    const data = await res.json();
-    allItems.push(...(data.items || []));
-    pageToken = data.nextPageToken || '';
-  } while (pageToken);
-
-  // Get video details for duration
-  const videoIds = allItems.map(i => i.contentDetails?.videoId).filter(Boolean);
-  const durations = {};
-  for (let i = 0; i < videoIds.length; i += 50) {
-    const chunk = videoIds.slice(i, i + 50).join(',');
-    const vRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${chunk}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (vRes.ok) {
-      const vData = await vRes.json();
-      (vData.items || []).forEach(v => {
-        durations[v.id] = {
-          duration: parseISO8601Duration(v.contentDetails?.duration || ''),
-          artist: extractArtist(v.snippet?.title || '', v.snippet?.channelTitle || ''),
-          thumbnail: v.snippet?.thumbnails?.medium?.url || v.snippet?.thumbnails?.default?.url || '',
-        };
-      });
+export async function syncSinglePlaylist(playlistUrl, syncIntervalDays = 7) {
+  if (!playlistUrl) return;
+  try {
+    YT_SYNCING = true;
+    updateMusicSyncBtn('syncing');
+    toast('Re-syncing playlist...', 'var(--ac)');
+    const res = await window.musicApi.syncPlaylist(playlistUrl, syncIntervalDays);
+    if (res) {
+      if (res.tracks) setMDATA(res.tracks);
+      if (res.playlists) setMPLAYLISTS(res.playlists);
+      toast(`✓ Re-synced playlist`, '#4ade80');
+      renderMusicBody();
     }
+  } catch (e) {
+    toast('Sync failed: ' + e.message, '#fb7185');
+  } finally {
+    YT_SYNCING = false;
+    updateMusicSyncBtn('idle');
   }
-
-  // Build song list from playlist
-  const ytSongIds = new Set();
-  const newSongs = allItems.map(item => {
-    const vid = item.contentDetails?.videoId;
-    if (!vid) return null;
-    ytSongIds.add('yt_' + vid);
-    const existing = MDATA.find(s => s.id === 'yt_' + vid);
-    if (existing) return existing; // Keep existing entry
-
-    const title = item.snippet?.title || 'Unknown';
-    const det = durations[vid] || {};
-    return {
-      id:          'yt_' + vid,
-      title:       title,
-      artist:      det.artist || item.snippet?.videoOwnerChannelTitle || 'Unknown Artist',
-      album:       null,
-      duration:    det.duration || null,
-      thumbnail:   det.thumbnail || item.snippet?.thumbnails?.medium?.url || '',
-      playlistId:  playlistId,
-      videoId:     vid,
-      addedAt:     new Date(item.snippet?.publishedAt || Date.now()).getTime(),
-      updatedAt:   Date.now(),
-      manual:      false,
-    };
-  }).filter(Boolean);
-
-  // Detect removed songs → move to trash concept (mark as removed)
-  const existingInPlaylist = MDATA.filter(s => s.playlistId === playlistId);
-  existingInPlaylist.forEach(s => {
-    if (!ytSongIds.has(s.id)) {
-      s.removedFromPlaylist = true;
-      s.updatedAt = Date.now();
-    }
-  });
-
-  // Merge
-  const otherSongs = MDATA.filter(s => s.playlistId !== playlistId);
-  MDATA = [...otherSongs, ...newSongs];
-  saveMusic(MDATA);
-
-  // Update playlist synced status
-  const pl = MPLAYLISTS.find(p => p.id === playlistId);
-  if (pl) { pl.synced = true; pl.lastSync = Date.now(); savePlaylists(MPLAYLISTS); }
 }
 
-function parseISO8601Duration(dur) {
-  if (!dur) return null;
-  const m = dur.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-  if (!m) return null;
-  const h = parseInt(m[1]||0), min = parseInt(m[2]||0), s = parseInt(m[3]||0);
-  return h*3600 + min*60 + s;
+export async function syncDuePlaylists() {
+  try {
+    const res = await window.musicApi.syncDuePlaylists();
+    if (res && res.syncedCount > 0) {
+      if (res.tracks) setMDATA(res.tracks);
+      if (res.playlists) setMPLAYLISTS(res.playlists);
+      toast(`✓ Auto-synced ${res.syncedCount} playlist(s)`, '#4ade80');
+      renderMusicBody();
+    }
+  } catch (e) {}
 }
 
 function fmtDuration(secs) {
@@ -215,20 +150,13 @@ function fmtDuration(secs) {
   return `${m}:${String(s).padStart(2,'0')}`;
 }
 
-function extractArtist(title, channelTitle) {
-  // Try "Artist - Title" pattern
-  const dash = title.match(/^(.+?)\s*[-–]\s*/);
-  if (dash) return dash[1].trim();
-  return channelTitle.replace(/ - Topic$/, '').trim();
-}
-
 function updateMusicSyncBtn(state) {
   const btn = document.getElementById('music-sync-btn'); if (!btn) return;
   const map = {
     syncing: ['<span class="mu-sync-spinning">↻</span> Syncing', 'var(--ac)'],
     synced:  ['✓ Synced',  '#4ade80'],
     error:   ['✗ Sync',    '#fb7185'],
-    idle:    ['⟳ Sync YT', 'var(--ac)'],
+    idle:    ['⟳ Sync Link', 'var(--ac)'],
   };
   const [label, color] = map[state] || map.idle;
   btn.innerHTML = label; btn.style.color = color;
@@ -252,12 +180,13 @@ function renderMusic(c) {
         ${tabs.map((t,i) => `<button class="stab${MUSIC_PAGE===['library','playlists','dashboard'][i]?' active':''}" onclick="setMusicPage('${['library','playlists','dashboard'][i]}')">${t}</button>`).join('')}
       </div>
       <div style="display:flex;gap:6px;align-items:center">
-        <button id="music-sync-btn" onclick="handleMusicSync()" class="nb-btn" style="color:var(--ac)">⟳ Sync YT</button>
+        <button id="music-sync-btn" onclick="openAddPlaylistModal()" class="nb-btn" style="color:var(--ac)">⟳ Sync Link</button>
         <button onclick="openAddSong()" class="nb-btn ac">+ Add Song</button>
       </div>
     </div>
     <div id="music-body"></div>`;
   renderMusicBody();
+  syncDuePlaylists();
 }
 
 function setMusicPage(p) {
@@ -279,12 +208,7 @@ function renderMusicBody() {
 }
 
 function handleMusicSync() {
-  if (!_isYTConnected()) {
-    if (!YT_READY) { toast('Google API loading...', 'var(--ch)'); return; }
-    YT_TOKEN_CLIENT.requestAccessToken();
-  } else {
-    syncYouTubePlaylists();
-  }
+  openAddPlaylistModal();
 }
 
 // ── LIBRARY ──
@@ -294,11 +218,20 @@ function renderMusicLibrary(c) {
     : MDATA.filter(s => !s.removedFromPlaylist);
 
   if (!songs.length) {
-    c.innerHTML = `<div class="mu-empty"><div class="mu-empty-ico">♪</div><div class="mu-empty-title">No songs yet</div><div class="mu-empty-sub">Sync a YouTube playlist or add songs manually to get started</div></div>`;
+    c.innerHTML = `
+      <div class="mu-empty">
+        <div class="mu-empty-ico">♪</div>
+        <div class="mu-empty-title">No songs in library</div>
+        <div class="mu-empty-sub">Sync a YouTube / YT Music playlist link or add songs manually</div>
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
+          <button onclick="openAddPlaylistModal()" class="nb-btn ac">+ Sync Playlist Link</button>
+          <button onclick="openAddSong()" class="nb-btn">+ Add Song</button>
+        </div>
+      </div>`;
     return;
   }
 
-  const totalSecs = songs.reduce((a, s) => a + (s.duration || 0), 0);
+  const totalSecs = songs.reduce((a, s) => a + (s.duration_sec || s.duration || 0), 0);
   const cardHtmls = [];
   const rows = songs.map((s, i) => {
     const html = songRowHtml(s, i);
@@ -317,9 +250,13 @@ function renderMusicLibrary(c) {
 
 function songRowHtml(s, idx=0) {
   const hasLyrics = !!(s.lyrics || s.lyricsLink);
+  const duration = s.duration_sec || s.duration;
+  const ytId = s.youtube_id || s.videoId;
+  const thumb = s.thumbnail || (ytId ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` : '');
+
   return `<div class="mu-row m-card-lazy" onclick="openSongDetail('${s.id}')">
     <div class="mu-row-bar" style="background:var(--ac)"></div>
-    ${s.thumbnail ? `<img src="${esc(s.thumbnail)}" class="mu-thumb" onerror="this.style.display='none'">` : '<div class="mu-thumb-ph">♪</div>'}
+    ${thumb ? `<img src="${esc(thumb)}" class="mu-thumb" onerror="this.style.display='none'">` : '<div class="mu-thumb-ph">♪</div>'}
     <div class="mu-info">
       <div class="mu-title">${esc(s.title)}</div>
       <div class="mu-meta">
@@ -330,9 +267,9 @@ function songRowHtml(s, idx=0) {
     </div>
     <div class="mu-right">
       <div class="mu-eq"><span></span><span></span><span></span></div>
-      <span class="mu-dur">${fmtDuration(s.duration)}</span>
+      <span class="mu-dur">${fmtDuration(duration)}</span>
       <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
-        ${s.videoId?`<button class="mu-act-btn mu-act-play" onclick="window.open('https://youtu.be/${s.videoId}','_blank')" title="Open on YouTube">▶</button>`:''}
+        ${ytId?`<button class="mu-act-btn mu-act-play" onclick="window.open('https://youtu.be/${ytId}','_blank')" title="Open on YouTube">▶</button>`:''}
         <button class="mu-act-btn mu-act-edit" onclick="openEditSong('${s.id}')" title="Edit">✎</button>
         <button class="mu-act-btn mu-act-del" onclick="delSong('${s.id}')">✕</button>
       </div>
@@ -348,6 +285,10 @@ function fmtTotalDuration(secs) {
 
 function openSongDetail(id) {
   const s = MDATA.find(x => x.id === id); if (!s) return;
+  const ytId = s.youtube_id || s.videoId;
+  const thumb = s.thumbnail || (ytId ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` : '');
+  const duration = s.duration_sec || s.duration;
+
   document.getElementById('rpanel').classList.add('open');
   document.getElementById('poverlay').classList.add('show');
   document.getElementById('content').classList.add('pushed');
@@ -373,13 +314,13 @@ function openSongDetail(id) {
       </div>
       <button class="ph-close" onclick="closePanel()">✕</button>
     </div>
-    ${s.thumbnail?`<div class="mu-det-hero"><img src="${esc(s.thumbnail)}" class="mu-det-hero-img" onerror="this.parentElement.style.display='none'"><div class="mu-det-hero-overlay"></div></div>`:''}
+    ${thumb?`<div class="mu-det-hero"><img src="${esc(thumb)}" class="mu-det-hero-img" onerror="this.parentElement.style.display='none'"><div class="mu-det-hero-overlay"></div></div>`:''}
     <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;font-size:13px">
       ${s.artist?`<div><span class="flbl">Artist</span><span style="color:var(--tx);font-size:14px;font-weight:600">${esc(s.artist)}</span></div>`:''}
       ${s.album?`<div><span class="flbl">Album</span><span style="color:var(--tx);font-size:14px;font-weight:600">${esc(s.album)}</span></div>`:''}
-      ${s.duration?`<div><span class="flbl">Duration</span><span style="color:var(--tx);font-size:14px;font-weight:600">${fmtDuration(s.duration)}</span></div>`:''}
-      ${s.videoId?`<div><span class="flbl">YouTube</span>
-        <a href="https://youtu.be/${s.videoId}" target="_blank" style="color:var(--ac);font-weight:600;font-size:14px;transition:opacity .2s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">Open on YouTube ↗</a></div>`:''}
+      ${duration?`<div><span class="flbl">Duration</span><span style="color:var(--tx);font-size:14px;font-weight:600">${fmtDuration(duration)}</span></div>`:''}
+      ${ytId?`<div><span class="flbl">YouTube</span>
+        <a href="https://youtu.be/${ytId}" target="_blank" style="color:var(--ac);font-weight:600;font-size:14px;transition:opacity .2s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">Open on YouTube ↗</a></div>`:''}
       ${s.lyricsLink?`<div><span class="flbl">Lyrics Link</span>
         <a href="${esc(s.lyricsLink)}" target="_blank" style="color:var(--ac);font-weight:600;font-size:14px;transition:opacity .2s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">View Lyrics ↗</a></div>`:''}
     </div>
@@ -406,54 +347,55 @@ function delSong(id) {
 // ── PLAYLISTS ──
 function renderMusicPlaylists(c) {
   if (!MPLAYLISTS.length) {
-    c.innerHTML = `<div class="mu-empty"><div class="mu-empty-ico">♪</div><div class="mu-empty-title">No YouTube playlists found</div><div class="mu-empty-sub">Connect your YouTube account to sync playlists</div><button onclick="handleMusicSync()" class="nb-btn ac" style="margin:12px auto 0">Connect YouTube →</button></div>`;
+    c.innerHTML = `
+      <div class="mu-empty">
+        <div class="mu-empty-ico">♪</div>
+        <div class="mu-empty-title">No synced playlists</div>
+        <div class="mu-empty-sub">Add any YouTube or YT Music playlist URL to auto-sync tracks on your preferred interval</div>
+        <button onclick="openAddPlaylistModal()" class="nb-btn ac" style="margin:14px auto 0">+ Sync Playlist Link</button>
+      </div>`;
     return;
   }
 
   const cardHtmls = [];
-  const cards = MPLAYLISTS.map((pl,i) => {
-    const songCount = MDATA.filter(s => s.playlistId === pl.id && !s.removedFromPlaylist).length;
-    const isSynced = pl.synced;
+  const cards = MPLAYLISTS.map((pl) => {
+    const songCount = MDATA.filter(s => (s.playlist_id || s.playlistId) === pl.id && !s.removedFromPlaylist).length;
+    const intervalText = pl.sync_interval_days === 1 ? 'Every 1 day'
+      : pl.sync_interval_days === 7 ? 'Every 1 week'
+      : pl.sync_interval_days > 0 ? `Every ${pl.sync_interval_days} days`
+      : 'Manual';
+
+    const lastSyncDate = pl.last_synced_at ? new Date(pl.last_synced_at * 1000).toLocaleDateString() : 'Never';
+    const plUrl = pl.playlist_url || `https://www.youtube.com/playlist?list=${pl.id}`;
+
     const cardHtml = `<div class="mu-pl-card m-card-lazy">
       ${pl.thumbnail?`<img src="${esc(pl.thumbnail)}" class="mu-pl-thumb" onerror="this.style.display='none'">`:'<div class="mu-pl-thumb-ph">♪</div>'}
       <div class="mu-pl-info">
         <div class="mu-pl-title">${esc(pl.title)}</div>
-        <div class="mu-pl-meta">${pl.itemCount} videos${isSynced?' · '+songCount+' synced':''}</div>
-        ${pl.lastSync?`<div class="mu-pl-sync-date">Last synced: ${new Date(pl.lastSync).toLocaleDateString()}</div>`:''}
+        <div class="mu-pl-meta">${pl.item_count || pl.itemCount || 0} videos · ${songCount} synced</div>
+        <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.3);font-weight:600">⚡ ${intervalText}</span>
+          <span style="font-size:10px;color:var(--mu)">Last synced: ${lastSyncDate}</span>
+        </div>
       </div>
-      <button onclick="togglePlaylistSync('${pl.id}')" class="mu-sync-toggle ${isSynced?'synced':'unsynced'}">
-        ${isSynced?'✓ Synced':'+ Sync'}
-      </button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button onclick="syncSinglePlaylist('${esc(plUrl)}', ${pl.sync_interval_days || 7})" class="mu-sync-toggle synced" title="Re-sync this playlist now">
+          ↻ Sync Now
+        </button>
+      </div>
     </div>`;
     cardHtmls.push(cardHtml);
     return _cardSlot(cardHtml, pl.id);
   }).join('');
 
-  c.innerHTML = `<div class="mu-cnt-lbl">${MPLAYLISTS.length} playlist${MPLAYLISTS.length!==1?'s':''} found</div>${cards}`;
+  c.innerHTML = `
+    <div style="display:flex;align-items:center;justify-space-between;margin-bottom:12px">
+      <div class="mu-cnt-lbl" style="margin:0">${MPLAYLISTS.length} playlist${MPLAYLISTS.length!==1?'s':''} synced</div>
+      <button onclick="openAddPlaylistModal()" class="nb-btn ac" style="font-size:11px">+ Sync Playlist Link</button>
+    </div>
+    ${cards}`;
   _hydrateSlots(c, cardHtmls);
   _observeCardVisibility(c);
-}
-
-async function togglePlaylistSync(id) {
-  const pl = MPLAYLISTS.find(p => p.id === id); if (!pl) return;
-  if (pl.synced) {
-    showConfirm(`Stop syncing "${pl.title}"? Songs already added will remain.`, async () => {
-      pl.synced = false; savePlaylists(MPLAYLISTS);
-      renderMusicBody();
-    }, { title: 'Unsync Playlist?', okLabel: 'Unsync', danger: false });
-  } else {
-    pl.synced = true; savePlaylists(MPLAYLISTS);
-    toast('Syncing playlist...', 'var(--ac)');
-    const token = _getYTToken();
-    if (token) {
-      await syncPlaylistSongs(id, token);
-      renderMusicBody();
-      toast(`✓ Playlist synced`, 'var(--cd)');
-    } else {
-      toast('Connect YouTube first', 'var(--err)');
-      pl.synced = false; savePlaylists(MPLAYLISTS);
-    }
-  }
 }
 
 // ── ADD MANUAL SONG ──
@@ -490,7 +432,7 @@ function saveManualSong() {
     album:      document.getElementById('ms-album')?.value?.trim() || null,
     lyricsLink: document.getElementById('ms-lyricslink')?.value?.trim() || null,
     lyrics:     document.getElementById('ms-lyrics')?.value?.trim() || null,
-    videoId: vid, thumbnail: vid ? `https://img.youtube.com/vi/${vid}/mqdefault.jpg` : '',
+    videoId: vid, youtube_id: vid, thumbnail: vid ? `https://img.youtube.com/vi/${vid}/mqdefault.jpg` : '',
     duration: null, playlistId: null, manual: true,
     addedAt: Date.now(), updatedAt: Date.now(),
   };
@@ -501,6 +443,9 @@ function saveManualSong() {
 // ── EDIT SONG ──
 function openEditSong(id) {
   const s = MDATA.find(x => x.id === id); if (!s) return;
+  const ytId = s.youtube_id || s.videoId;
+  const thumb = s.thumbnail || (ytId ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` : '');
+
   document.getElementById('rpanel').classList.add('open');
   document.getElementById('poverlay').classList.add('show');
   document.getElementById('content').classList.add('pushed');
@@ -509,12 +454,12 @@ function openEditSong(id) {
       <div class="ph-title">Edit Song</div>
       <button class="ph-close" onclick="closePanel()">✕</button>
     </div>
-    ${s.thumbnail?`<div class="mu-det-hero" style="margin-bottom:-10px"><img src="${esc(s.thumbnail)}" class="mu-det-hero-img" onerror="this.parentElement.style.display='none'"><div class="mu-det-hero-overlay"></div></div>`:''}
+    ${thumb?`<div class="mu-det-hero" style="margin-bottom:-10px"><img src="${esc(thumb)}" class="mu-det-hero-img" onerror="this.parentElement.style.display='none'"><div class="mu-det-hero-overlay"></div></div>`:''}
     <div class="form-wrap">
       <div class="fg"><label class="flbl">Title *</label><input class="fin" id="me-title" value="${esc(s.title||'')}"></div>
       <div class="fg"><label class="flbl">Artist</label><input class="fin" id="me-artist" value="${esc(s.artist||'')}"></div>
       <div class="fg"><label class="flbl">Album</label><input class="fin" id="me-album" value="${esc(s.album||'')}"></div>
-      ${s.videoId?`<div class="fg"><label class="flbl">YouTube Video</label><div style="font-size:12px;color:var(--tx2);padding:8px 0"><a href="https://youtu.be/${s.videoId}" target="_blank" style="color:var(--ac)">youtu.be/${s.videoId} ↗</a> <span style="color:var(--mu);font-size:10px">(synced)</span></div></div>`:''}
+      ${ytId?`<div class="fg"><label class="flbl">YouTube Video</label><div style="font-size:12px;color:var(--tx2);padding:8px 0"><a href="https://youtu.be/${ytId}" target="_blank" style="color:var(--ac)">youtu.be/${ytId} ↗</a> <span style="color:var(--mu);font-size:10px">(synced)</span></div></div>`:''}
       <div class="mu-edit-divider"></div>
       <div class="fg"><label class="flbl">Lyrics Link</label><input class="fin" id="me-lyricslink" value="${esc(s.lyricsLink||'')}" placeholder="https://genius.com/..."></div>
       <div class="fg"><label class="flbl">Lyrics</label><textarea class="fin mu-lyrics-input" id="me-lyrics" placeholder="Paste song lyrics here..." rows="8">${esc(s.lyrics||'')}</textarea></div>
@@ -548,12 +493,10 @@ function saveEditSong(id) {
 // ── DASHBOARD ──
 function renderMusicDash(c) {
   const songs = MDATA.filter(s => !s.removedFromPlaylist);
-  const totalSecs = songs.reduce((a, s) => a + (s.duration || 0), 0);
+  const totalSecs = songs.reduce((a, s) => a + (s.duration_sec || s.duration || 0), 0);
   const artists = new Set(songs.map(s => s.artist).filter(Boolean)).size;
-  const syncedPl = MPLAYLISTS.filter(p => p.synced).length;
-  const manualCount = songs.filter(s => s.manual).length;
+  const syncedPl = MPLAYLISTS.filter(p => p.synced || p.playlist_url).length;
 
-  // Top artists
   const artistCounts = {};
   songs.forEach(s => { if (s.artist) artistCounts[s.artist] = (artistCounts[s.artist]||0)+1; });
   const topArtists = Object.entries(artistCounts).sort((a,b) => b[1]-a[1]).slice(0,8);
@@ -580,22 +523,16 @@ function renderMusicDash(c) {
     </div>` : ''}`;
 }
 
-
-// Auto-initialize YouTube Auth
-initYTAuth();
-
 // ── Register all music functions as globals ───────────────────────────────
 Object.assign(window, {
   renderMusic, renderMusicBody, setMusicPage,
   saveMusic, savePlaylists,
-  handleMusicSync, syncYouTubePlaylists,
+  handleMusicSync, openAddPlaylistModal, submitAddPlaylistSync, syncSinglePlaylist, syncDuePlaylists,
   renderMusicLibrary, songRowHtml, fmtTotalDuration,
   openSongDetail, delSong,
-  renderMusicPlaylists, togglePlaylistSync,
+  renderMusicPlaylists,
   openAddSong, saveManualSong,
   openEditSong, saveEditSong,
-  renderMusicDash,
-  initYTAuth, updateMusicSyncBtn,
-  parseISO8601Duration, fmtDuration, extractArtist,
-  _isYTConnected, _clearYTToken,
+  renderMusicDash, updateMusicSyncBtn,
+  fmtDuration,
 });

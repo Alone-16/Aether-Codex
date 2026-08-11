@@ -22,13 +22,29 @@ export async function handleCors(request) {
 
 export async function authenticateRequest(request, env) {
   const authHeader = request.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return null;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    const secret = env.JWT_SECRET || 'aether-codex-jwt-secret-key-change-in-prod-vars';
+    const claims = await verifyJWT(token, secret);
+    if (claims) return claims; // Returns { sub, email, iat, exp }
   }
-  const token = authHeader.slice(7).trim();
-  const secret = env.JWT_SECRET || 'aether-codex-jwt-secret-key-change-in-prod-vars';
-  const claims = await verifyJWT(token, secret);
-  return claims; // Returns { sub, email, iat, exp } or null
+
+  // Cloudflare Access (Zero Trust) edge headers auto-authentication
+  const cfEmail = request.headers.get('CF-Access-Authenticated-User-Email');
+  const cfUserId = request.headers.get('CF-Access-Authenticated-User-Id');
+  if (cfEmail) {
+    const subId = cfUserId || 'cf_' + btoa(cfEmail).replace(/=/g, '');
+    return {
+      sub: subId,
+      email: cfEmail,
+      name: cfEmail.split('@')[0],
+      cf_access: true,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 86400,
+    };
+  }
+
+  return null;
 }
 
 export function requireAuth(handler) {

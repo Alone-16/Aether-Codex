@@ -68,7 +68,7 @@ export default {
       const healthRes = await handleHealthRoute(request, env, ctx, requestId, pathname);
       if (healthRes) return healthRes;
 
-      // 2. Unauthenticated Auth Routes (/v1/auth/google, /v1/auth/refresh, /v1/auth/logout)
+      // 2. Unauthenticated Auth Routes (/v1/auth/cf-access, /v1/auth/login, /v1/auth/refresh, /v1/auth/logout)
       const authRes = await handleAuth(request, env, ctx, requestId, pathname);
       if (authRes) return authRes;
 

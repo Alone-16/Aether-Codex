@@ -9,9 +9,7 @@ export const K = {
   DTOKEN:'ac_v4_dtoken', DEXP:'ac_v4_dexp', DFILE:'ac_v4_dfile', DSYNC:'ac_v4_dsync'
 };
 export const DATA_VERSION  = '4.0';
-export const CLIENT_ID     = '750528266098-oudtbb5dcmf4c167sf7l3fu46luqeq11.apps.googleusercontent.com';
 export const DRIVE_SCOPE   = 'https://www.googleapis.com/auth/drive.file';
-export const YT_SCOPE_CONST= 'https://www.googleapis.com/auth/youtube.readonly';
 export const DRIVE_FOLDER  = 'Aether Codex';
 export const DRIVE_FILE    = 'AetherCodex_data.json';  // legacy single-file (migration only)
 

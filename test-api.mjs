@@ -202,7 +202,20 @@ async function main() {
     log('DELETE /v1/files/:id', delFile);
   }
 
-  // ── Test 18: 404 Route ──
+  // ── Test 18: Server Auth (/v1/auth/login) ──
+  console.log('\n── Cloudflare Server Auth Tests ──');
+  const serverLogin = await req('POST', '/v1/auth/login', { email: 'cloud@aethercodex.dev', name: 'Cloud User' });
+  log('POST /v1/auth/login (Server auth)', serverLogin);
+
+  // ── Test 19: YouTube Playlist Link Sync (/v1/music/sync-playlist) ──
+  console.log('\n── YT Music Link Sync Tests ──');
+  const playlistSync = await req('POST', '/v1/music/sync-playlist', {
+    playlist_url: 'https://www.youtube.com/playlist?list=PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG',
+    sync_interval_days: 5,
+  }, token);
+  log('POST /v1/music/sync-playlist (Sync 5-day interval)', playlistSync);
+
+  // ── Test 20: 404 Route ──
   const notFound = await req('GET', '/v1/doesnotexist', null, token);
   log('GET /v1/doesnotexist → 404', notFound);
 
