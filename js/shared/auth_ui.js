@@ -103,7 +103,15 @@ export async function submitServerSignIn() {
     if (typeof window.bootApp === 'function') window.bootApp();
   } catch (err) {
     console.warn('[Auth UI] Sign in error:', err.message);
-    toast('Sign in failed: ' + (err.message || 'Auth error'), '#fb7185');
+    const msg = err.message || '';
+    if (msg.includes('No account found') || msg.includes('USER_NOT_FOUND') || msg.includes('sign up')) {
+      showAlert('No account found with this email. Please click "Sign Up" to create a new account.', { title: 'Account Not Found' });
+      promptServerSignUp();
+    } else if (msg.includes('Incorrect password') || msg.includes('WRONG_PASSWORD')) {
+      showAlert('Incorrect password. Please check your password and try again.', { title: 'Invalid Password' });
+    } else {
+      toast('Sign in failed: ' + (msg || 'Auth error'), '#fb7185');
+    }
   }
 }
 
@@ -268,22 +276,22 @@ export function openAccountModal() {
   }
 }
 
-export async function handleLogoutCurrent() {
-  const confirmed = await showConfirm('Logout', 'Are you sure you want to log out of this session?');
-  if (!confirmed) return;
-  await logout();
-  setCurrentUser(null);
-  toast('Logged out successfully', '#fb7185');
-  location.reload();
+export function handleLogoutCurrent() {
+  showConfirm('Are you sure you want to log out of this session?', async () => {
+    await logout();
+    setCurrentUser(null);
+    toast('Logged out successfully', '#fb7185');
+    location.reload();
+  }, { title: 'Logout', danger: true, okLabel: 'Logout' });
 }
 
-export async function handleLogoutAllSessions() {
-  const confirmed = await showConfirm('Revoke All Sessions', 'This will log you out of all active devices. Proceed?');
-  if (!confirmed) return;
-  await logoutAllSessions();
-  setCurrentUser(null);
-  toast('All active sessions revoked', '#fb7185');
-  location.reload();
+export function handleLogoutAllSessions() {
+  showConfirm('This will log you out of all active devices. Proceed?', async () => {
+    await logoutAllSessions();
+    setCurrentUser(null);
+    toast('All active sessions revoked', '#fb7185');
+    location.reload();
+  }, { title: 'Revoke All Sessions', danger: true, okLabel: 'Logout All' });
 }
 
 if (typeof window !== 'undefined') {
