@@ -179,6 +179,106 @@ export default {
         return successResponse(data, requestId);
       }
 
+      // 4.5 MAL User List Status Update Proxy (PATCH /mal/list/:id)
+      if (request.method === 'PATCH' && pathname.startsWith('/mal/list/')) {
+        const malId = pathname.split('/mal/list/')[1];
+        if (!malId || isNaN(Number(malId))) return errorResponse('INVALID_ID', 'Provide numeric MAL ID', requestId, 400);
+
+        let body = {};
+        try { body = await request.json(); } catch (e) {}
+
+        let accessToken = body.access_token || '';
+        let refreshToken = body.refresh_token || '';
+
+        // If access token missing or expired, attempt auto-refresh
+        if (!accessToken && refreshToken) {
+          const formParams = new URLSearchParams({
+            client_id: malClientId,
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token'
+          });
+          if (malClientSecret) formParams.append('client_secret', malClientSecret);
+
+          const refreshRes = await fetch('https://myanimelist.net/v1/oauth2/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formParams
+          });
+          if (refreshRes.ok) {
+            const refData = await refreshRes.json();
+            accessToken = refData.access_token;
+            refreshToken = refData.refresh_token || refreshToken;
+          }
+        }
+
+        if (!accessToken) {
+          return errorResponse('MAL_AUTH_REQUIRED', 'Access token required to update MAL entry', requestId, 401);
+        }
+
+        const isManga = body.type === 'manga' || body.is_manga === true;
+        const targetUrl = isManga
+          ? `https://api.myanimelist.net/v2/manga/${malId}/my_list_status`
+          : `https://api.myanimelist.net/v2/anime/${malId}/my_list_status`;
+
+        const formParams = new URLSearchParams();
+        if (body.status) formParams.append('status', body.status);
+        if (body.num_watched_episodes !== undefined && !isManga) formParams.append('num_watched_episodes', String(body.num_watched_episodes));
+        if (body.num_chapters_read !== undefined && isManga) formParams.append('num_chapters_read', String(body.num_chapters_read));
+        if (body.score !== undefined && body.score !== null) formParams.append('score', String(body.score));
+
+        let malRes = await fetch(targetUrl, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: formParams
+        });
+
+        // Retry with auto-refreshed token if 401 Unauthorized
+        if (malRes.status === 401 && refreshToken) {
+          const refreshParams = new URLSearchParams({
+            client_id: malClientId,
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token'
+          });
+          if (malClientSecret) refreshParams.append('client_secret', malClientSecret);
+
+          const refreshRes = await fetch('https://myanimelist.net/v1/oauth2/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: refreshParams
+          });
+          if (refreshRes.ok) {
+            const refData = await refreshRes.json();
+            accessToken = refData.access_token;
+            refreshToken = refData.refresh_token || refreshToken;
+
+            malRes = await fetch(targetUrl, {
+              method: 'PATCH',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/x-www-form-urlencoded'
+              },
+              body: formParams
+            });
+          }
+        }
+
+        const malData = await malRes.json().catch(() => ({}));
+        if (!malRes.ok) {
+          return errorResponse('MAL_UPDATE_ERROR', malData.message || malData.error || 'MAL update failed', requestId, malRes.status);
+        }
+
+        return successResponse({
+          updated: true,
+          status: malData.status,
+          num_watched_episodes: malData.num_episodes_watched || malData.num_watched_episodes,
+          access_token: accessToken,
+          refresh_token: refreshToken
+        }, requestId);
+      }
+
       // 5. Gemini AI Generate Endpoint (Preserved)
       if (request.method === 'POST' && (pathname === '/ai/generate' || pathname === '/gemini_ai')) {
         if (!env.GEMINI_API_KEY) return errorResponse('NO_KEY', 'Gemini API key not configured on Worker', requestId, 500);

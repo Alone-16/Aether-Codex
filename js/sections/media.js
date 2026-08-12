@@ -1474,7 +1474,7 @@ function saveEntry(eid) {
 async function _syncMALListEntry(entry, silent = false) {
   if (!entry?.malId) return false;
   if (entry.genreId !== 'anime' && entry.genreId !== 'manga') return false;
-  if (!window.window.SETTINGS?.malRefreshToken) {
+  if (!window.SETTINGS?.malRefreshToken) {
     if (!silent) toast('MAL not connected — go to Settings → Security to connect', '#fbbf24');
     return false;
   }
@@ -1493,10 +1493,12 @@ async function _syncMALListEntry(entry, silent = false) {
   const score  = entry.rating != null && entry.rating !== '' ? Number(entry.rating) : undefined;
 
   const payload = {
-    access_token:  window.window.SETTINGS?.malAccessToken || null,
-    refresh_token: window.window.SETTINGS?.malRefreshToken || null,
+    access_token:  window.SETTINGS?.malAccessToken || null,
+    refresh_token: window.SETTINGS?.malRefreshToken || null,
+    type: entry.genreId === 'manga' ? 'manga' : 'anime',
     status,
     num_watched_episodes: epCur,
+    num_chapters_read: epCur,
   };
   if (!Number.isNaN(score) && score !== undefined) payload.score = score;
 
@@ -1511,11 +1513,11 @@ async function _syncMALListEntry(entry, silent = false) {
   }
   const data = await res.json();
   if (data.access_token) {
-    window.window.SETTINGS.malAccessToken = data.access_token;
-    if (data.expires_in) window.window.SETTINGS.malTokenExpiry = String(Date.now() + (data.expires_in - 60) * 1000);
+    window.SETTINGS.malAccessToken = data.access_token;
+    if (data.expires_in) window.SETTINGS.malTokenExpiry = String(Date.now() + (data.expires_in - 60) * 1000);
   }
-  if (data.refresh_token) window.window.SETTINGS.malRefreshToken = data.refresh_token;
-  window.saveSettings(window.SETTINGS);
+  if (data.refresh_token) window.SETTINGS.malRefreshToken = data.refresh_token;
+  if (typeof window.saveSettings === 'function') window.saveSettings(window.SETTINGS);
   if (data.updated) {
     ls.setStr('ac_mal_last_sync', String(Date.now()));
     ls.setStr('ac_mal_last_sync_title', entry.title || '');
@@ -1525,7 +1527,7 @@ async function _syncMALListEntry(entry, silent = false) {
 }
 
 function _malSyncQuiet(e) {
-  if (!e?.malId || !window.window.SETTINGS?.malRefreshToken) return;
+  if (!e?.malId || !window.SETTINGS?.malRefreshToken) return;
   if (e.genreId !== 'anime' && e.genreId !== 'manga') return;
   _syncMALListEntry(e, true).catch(err => console.warn('[MAL] background sync failed:', err));
 }
