@@ -494,6 +494,7 @@ async function _refreshMALAccessToken() {
 }
 
 async function _handleMALRedirect() {
+  console.log('[MAL Redirect] Starting. search:', location.search, 'hash:', location.hash?.substring(0, 80));
   let params = new URLSearchParams(location.search);
   let code   = params.get('code');
   let state  = params.get('state');
@@ -501,6 +502,7 @@ async function _handleMALRedirect() {
 
   // Fallback: check hash-based params (/#/settings?code=...&state=...)
   if (!code && !error && location.hash.includes('?')) {
+    console.log('[MAL Redirect] Checking hash params');
     const hashQuery = location.hash.split('?')[1];
     params = new URLSearchParams(hashQuery);
     code   = params.get('code');
@@ -510,18 +512,21 @@ async function _handleMALRedirect() {
 
   // Fallback: check sessionStorage stash (boot() may have cleared the URL before we ran)
   if (!code && !error) {
+    console.log('[MAL Redirect] Checking sessionStorage stash');
     code  = sessionStorage.getItem('_ac_oauth_code');
     state = sessionStorage.getItem('_ac_oauth_state');
     error = sessionStorage.getItem('_ac_oauth_error');
+    console.log('[MAL Redirect] From sessionStorage:', { code: code?.substring(0, 20), state, error });
     // Clear the stash immediately so it doesn't re-trigger
     sessionStorage.removeItem('_ac_oauth_code');
     sessionStorage.removeItem('_ac_oauth_state');
     sessionStorage.removeItem('_ac_oauth_error');
   }
 
-  if (!code && !error) return false;
-  if (!state || !state.startsWith(_MAL_STATE_PREFIX)) return false;
+  if (!code && !error) { console.log('[MAL Redirect] No code/error found, returning false'); return false; }
+  if (!state || !state.startsWith(_MAL_STATE_PREFIX)) { console.log('[MAL Redirect] State missing or invalid:', state); return false; }
 
+  console.log('[MAL Redirect] Processing code exchange. state:', state);
   const redirectUri = _getMALStoredValue(_MAL_REDIRECT_URI_KEY) || _getRedirectUri();
   try {
     const parts   = (state || '').split(':');
@@ -537,8 +542,10 @@ async function _handleMALRedirect() {
     return true;
   }
   _showSigningInBanner();
+  console.log('[MAL Redirect] Calling _exchangeMALCode...');
   await _exchangeMALCode(code, redirectUri, state || '', false);
   _hideSigningInBanner();
+  console.log('[MAL Redirect] Exchange complete!');
   return true;
 }
 
@@ -569,6 +576,7 @@ async function _refreshAccessToken() {
 //  BOOTSTRAP
 // ═══════════════════════════════════════════════════════════════════
 export async function initGIS() {
+  console.log('[initGIS] called, _gisInitDone:', _gisInitDone);
   if (_gisInitDone) return;
   _gisInitDone = true;
 

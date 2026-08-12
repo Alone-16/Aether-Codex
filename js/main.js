@@ -22,6 +22,7 @@ import { renderPage } from './shared/routing.js';
 import { nav }        from './shared/nav.js';
 import {
   driveBootstrap, openMob, closeMob, driveAction, syncDrive,
+  initGIS,
 } from './shared/drive.js';
 
 // ── Expose globals IMMEDIATELY so inline onclick="" handlers work ──
@@ -97,6 +98,26 @@ await import('./shared/extras.js').catch(e =>
 
 // ── Boot ──────────────────────────────────────────────────────────
 async function boot() {
+  console.log('[Boot] v2 starting, hash:', location.hash);
+
+  // ── 0. Handle MAL OAuth Callback FIRST (before anything clears the URL) ──
+  const rawHashFull = location.hash;
+  if (rawHashFull.includes('code=') && rawHashFull.includes('state=mal')) {
+    console.log('[Boot] MAL OAuth callback detected in hash');
+    const hashQuery = rawHashFull.split('?')[1];
+    if (hashQuery) {
+      const hp = new URLSearchParams(hashQuery);
+      const oauthCode  = hp.get('code');
+      const oauthState = hp.get('state');
+      const oauthError = hp.get('error');
+      if (oauthCode || oauthError) {
+        console.log('[Boot] Stashing OAuth params:', { code: oauthCode?.substring(0, 20) + '...', state: oauthState, error: oauthError });
+        if (oauthCode)  sessionStorage.setItem('_ac_oauth_code',  oauthCode);
+        if (oauthState) sessionStorage.setItem('_ac_oauth_state', oauthState);
+        if (oauthError) sessionStorage.setItem('_ac_oauth_error', oauthError);
+      }
+    }
+  }
 
   // 1. Check Worker Health Endpoint
   const health = await checkHealth();
@@ -123,24 +144,6 @@ async function boot() {
   ];
 
   const rawHash = location.hash.replace('#/', '').replace('#', '').trim();
-
-  // ── Preserve OAuth callback params before clearing the URL ──
-  // When MAL redirects back, the URL is /#/settings?code=xxx&state=mal:...
-  // We need to save these params before replaceState wipes the hash.
-  if (rawHash.includes('?')) {
-    const hashQuery = rawHash.split('?')[1];
-    const hp = new URLSearchParams(hashQuery);
-    const oauthCode  = hp.get('code');
-    const oauthState = hp.get('state');
-    const oauthError = hp.get('error');
-    if (oauthCode || oauthError) {
-      // Stash in sessionStorage so _handleMALRedirect can pick them up
-      if (oauthCode)  sessionStorage.setItem('_ac_oauth_code',  oauthCode);
-      if (oauthState) sessionStorage.setItem('_ac_oauth_state', oauthState);
-      if (oauthError) sessionStorage.setItem('_ac_oauth_error', oauthError);
-    }
-  }
-
   const sectionPart = rawHash.split('?')[0] || '';
   const hash = VALID_SECTIONS.includes(sectionPart) ? sectionPart : '';
 
