@@ -77,7 +77,7 @@ export default {
         const q = url.searchParams.get('q');
         if (!q) return errorResponse('MISSING_QUERY', 'Provide ?q= parameter', requestId, 400);
         const malRes = await fetch(
-          `https://api.myanimelist.net/v2/anime?q=${encodeURIComponent(q)}&limit=10&fields=id,title,alternative_titles,main_picture,num_episodes,mean,status,media_type,start_date,broadcast`,
+          `https://api.myanimelist.net/v2/anime?q=${encodeURIComponent(q)}&limit=10&fields=id,title,alternative_titles,main_picture,num_episodes,mean,status,media_type,start_date,broadcast,average_episode_duration,synopsis`,
           { headers: { 'X-MAL-CLIENT-ID': env.MAL_CLIENT_ID } }
         );
         const data = await malRes.json();
@@ -88,6 +88,8 @@ export default {
           title_en: n.alternative_titles?.en || null,
           image: n.main_picture?.medium || n.main_picture?.large || null,
           episodes: n.num_episodes || null,
+          duration_min: n.average_episode_duration ? Math.round(n.average_episode_duration / 60) : 24,
+          synopsis: n.synopsis || null,
           score: n.mean || null,
           status: n.status || null,
           media_type: n.media_type || null,

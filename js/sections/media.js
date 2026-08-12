@@ -664,10 +664,16 @@ function quickEp(id, delta) {
     if (['watching', 'plan', 'not_started', 'on_hold'].includes(e.status)) {
       e.status = 'completed';
       if (!e.endDate) e.endDate = today();
+      e.airingDay = null;
+      e.airingTime = null;
     }
   }
+  if (e.status !== 'watching') {
+    e.airingDay = null;
+    e.airingTime = null;
+  }
   e.updatedAt = Date.now(); saveData(DATA); renderMediaBody();
-  mediaApi.patch(id, { ep_cur: e.epCur, epCur: e.epCur, status: e.status }).catch(err => console.warn('[quickEp Sync Fail]', err));
+  mediaApi.patch(id, { ep_cur: e.epCur, epCur: e.epCur, status: e.status, airing_day: e.airingDay, airingDay: e.airingDay, airing_time: e.airingTime, airingTime: e.airingTime }).catch(err => console.warn('[quickEp Sync Fail]', err));
   if (PANEL === 'detail' && PEDIT === id) renderDetailPanel(DATA.find(x => x.id === id));
   _malSyncQuiet(e);
 }
@@ -1260,7 +1266,9 @@ function renderFormPanel(e) {
   const pendingGroupId    = !e ? PENDING_LINKED_GROUP_ID    : null;
   const pendingGroupOrder = !e ? PENDING_LINKED_GROUP_ORDER : null;
   const pendingGroupLabel = !e ? PENDING_LINKED_GROUP_LABEL : null;
-  const gOpts = GENRES.map(g => `<option value="${g.id}" ${(e?e.genreId:GACTIVE)===g.id?'selected':''}>${esc(g.name)}</option>`).join('');
+  const curGenre = e ? e.genreId : (GACTIVE || 'anime');
+  const showMal = curGenre === 'anime' || curGenre === 'manga';
+  const gOpts = GENRES.map(g => `<option value="${g.id}" ${curGenre===g.id?'selected':''}>${esc(g.name)}</option>`).join('');
   const status = e ? e.status : 'not_started';
   const airingDays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const linkedGroupId    = e?.linkedGroupId    || pendingGroupId    || '';
@@ -1277,8 +1285,8 @@ function renderFormPanel(e) {
       <button class="ph-close" onclick="closePanel()">✕</button>
     </div>
     <div class="form-wrap">
-      <!-- ── MAL Search ── -->
-      <div id="mal-search-wrap" style="position:relative;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--brd)">
+      <!-- ── MAL Search (Anime / Manga only) ── -->
+      <div id="mal-search-wrap" style="position:relative;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--brd);display:${showMal?'block':'none'};">
         <label class="flbl" style="display:flex;align-items:center;gap:5px;margin-bottom:5px">
           <span style="font-size:9px;background:rgba(var(--ac-rgb),.12);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.25);border-radius:3px;padding:1px 5px;font-weight:800;letter-spacing:.5px">MAL</span>
           Search MyAnimeList to autofill
@@ -1300,7 +1308,7 @@ function renderFormPanel(e) {
         <input class="fin" id="f-title" placeholder="e.g. Attack on Titan Season 1" value="${esc(e?e.title:'')}">
       </div>
       <div class="fg-row">
-        <div class="fg"><label class="flbl">Genre</label><select class="fin" id="f-genre">${gOpts}</select></div>
+        <div class="fg"><label class="flbl">Genre</label><select class="fin" id="f-genre" onchange="toggleMalSearchByGenre(this.value)">${gOpts}</select></div>
         <div class="fg"><label class="flbl">Status</label>
           <select class="fin" id="f-status">
             <option value="not_started" ${status==='not_started'?'selected':''}>○ Not Started</option>
@@ -1397,9 +1405,12 @@ function saveEntry(eid) {
   const epDurVal  = document.getElementById('f-epduration')?.value?.trim();
   const ratingVal = document.getElementById('f-rating')?.value?.trim();
 
+  const selectedGenre = g('f-genre');
+  const isAnimeOrManga = selectedGenre === 'anime' || selectedGenre === 'manga';
+
   const entry = {
     id:eid||uid(), title,
-    genreId:g('f-genre'), status:g('f-status'),
+    genreId: selectedGenre, status:g('f-status'),
     airingDay:isNaN(airingDay)?null:airingDay,
     airingTime:g('f-airingtime'),
     rewatchCount:document.getElementById('f-rewatch')?.value?parseInt(document.getElementById('f-rewatch').value):(existing?.rewatchCount||null),
@@ -1415,7 +1426,7 @@ function saveEntry(eid) {
     upcomingDate:existing?.upcomingDate||null, upcomingTime:existing?.upcomingTime||null,
     notes:g('f-notes'),
     watchUrl:document.getElementById('f-url')?.value?.trim()||null,
-    malId:document.getElementById('f-malid')?.value || existing?.malId || null,
+    malId: isAnimeOrManga ? (document.getElementById('f-malid')?.value || existing?.malId || null) : null,
     coverImage:document.getElementById('f-malimg')?.value || existing?.coverImage || null,
     linkedGroupId,
     linkedGroupOrder,
@@ -1430,6 +1441,12 @@ function saveEntry(eid) {
     }
   }
   if (entry.status==='completed'&&!entry.endDate) entry.endDate=today();
+
+  // Clear airing day & time when status is not watching (e.g. completed, on hold, dropped)
+  if (entry.status !== 'watching') {
+    entry.airingDay = null;
+    entry.airingTime = null;
+  }
   if (eid) {
     const i = DATA.findIndex(x => x.id === eid);
     DATA[i] = entry;
@@ -2255,6 +2272,13 @@ function _malRenderDropdown(results) {
   }, 10);
 }
 
+function toggleMalSearchByGenre(genreId) {
+  const wrap = document.getElementById('mal-search-wrap');
+  if (wrap) {
+    wrap.style.display = (genreId === 'anime' || genreId === 'manga') ? 'block' : 'none';
+  }
+}
+
 function _malSelect(rJson) {
   const r = JSON.parse(rJson);
   const dd = document.getElementById('mal-dropdown');
@@ -2277,13 +2301,30 @@ function _malSelect(rJson) {
   const notesEl = document.getElementById('f-notes');
   if (notesEl && !notesEl.value && r.synopsis) notesEl.value = r.synopsis;
 
-  if (r.episodes) {
-    const epTot = document.getElementById('f-eptot');
-    if (epTot && !epTot.value) epTot.value = String(r.episodes);
+  // 1. Auto-fill Total Episodes
+  const totalEps = r.episodes || r.num_episodes;
+  const epTotEl = document.getElementById('f-eptot');
+  if (epTotEl && totalEps) {
+    epTotEl.value = String(totalEps);
   }
 
+  // 2. Auto-fill Episode Duration Length in Minutes (only upon auto-fill selection)
+  const durationMin = r.duration_min || (r.average_episode_duration ? Math.round(r.average_episode_duration / 60) : 24);
+  const epDurEl = document.getElementById('f-epduration');
+  if (epDurEl && durationMin) {
+    epDurEl.value = String(durationMin);
+  }
+
+  // 3. Status & Airing updates
   const statusEl = document.getElementById('f-status');
-  if (statusEl && r.status) {
+  const airingDayEl = document.getElementById('f-airingday');
+  const airingTimeEl = document.getElementById('f-airingtime');
+
+  if (r.status === 'finished_airing') {
+    if (statusEl) statusEl.value = 'completed';
+    if (airingDayEl) airingDayEl.value = '';
+    if (airingTimeEl) airingTimeEl.value = '';
+  } else if (statusEl && r.status) {
     const map = {
       currently_airing: 'watching',
       finished_airing:  'completed',
@@ -2316,12 +2357,12 @@ function _malSelect(rJson) {
       const formattedHour = String(istHour).padStart(2, '0');
       const formattedMin = String(istMin).padStart(2, '0');
 
-      const airingDayEl = document.getElementById('f-airingday');
       if (airingDayEl) airingDayEl.value = String(istDay);
-
-      const airingTimeEl = document.getElementById('f-airingtime');
       if (airingTimeEl) airingTimeEl.value = `${formattedHour}:${formattedMin}`;
     }
+  } else if (r.status !== 'currently_airing') {
+    if (airingDayEl) airingDayEl.value = '';
+    if (airingTimeEl) airingTimeEl.value = '';
   }
 
   toast(`✓ Autofilled: ${displayTitle}`);
@@ -2368,7 +2409,7 @@ Object.assign(window, {
 
   // MAL
   malBulkSyncAll, malSearchInput, _syncMALListEntry,
-  runLinkedMigrationV3, _malSelect,
+  runLinkedMigrationV3, _malSelect, toggleMalSearchByGenre,
 
   // Filter chips
   _renderFilterChips,
