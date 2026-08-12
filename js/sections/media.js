@@ -1519,22 +1519,24 @@ async function _syncMALListEntry(entry, silent = false) {
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    const data = await res.json().catch(() => null);
-    throw new Error(data?.error_description || data?.error || 'MAL update failed');
+    const errData = await res.json().catch(() => null);
+    throw new Error(errData?.error_description || errData?.error?.message || errData?.error || 'MAL update failed');
   }
-  const data = await res.json();
+  const json = await res.json();
+  const data = json.data || json;
   if (data.access_token) {
     window.SETTINGS.malAccessToken = data.access_token;
     if (data.expires_in) window.SETTINGS.malTokenExpiry = String(Date.now() + (data.expires_in - 60) * 1000);
   }
   if (data.refresh_token) window.SETTINGS.malRefreshToken = data.refresh_token;
   if (typeof window.saveSettings === 'function') window.saveSettings(window.SETTINGS);
-  if (data.updated) {
+  if (data.updated || json.success) {
     ls.setStr('ac_mal_last_sync', String(Date.now()));
     ls.setStr('ac_mal_last_sync_title', entry.title || '');
     if (!silent) toast('✓ MAL synced: ' + (entry.title || 'entry updated'), 'var(--ac)');
+    if (typeof window.renderSettingsBody === 'function') window.renderSettingsBody();
   }
-  return data.updated || false;
+  return data.updated || json.success || false;
 }
 
 function _malSyncQuiet(e) {
