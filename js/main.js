@@ -101,21 +101,31 @@ async function boot() {
   console.log('[Boot] v2 starting, hash:', location.hash);
 
   // ── 0. Handle MAL OAuth Callback FIRST (before anything clears the URL) ──
+  const searchParams = new URLSearchParams(location.search);
+  let oauthCode  = searchParams.get('code');
+  let oauthState = searchParams.get('state');
+  let oauthError = searchParams.get('error');
+
   const rawHashFull = location.hash;
-  if (rawHashFull.includes('code=') && rawHashFull.includes('state=mal')) {
-    console.log('[Boot] MAL OAuth callback detected in hash');
+  if (!oauthCode && !oauthError && rawHashFull.includes('?')) {
     const hashQuery = rawHashFull.split('?')[1];
     if (hashQuery) {
       const hp = new URLSearchParams(hashQuery);
-      const oauthCode  = hp.get('code');
-      const oauthState = hp.get('state');
-      const oauthError = hp.get('error');
-      if (oauthCode || oauthError) {
-        console.log('[Boot] Stashing OAuth params:', { code: oauthCode?.substring(0, 20) + '...', state: oauthState, error: oauthError });
-        if (oauthCode)  sessionStorage.setItem('_ac_oauth_code',  oauthCode);
-        if (oauthState) sessionStorage.setItem('_ac_oauth_state', oauthState);
-        if (oauthError) sessionStorage.setItem('_ac_oauth_error', oauthError);
-      }
+      oauthCode  = hp.get('code');
+      oauthState = hp.get('state');
+      oauthError = hp.get('error');
+    }
+  }
+
+  if (oauthCode || oauthError) {
+    console.log('[Boot] Stashing OAuth params:', { code: oauthCode?.substring(0, 20) + '...', state: oauthState, error: oauthError });
+    if (oauthCode)  sessionStorage.setItem('_ac_oauth_code',  oauthCode);
+    if (oauthState) sessionStorage.setItem('_ac_oauth_state', oauthState);
+    if (oauthError) sessionStorage.setItem('_ac_oauth_error', oauthError);
+
+    // Clean location.search if present
+    if (location.search.includes('code=')) {
+      history.replaceState({}, '', location.pathname + (location.hash || '#/settings'));
     }
   }
 

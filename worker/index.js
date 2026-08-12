@@ -39,7 +39,7 @@ export default {
         const parts = state.split(':');
         targetSection = parts[parts.length - 1] || 'settings';
       }
-      const redirectUrl = `${url.origin}/#/${targetSection}?${url.searchParams.toString()}`;
+      const redirectUrl = `${url.origin}/?${url.searchParams.toString()}#/${targetSection}`;
       return Response.redirect(redirectUrl, 302);
     }
 
