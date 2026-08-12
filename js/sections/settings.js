@@ -29,7 +29,8 @@ function loadSettings() {
     malRefreshToken: null,
     malTokenExpiry: null,
   };
-  const raw = window.SETTINGS || ls.get(SETTINGS_KEY);
+  const stored = ls.get(SETTINGS_KEY);
+  const raw = stored || window.SETTINGS;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...defaults };
 
   const merged = { ...defaults, ...raw };
@@ -94,6 +95,7 @@ function saveSettings(s) {
   };
   SETTINGS = next;
   window.SETTINGS = next;
+  ls.set(SETTINGS_KEY, next);
   if (window.settingsApi && typeof window.settingsApi.put === 'function') {
     window.settingsApi.put(next).catch(e => console.warn('[Settings] Cloud API sync error:', e));
   }

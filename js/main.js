@@ -189,7 +189,19 @@ async function boot() {
         vaultApi.getAll().then(d => { if (Array.isArray(d)) (typeof window.setVDATA_PUBLIC === 'function' ? window.setVDATA_PUBLIC(d) : window.VDATA_PUBLIC = d); }).catch(() => {}),
         logsApi.getAll().then(d => { if (Array.isArray(d)) window.LDATA = d; }).catch(() => {}),
         settingsApi.get().then(d => {
-          if (d.settings) window.SETTINGS = { ...(window.SETTINGS || {}), ...d.settings };
+          if (d.settings) {
+            const curLocal = (typeof window.ls?.get === 'function' ? window.ls.get('ac_v4_settings') : null) || {};
+            const merged = {
+              ...curLocal,
+              ...(window.SETTINGS || {}),
+              ...d.settings,
+              malAccessToken:  d.settings.malAccessToken  || curLocal.malAccessToken  || window.SETTINGS?.malAccessToken  || null,
+              malRefreshToken: d.settings.malRefreshToken || curLocal.malRefreshToken || window.SETTINGS?.malRefreshToken || null,
+              malTokenExpiry:  d.settings.malTokenExpiry  || curLocal.malTokenExpiry  || window.SETTINGS?.malTokenExpiry  || null,
+            };
+            window.SETTINGS = merged;
+            if (typeof window.saveSettings === 'function') window.saveSettings(merged);
+          }
           if (d.genres && Array.isArray(d.genres)) window.setGENRES(d.genres);
         }).catch(() => {}),
       ]);
