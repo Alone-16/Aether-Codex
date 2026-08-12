@@ -98,8 +98,6 @@ await import('./shared/extras.js').catch(e =>
 
 // ── Boot ──────────────────────────────────────────────────────────
 async function boot() {
-  console.log('[Boot] v2 starting, hash:', location.hash);
-
   // ── 0. Handle MAL OAuth Callback FIRST (before anything clears the URL) ──
   const searchParams = new URLSearchParams(location.search);
   let oauthCode  = searchParams.get('code');
@@ -118,7 +116,6 @@ async function boot() {
   }
 
   if (oauthCode || oauthError) {
-    console.log('[Boot] Stashing OAuth params:', { code: oauthCode?.substring(0, 20) + '...', state: oauthState, error: oauthError });
     if (oauthCode)  sessionStorage.setItem('_ac_oauth_code',  oauthCode);
     if (oauthState) sessionStorage.setItem('_ac_oauth_state', oauthState);
     if (oauthError) sessionStorage.setItem('_ac_oauth_error', oauthError);
