@@ -227,13 +227,23 @@ export default {
         if (body.score !== undefined && body.score !== null) formParams.append('score', String(body.score));
 
         let malRes = await fetch(targetUrl, {
-          method: 'PATCH',
+          method: 'PUT',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/x-www-form-urlencoded'
           },
           body: formParams
         });
+        if (!malRes.ok && malRes.status === 405) {
+          malRes = await fetch(targetUrl, {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: formParams
+          });
+        }
 
         // Retry with auto-refreshed token if 401 Unauthorized
         if (malRes.status === 401 && refreshToken) {
@@ -255,7 +265,7 @@ export default {
             refreshToken = refData.refresh_token || refreshToken;
 
             malRes = await fetch(targetUrl, {
-              method: 'PATCH',
+              method: 'PUT',
               headers: {
                 'Authorization': `Bearer ${accessToken}`,
                 'Content-Type': 'application/x-www-form-urlencoded'

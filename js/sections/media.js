@@ -1471,9 +1471,18 @@ function saveEntry(eid) {
   }
 }
 
+function _isMALGenre(e) {
+  if (!e) return false;
+  const gid = (e.genreId || e.genre_id || '').toLowerCase();
+  if (gid === 'anime' || gid === 'manga' || gid === 'manhwa' || gid === 'hmanhwa') return true;
+  const g = typeof gbyid === 'function' ? gbyid(e.genreId || e.genre_id) : null;
+  const gname = (g?.name || '').toLowerCase();
+  return gname.includes('anime') || gname.includes('manga') || gname.includes('manhwa');
+}
+
 async function _syncMALListEntry(entry, silent = false) {
   if (!entry?.malId) return false;
-  if (entry.genreId !== 'anime' && entry.genreId !== 'manga') return false;
+  if (!_isMALGenre(entry)) return false;
   if (!window.SETTINGS?.malRefreshToken) {
     if (!silent) toast('MAL not connected — go to Settings → Security to connect', '#fbbf24');
     return false;
@@ -1488,14 +1497,16 @@ async function _syncMALListEntry(entry, silent = false) {
     not_started: 'plan_to_watch',
     upcoming: 'plan_to_watch',
   };
-  const status = statusMap[entry.status] || 'plan_to_watch';
+  const status = statusMap[entry.status] || 'watching';
   const epCur  = parseInt(entry.epCur || '0') || 0;
   const score  = entry.rating != null && entry.rating !== '' ? Number(entry.rating) : undefined;
+  const gid    = (entry.genreId || '').toLowerCase();
+  const isManga = gid.includes('manga') || gid.includes('manhwa');
 
   const payload = {
     access_token:  window.SETTINGS?.malAccessToken || null,
     refresh_token: window.SETTINGS?.malRefreshToken || null,
-    type: entry.genreId === 'manga' ? 'manga' : 'anime',
+    type: isManga ? 'manga' : 'anime',
     status,
     num_watched_episodes: epCur,
     num_chapters_read: epCur,
@@ -1528,7 +1539,7 @@ async function _syncMALListEntry(entry, silent = false) {
 
 function _malSyncQuiet(e) {
   if (!e?.malId || !window.SETTINGS?.malRefreshToken) return;
-  if (e.genreId !== 'anime' && e.genreId !== 'manga') return;
+  if (!_isMALGenre(e)) return;
   _syncMALListEntry(e, true).catch(err => console.warn('[MAL] background sync failed:', err));
 }
 
