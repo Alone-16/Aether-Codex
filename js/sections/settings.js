@@ -774,10 +774,10 @@ async function startMALAutoLink() {
     if (rowEl) rowEl.innerHTML = '<span style="color:var(--ac);font-size:11px">Searching…</span>';
 
     try {
-      const res  = await fetch(
-        `https://aether-codex.nadeempubgmobile2-0.workers.dev/mal/search?q=${encodeURIComponent(entry.title)}`
-      );
-      const data = await res.json();
+      const workerUrl = window._WORKER || 'https://aether-codex.nadeempubgmobile2-0.workers.dev';
+      const res  = await fetch(`${workerUrl}/mal/search?q=${encodeURIComponent(entry.title)}`);
+      const json = await res.json();
+      const data = json.data || json;
       const top  = (data.results || [])[0];
 
       if (top) {

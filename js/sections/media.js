@@ -2230,11 +2230,15 @@ async function _malDoSearch(q) {
   const dd = document.getElementById('mal-dropdown');
   if (!dd) return;
   try {
-    const res  = await fetch(
-      `https://aether-codex.nadeempubgmobile2-0.workers.dev/mal/search?q=${encodeURIComponent(q)}`
-    );
-    const data = await res.json();
-    if (data.error) throw new Error(data.error_description || data.error);
+    const workerUrl = window._WORKER || 'https://aether-codex.nadeempubgmobile2-0.workers.dev';
+    const res  = await fetch(`${workerUrl}/mal/search?q=${encodeURIComponent(q)}`);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => null);
+      throw new Error(errData?.error?.message || errData?.error || 'MAL search failed');
+    }
+    const json = await res.json();
+    const data = json.data || json;
+    if (json.error) throw new Error(json.error_description || json.error);
     _malRenderDropdown(data.results || []);
   } catch(e) {
     dd.innerHTML = `<div style="padding:10px 12px;font-size:12px;color:#fb7185">⚠ ${esc(e.message)}</div>`;
