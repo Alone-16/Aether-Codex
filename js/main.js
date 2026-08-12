@@ -123,7 +123,26 @@ async function boot() {
   ];
 
   const rawHash = location.hash.replace('#/', '').replace('#', '').trim();
-  const hash    = VALID_SECTIONS.includes(rawHash) ? rawHash : '';
+
+  // ── Preserve OAuth callback params before clearing the URL ──
+  // When MAL redirects back, the URL is /#/settings?code=xxx&state=mal:...
+  // We need to save these params before replaceState wipes the hash.
+  if (rawHash.includes('?')) {
+    const hashQuery = rawHash.split('?')[1];
+    const hp = new URLSearchParams(hashQuery);
+    const oauthCode  = hp.get('code');
+    const oauthState = hp.get('state');
+    const oauthError = hp.get('error');
+    if (oauthCode || oauthError) {
+      // Stash in sessionStorage so _handleMALRedirect can pick them up
+      if (oauthCode)  sessionStorage.setItem('_ac_oauth_code',  oauthCode);
+      if (oauthState) sessionStorage.setItem('_ac_oauth_state', oauthState);
+      if (oauthError) sessionStorage.setItem('_ac_oauth_error', oauthError);
+    }
+  }
+
+  const sectionPart = rawHash.split('?')[0] || '';
+  const hash = VALID_SECTIONS.includes(sectionPart) ? sectionPart : '';
 
   if (rawHash && !hash) {
     history.replaceState({}, '', location.pathname);

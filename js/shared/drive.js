@@ -499,12 +499,24 @@ async function _handleMALRedirect() {
   let state  = params.get('state');
   let error  = params.get('error');
 
+  // Fallback: check hash-based params (/#/settings?code=...&state=...)
   if (!code && !error && location.hash.includes('?')) {
     const hashQuery = location.hash.split('?')[1];
     params = new URLSearchParams(hashQuery);
     code   = params.get('code');
     state  = params.get('state');
     error  = params.get('error');
+  }
+
+  // Fallback: check sessionStorage stash (boot() may have cleared the URL before we ran)
+  if (!code && !error) {
+    code  = sessionStorage.getItem('_ac_oauth_code');
+    state = sessionStorage.getItem('_ac_oauth_state');
+    error = sessionStorage.getItem('_ac_oauth_error');
+    // Clear the stash immediately so it doesn't re-trigger
+    sessionStorage.removeItem('_ac_oauth_code');
+    sessionStorage.removeItem('_ac_oauth_state');
+    sessionStorage.removeItem('_ac_oauth_error');
   }
 
   if (!code && !error) return false;
