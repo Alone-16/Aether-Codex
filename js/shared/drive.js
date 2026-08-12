@@ -415,7 +415,7 @@ async function _startMALAuth() {
       oauthUrl = data.url;
     }
     if (!oauthUrl) {
-      const clientId = '750528266098-oudtbb5dcmf4c167sf7l3fu46luqeq11.apps.googleusercontent.com';
+      const clientId = '97959fe7356ea8135f3b19db28cb941f';
       oauthUrl = `https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=${clientId}&code_challenge=${codeChallenge}&code_challenge_method=plain&state=${encodeURIComponent(state)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
     }
 
@@ -423,8 +423,8 @@ async function _startMALAuth() {
     _showRedirectingOverlay('MyAnimeList');
     setTimeout(() => { location.href = oauthUrl; }, 80);
   } catch (e) {
-    const clientId = '750528266098-oudtbb5dcmf4c167sf7l3fu46luqeq11.apps.googleusercontent.com';
-    const oauthUrl = `https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=${clientId}&code_challenge=${codeChallenge}&code_challenge_method=plain&state=${encodeURIComponent(state)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    const clientId = '97959fe7356ea8135f3b19db28cb941f';
+    oauthUrl = `https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=${clientId}&code_challenge=${codeChallenge}&code_challenge_method=plain&state=${encodeURIComponent(state)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
     _showRedirectingOverlay('MyAnimeList');
     setTimeout(() => { location.href = oauthUrl; }, 80);
   }

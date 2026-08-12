@@ -86,7 +86,8 @@ export default {
 
       // 2.5 MAL OAuth Endpoints (Authorize URL, Token Exchange & Refresh)
       const action = request.headers.get('X-Action');
-      const malClientId = env.MAL_CLIENT_ID || '750528266098-oudtbb5dcmf4c167sf7l3fu46luqeq11.apps.googleusercontent.com';
+      const malClientId = env.MAL_CLIENT_ID || '97959fe7356ea8135f3b19db28cb941f';
+      const malClientSecret = env.MAL_CLIENT_SECRET || 'bd43d6c2462b4776d70685b5b4b0fe21c4e2db0b095ac6c3ea4fc215ab4ef7a7';
 
       if (action === 'mal_authorize_url' || pathname === '/mal/auth') {
         let body = {};
@@ -103,12 +104,12 @@ export default {
         try { body = await request.json(); } catch (e) {}
         const formParams = new URLSearchParams({
           client_id: malClientId,
+          client_secret: malClientSecret,
           code: body.code || '',
           code_verifier: body.code_verifier || '',
           grant_type: 'authorization_code',
           redirect_uri: body.redirect_uri || `${url.origin}/auth/callback`
         });
-        if (env.MAL_CLIENT_SECRET) formParams.append('client_secret', env.MAL_CLIENT_SECRET);
 
         const malTokenRes = await fetch('https://myanimelist.net/v1/oauth2/token', {
           method: 'POST',
@@ -125,10 +126,10 @@ export default {
         try { body = await request.json(); } catch (e) {}
         const formParams = new URLSearchParams({
           client_id: malClientId,
+          client_secret: malClientSecret,
           refresh_token: body.refresh_token || '',
           grant_type: 'refresh_token'
         });
-        if (env.MAL_CLIENT_SECRET) formParams.append('client_secret', env.MAL_CLIENT_SECRET);
 
         const malRefreshRes = await fetch('https://myanimelist.net/v1/oauth2/token', {
           method: 'POST',
