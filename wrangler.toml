@@ -9,7 +9,6 @@ exclude = ["node_modules", ".git", ".wrangler", "playwright-report", "test-resul
 [vars]
 ENVIRONMENT = "development"
 MAL_CLIENT_ID = "97959fe7356ea8135f3b19db28cb941f"
-MAL_CLIENT_SECRET = "bd43d6c2462b4776d70685b5b4b0fe21c4e2db0b095ac6c3ea4fc215ab4ef7a7"
 
 [[d1_databases]]
 binding = "DB"
@@ -21,7 +20,7 @@ database_id = "707efb23-2b15-4c56-95e3-3aaed94abb93"
 # bucket_name = "aether-codex-files-dev"
 
 [env.preview]
-vars = { ENVIRONMENT = "preview", MAL_CLIENT_ID = "97959fe7356ea8135f3b19db28cb941f", MAL_CLIENT_SECRET = "bd43d6c2462b4776d70685b5b4b0fe21c4e2db0b095ac6c3ea4fc215ab4ef7a7" }
+vars = { ENVIRONMENT = "preview", MAL_CLIENT_ID = "97959fe7356ea8135f3b19db28cb941f" }
 
 [[env.preview.d1_databases]]
 binding = "DB"
@@ -33,7 +32,7 @@ database_id = "707efb23-2b15-4c56-95e3-3aaed94abb93"
 # bucket_name = "aether-codex-files-preview"
 
 [env.production]
-vars = { ENVIRONMENT = "production", MAL_CLIENT_ID = "97959fe7356ea8135f3b19db28cb941f", MAL_CLIENT_SECRET = "bd43d6c2462b4776d70685b5b4b0fe21c4e2db0b095ac6c3ea4fc215ab4ef7a7" }
+vars = { ENVIRONMENT = "production", MAL_CLIENT_ID = "97959fe7356ea8135f3b19db28cb941f" }
 
 [[env.production.d1_databases]]
 binding = "DB"
