@@ -87,7 +87,7 @@ export default {
       // 2.5 MAL OAuth Endpoints (Authorize URL, Token Exchange & Refresh)
       const action = request.headers.get('X-Action');
       const malClientId = env.MAL_CLIENT_ID || '97959fe7356ea8135f3b19db28cb941f';
-      const malClientSecret = env.MAL_CLIENT_SECRET || 'bd43d6c2462b4776d70685b5b4b0fe21c4e2db0b095ac6c3ea4fc215ab4ef7a7';
+      const malClientSecret = env.MAL_CLIENT_SECRET || 'bd45d6c2462b4726d706898564b0fe21c4e2db06095ac6c3ea4fc215ab4ef7a7';
 
       if (action === 'mal_authorize_url' || pathname === '/mal/auth') {
         let body = {};
