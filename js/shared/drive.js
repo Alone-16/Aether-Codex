@@ -224,6 +224,9 @@ function _startOAuthFlow() {
 const OAUTH_CALLBACK_PATH = '/auth/callback';
 
 function _getRedirectUri() {
+  if (location.protocol === 'file:') {
+    return 'https://aether-codex.nadeempubgmobile2-0.workers.dev/auth/callback';
+  }
   return location.origin + OAUTH_CALLBACK_PATH;
 }
 
@@ -475,11 +478,19 @@ async function _refreshMALAccessToken() {
 }
 
 async function _handleMALRedirect() {
+  let params = new URLSearchParams(location.search);
+  let code   = params.get('code');
+  let state  = params.get('state');
+  let error  = params.get('error');
 
-  const params = new URLSearchParams(location.search);
-  const code   = params.get('code');
-  const state  = params.get('state');
-  const error  = params.get('error');
+  if (!code && !error && location.hash.includes('?')) {
+    const hashQuery = location.hash.split('?')[1];
+    params = new URLSearchParams(hashQuery);
+    code   = params.get('code');
+    state  = params.get('state');
+    error  = params.get('error');
+  }
+
   if (!code && !error) return false;
   if (!state || !state.startsWith(_MAL_STATE_PREFIX)) return false;
 

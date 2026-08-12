@@ -31,6 +31,18 @@ export default {
     const url = new URL(request.url);
     const pathname = url.pathname;
 
+    // Handle OAuth Callback Redirection (/auth/callback)
+    if (pathname === '/auth/callback') {
+      const state = url.searchParams.get('state') || '';
+      let targetSection = 'settings';
+      if (state.includes(':')) {
+        const parts = state.split(':');
+        targetSection = parts[parts.length - 1] || 'settings';
+      }
+      const redirectUrl = `${url.origin}/#/${targetSection}?${url.searchParams.toString()}`;
+      return Response.redirect(redirectUrl, 302);
+    }
+
     // Serve static website frontend if route is non-API
     if (!pathname.startsWith('/v1/') && !pathname.startsWith('/mal/') && !pathname.startsWith('/ai/')) {
       if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
