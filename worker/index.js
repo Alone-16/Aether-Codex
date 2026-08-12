@@ -84,6 +84,62 @@ export default {
       const authRes = await handleAuth(request, env, ctx, requestId, pathname);
       if (authRes) return authRes;
 
+      // 2.5 MAL OAuth Endpoints (Authorize URL, Token Exchange & Refresh)
+      const action = request.headers.get('X-Action');
+      const malClientId = env.MAL_CLIENT_ID || '750528266098-oudtbb5dcmf4c167sf7l3fu46luqeq11.apps.googleusercontent.com';
+
+      if (action === 'mal_authorize_url' || pathname === '/mal/auth') {
+        let body = {};
+        try { body = await request.json(); } catch (e) {}
+        const redirectUri = body.redirect_uri || `${url.origin}/auth/callback`;
+        const codeChallenge = body.code_challenge || '';
+        const state = body.state || '';
+        const authUrl = `https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=${malClientId}&code_challenge=${codeChallenge}&code_challenge_method=plain&state=${encodeURIComponent(state)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+        return successResponse({ url: authUrl }, requestId);
+      }
+
+      if (action === 'mal_exchange_code' || pathname === '/mal/token') {
+        let body = {};
+        try { body = await request.json(); } catch (e) {}
+        const formParams = new URLSearchParams({
+          client_id: malClientId,
+          code: body.code || '',
+          code_verifier: body.code_verifier || '',
+          grant_type: 'authorization_code',
+          redirect_uri: body.redirect_uri || `${url.origin}/auth/callback`
+        });
+        if (env.MAL_CLIENT_SECRET) formParams.append('client_secret', env.MAL_CLIENT_SECRET);
+
+        const malTokenRes = await fetch('https://myanimelist.net/v1/oauth2/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formParams
+        });
+        const tokenData = await malTokenRes.json();
+        if (!malTokenRes.ok) return errorResponse('MAL_TOKEN_ERROR', tokenData.error_description || tokenData.message || 'MAL token exchange failed', requestId, malTokenRes.status);
+        return successResponse(tokenData, requestId);
+      }
+
+      if (action === 'mal_refresh_token' || pathname === '/mal/refresh') {
+        let body = {};
+        try { body = await request.json(); } catch (e) {}
+        const formParams = new URLSearchParams({
+          client_id: malClientId,
+          refresh_token: body.refresh_token || '',
+          grant_type: 'refresh_token'
+        });
+        if (env.MAL_CLIENT_SECRET) formParams.append('client_secret', env.MAL_CLIENT_SECRET);
+
+        const malRefreshRes = await fetch('https://myanimelist.net/v1/oauth2/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formParams
+        });
+        const refreshData = await malRefreshRes.json();
+        if (!malRefreshRes.ok) return errorResponse('MAL_REFRESH_ERROR', refreshData.error_description || refreshData.message || 'MAL token refresh failed', requestId, malRefreshRes.status);
+        return successResponse(refreshData, requestId);
+      }
+
       // 3. MAL API Search Proxy (Preserved)
       if (request.method === 'GET' && pathname === '/mal/search') {
         const q = url.searchParams.get('q');

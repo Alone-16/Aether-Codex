@@ -2216,7 +2216,7 @@ async function _malDoSearch(q) {
   if (!dd) return;
   try {
     const res  = await fetch(
-      `https://aether-codex-ai.nadeempubgmobile2-0.workers.dev/mal/search?q=${encodeURIComponent(q)}`
+      `https://aether-codex.nadeempubgmobile2-0.workers.dev/mal/search?q=${encodeURIComponent(q)}`
     );
     const data = await res.json();
     if (data.error) throw new Error(data.error_description || data.error);

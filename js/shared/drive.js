@@ -181,7 +181,7 @@ function _updateDriveBtn(state) {
             : 'Connect to Google Drive';
 }
 
-const _WORKER              = 'https://aether-codex-ai.nadeempubgmobile2-0.workers.dev';
+const _WORKER              = 'https://aether-codex.nadeempubgmobile2-0.workers.dev';
 const K_REFRESH            = 'ac_v4_refresh';
 const _MAL_OAUTH_NONCE_KEY = 'ac_mal_oauth_nonce';
 const _MAL_CODE_VERIFIER_KEY = 'ac_mal_code_verifier';

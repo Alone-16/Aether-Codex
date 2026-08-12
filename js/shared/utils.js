@@ -153,7 +153,7 @@ export function entryStats(e) {
   return { cur, tot, pct, time: estTime(tot || cur, dur) };
 }
 
-export function fmtMin(min)   { if (!min) return '—'; const h=Math.floor(min/60),m=min%60; if(h>0) return `${h.toLocaleString()}h${m>0?' '+m+'m':''}`; return `${m}m`; }
+export function fmtMin(min)   { if (!min) return '—'; const h=Math.round(min/60); return `${h.toLocaleString()}h`; }
 
 export const SL  = { watching:'▶ Watching', completed:'✓ Done', on_hold:'⏸ On Hold', dropped:'✗ Dropped', plan:'◻ Planned', upcoming:'◉ Upcoming', not_started:'○ Not Started' };
 export const SC  = { watching:'#7dd3fc', completed:'#4ade80', on_hold:'#fbbf24', dropped:'#fb7185', plan:'#a78bfa', upcoming:'#fb923c', not_started:'var(--mu)' };

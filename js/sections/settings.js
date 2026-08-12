@@ -775,7 +775,7 @@ async function startMALAutoLink() {
 
     try {
       const res  = await fetch(
-        `https://aether-codex-ai.nadeempubgmobile2-0.workers.dev/mal/search?q=${encodeURIComponent(entry.title)}`
+        `https://aether-codex.nadeempubgmobile2-0.workers.dev/mal/search?q=${encodeURIComponent(entry.title)}`
       );
       const data = await res.json();
       const top  = (data.results || [])[0];

@@ -45,7 +45,7 @@ async function renderPublicView(fileId) {
   document.head.appendChild(link);
 
   try {
-    const res = await fetch(`https://aether-codex-ai.nadeempubgmobile2-0.workers.dev?fileId=${fileId}`);
+    const res = await fetch(`https://aether-codex.nadeempubgmobile2-0.workers.dev?fileId=${fileId}`);
     if (!res.ok) throw new Error('File not found or not public');
     const text = await res.text();
     // Handle Google Drive virus scan warning page

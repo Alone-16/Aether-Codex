@@ -11,7 +11,7 @@ function setAIKey(k) { ls.setStr(AI_KEY_STORAGE, k); }
 
 function aiWorkerUrl() {
   const w = typeof window !== 'undefined' && window._WORKER;
-  return (w && String(w).replace(/\/$/, '')) || 'https://aether-codex-ai.nadeempubgmobile2-0.workers.dev';
+  return (w && String(w).replace(/\/$/, '')) || 'https://aether-codex.nadeempubgmobile2-0.workers.dev';
 }
 
 // ── Build context for Claude ──

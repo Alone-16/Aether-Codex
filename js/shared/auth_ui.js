@@ -100,7 +100,10 @@ export async function submitServerSignIn() {
     setCurrentUser(user);
     closePanel();
     toast(`Welcome back, ${user.name || user.email}!`, '#4ade80');
-    if (typeof window.bootApp === 'function') window.bootApp();
+    if (typeof window.bootApp === 'function') {
+      try { await window.bootApp(); } catch (e) {}
+    }
+    setTimeout(() => location.reload(), 200);
   } catch (err) {
     console.warn('[Auth UI] Sign in error:', err.message);
     const msg = err.message || '';
@@ -197,7 +200,10 @@ export async function submitServerSignUp() {
     setCurrentUser(user);
     closePanel();
     toast(`Welcome, ${user.name || user.email}! Account created.`, '#4ade80');
-    if (typeof window.bootApp === 'function') window.bootApp();
+    if (typeof window.bootApp === 'function') {
+      try { await window.bootApp(); } catch (e) {}
+    }
+    setTimeout(() => location.reload(), 200);
   } catch (err) {
     console.warn('[Auth UI] Sign up error:', err.message);
     toast('Sign up failed: ' + (err.message || 'Registration error'), '#fb7185');
