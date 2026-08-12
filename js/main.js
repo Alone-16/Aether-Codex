@@ -190,6 +190,9 @@ async function boot() {
 
   // Re-render active section with memory data
   if (typeof window.render === 'function') window.render();
+
+  // 5. Initialize Drive/OAuth — handles MAL callback redirect & Google sync
+  driveBootstrap().catch(e => console.error('[Boot] driveBootstrap error:', e));
 }
 
 window.bootApp = boot;
