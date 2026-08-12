@@ -402,18 +402,32 @@ async function _startMALAuth() {
   _setMALStoredValue(_MAL_CODE_VERIFIER_KEY,  codeVerifier);
   _setMALStoredValue(_MAL_REDIRECT_URI_KEY,   redirectUri);
 
-  const res = await fetch(_WORKER, {
-    method:  'POST',
-    headers: { 'Content-Type':'application/json', 'X-Action':'mal_authorize_url' },
-    body:    JSON.stringify({ redirect_uri:redirectUri, code_challenge:codeChallenge, state }),
-  });
-  if (!res.ok) { const body = await res.text(); throw new Error(`MAL auth failed: ${body}`); }
-  const data      = await res.json();
-  const oauthUrl  = data.url;
+  try {
+    const res = await fetch(`${_WORKER}/mal/auth`, {
+      method:  'POST',
+      headers: { 'Content-Type':'application/json', 'X-Action':'mal_authorize_url' },
+      body:    JSON.stringify({ redirect_uri:redirectUri, code_challenge:codeChallenge, state }),
+    });
+    let oauthUrl = '';
+    if (res.ok) {
+      const resJson = await res.json();
+      const data = resJson.data || resJson;
+      oauthUrl = data.url;
+    }
+    if (!oauthUrl) {
+      const clientId = '750528266098-oudtbb5dcmf4c167sf7l3fu46luqeq11.apps.googleusercontent.com';
+      oauthUrl = `https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=${clientId}&code_challenge=${codeChallenge}&code_challenge_method=plain&state=${encodeURIComponent(state)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    }
 
-  console.log('[MAL OAuth] authorize URL', oauthUrl);
+    console.log('[MAL OAuth] authorize URL', oauthUrl);
     _showRedirectingOverlay('MyAnimeList');
     setTimeout(() => { location.href = oauthUrl; }, 80);
+  } catch (e) {
+    const clientId = '750528266098-oudtbb5dcmf4c167sf7l3fu46luqeq11.apps.googleusercontent.com';
+    const oauthUrl = `https://myanimelist.net/v1/oauth2/authorize?response_type=code&client_id=${clientId}&code_challenge=${codeChallenge}&code_challenge_method=plain&state=${encodeURIComponent(state)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    _showRedirectingOverlay('MyAnimeList');
+    setTimeout(() => { location.href = oauthUrl; }, 80);
+  }
 }
 
 async function _exchangeMALCode(code, redirectUri, stateParam, skipNonceCheck = false) {
@@ -430,13 +444,14 @@ async function _exchangeMALCode(code, redirectUri, stateParam, skipNonceCheck = 
   _showSigningInBanner();
   try {
     const payload = { code, code_verifier:codeVerifier, redirect_uri:redirectUri };
-    const res = await fetch(_WORKER, {
+    const res = await fetch(`${_WORKER}/mal/token`, {
       method:  'POST',
       headers: { 'Content-Type':'application/json', 'X-Action':'mal_exchange_code' },
       body:    JSON.stringify(payload),
     });
     if (!res.ok) { const body = await res.text(); _toast(`MAL token exchange failed: ${body}`, '#fb7185'); throw new Error(`MAL token exchange failed: ${body}`); }
-    const data = await res.json();
+    const resJson = await res.json();
+    const data = resJson.data || resJson;
     if (data.error) throw new Error(data.error_description || data.error || 'MAL token exchange failed');
     window.SETTINGS.malAccessToken  = data.access_token  || null;
     window.SETTINGS.malRefreshToken = data.refresh_token || window.SETTINGS.malRefreshToken || null;
@@ -458,13 +473,14 @@ async function _refreshMALAccessToken() {
   const refreshToken = window.SETTINGS?.malRefreshToken;
   if (!refreshToken) return false;
   try {
-    const res = await fetch(_WORKER, {
+    const res = await fetch(`${_WORKER}/mal/refresh`, {
       method:  'POST',
       headers: { 'Content-Type':'application/json', 'X-Action':'mal_refresh_token' },
       body:    JSON.stringify({ refresh_token:refreshToken }),
     });
     if (!res.ok) throw new Error('status ' + res.status);
-    const data = await res.json();
+    const resJson = await res.json();
+    const data = resJson.data || resJson;
     if (data.error) throw new Error(data.error_description || data.error);
     window.SETTINGS.malAccessToken  = data.access_token;
     window.SETTINGS.malTokenExpiry  = data.expires_in ? String(Date.now() + (data.expires_in - 60) * 1000) : window.SETTINGS.malTokenExpiry;
