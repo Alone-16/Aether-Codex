@@ -104,12 +104,12 @@ export default {
         try { body = await request.json(); } catch (e) {}
         const formParams = new URLSearchParams({
           client_id: malClientId,
-          client_secret: malClientSecret,
           code: body.code || '',
           code_verifier: body.code_verifier || '',
           grant_type: 'authorization_code',
           redirect_uri: body.redirect_uri || `${url.origin}/auth/callback`
         });
+        if (malClientSecret) formParams.append('client_secret', malClientSecret);
 
         const malTokenRes = await fetch('https://myanimelist.net/v1/oauth2/token', {
           method: 'POST',
@@ -126,10 +126,10 @@ export default {
         try { body = await request.json(); } catch (e) {}
         const formParams = new URLSearchParams({
           client_id: malClientId,
-          client_secret: malClientSecret,
           refresh_token: body.refresh_token || '',
           grant_type: 'refresh_token'
         });
+        if (malClientSecret) formParams.append('client_secret', malClientSecret);
 
         const malRefreshRes = await fetch('https://myanimelist.net/v1/oauth2/token', {
           method: 'POST',
