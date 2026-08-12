@@ -10,10 +10,10 @@ import {
 // ═══════════════════════════════════════════════════════
 const SETTINGS_KEY = 'ac_v4_settings';
 
-const ALL_SECTION_IDS = ['home','media','games','books','music','vault','log','tools','notes'];
+const ALL_SECTION_IDS = ['home','media','games','books','music','vault','tools','notes','log'];
 
 function _defaultSectionEnabled() {
-  return { home:true, media:true, games:true, books:true, music:true, vault:true, log:true, tools:true, notes:true };
+  return { home:true, media:true, games:true, books:true, music:true, vault:true, tools:true, notes:true, log:true };
 }
 
 function loadSettings() {
@@ -43,6 +43,9 @@ function loadSettings() {
     return true;
   });
   ALL_SECTION_IDS.forEach(id => { if (!seen.has(id)) order.push(id); });
+  // Move 'log' to the end of the order by default
+  order = order.filter(id => id !== 'log');
+  order.push('log');
   merged.sectionOrder = order;
 
   const se = merged.sectionEnabled && typeof merged.sectionEnabled === 'object' && !Array.isArray(merged.sectionEnabled)
@@ -424,42 +427,7 @@ function renderSettingsSync(el) {
         `}
       </div>
     </div>
-    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
-      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
-        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Google Drive (Optional File Export)</div>
-        <div style="font-size:12px;color:var(--mu)">Optional secondary backup for exporting raw JSON files into Google Drive</div>
-      </div>
-      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div style="font-size:13px;font-weight:600;color:var(--tx)">Status</div>
-            <div style="font-size:12px;color:${connected?'#4ade80':'var(--mu)'};margin-top:2px">${connected?'✓ Connected':'Optional — Not Connected'}</div>
-          </div>
-          <button onclick="driveAction()" style="background:${connected?'rgba(251,113,133,.1)':'rgba(var(--ac-rgb),.12)'};color:${connected?'#fb7185':'var(--ac)'};border:1px solid ${connected?'rgba(251,113,133,.25)':'rgba(var(--ac-rgb),.3)'};border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">
-            ${connected?'Disconnect':'Connect'}
-          </button>
-        </div>
-        <div style="height:1px;background:var(--brd)"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
-          <div><div style="color:var(--mu);margin-bottom:2px">Last Synced</div><div style="color:var(--tx2)">${lastSync}</div></div>
-          <div><div style="color:var(--mu);margin-bottom:2px">Last Changed</div><div style="color:var(--tx2)">${lastSaved}</div></div>
-        </div>
-        ${connected?`<button onclick="syncDrive()" style="background:rgba(var(--ac-rgb),.12);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3);border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;align-self:flex-start">↻ Sync Now</button>`:''}
-      </div>
-    </div>
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden">
-      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
-        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Auto Backup</div>
-        <div style="font-size:12px;color:var(--mu)">Automatically export a backup to Drive every N days</div>
-      </div>
-      <div style="padding:14px 16px;display:flex;align-items:center;gap:10px">
-        <input type="number" id="backup-days" min="1" max="365" value="${SETTINGS.autoBackupDays||10}"
-          style="width:70px;background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:6px 10px;font-size:13px;color:var(--tx);outline:none">
-        <span style="font-size:13px;color:var(--tx2)">days</span>
-        <button onclick="saveBackupDays()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">Save</button>
-      </div>
-    </div>
-    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-top:12px">
       <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap">
           <div style="font-size:13px;font-weight:700;color:var(--tx)">MyAnimeList Sync</div>
@@ -610,38 +578,7 @@ async function runOneTimeCloudImport() {
 }
 
 function renderSettingsStorage(el) {
-  const counts = getLegacyCounts();
-  const hasLegacy = counts.total > 0;
-
   el.innerHTML = `
-    ${hasLegacy ? `
-    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
-      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
-        <div style="font-size:13px;font-weight:700;color:var(--ac);margin-bottom:2px">Import Existing Local Data</div>
-        <div style="font-size:12px;color:var(--mu)">Legacy data found in browser storage. One-time import to Cloudflare D1 database:</div>
-      </div>
-      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--tx)">
-        <div>Media: <strong>${counts.media}</strong> | Music: <strong>${counts.music}</strong> | Games: <strong>${counts.games}</strong> | Books: <strong>${counts.books}</strong> | Notes: <strong>${counts.notes}</strong> | Vault: <strong>${counts.vault}</strong></div>
-        <button onclick="window.runOneTimeCloudImport()" style="padding:8px 16px;background:var(--ac);color:#000;border:none;border-radius:6px;font-weight:700;cursor:pointer;align-self:flex-start">Import to Cloud</button>
-        <div id="import-status-box" style="display:none;margin-top:10px;padding:10px;background:var(--surf2);border-radius:6px">
-          <div id="import-status-txt" style="font-size:12px;font-weight:600;color:var(--tx);margin-bottom:6px">Importing...</div>
-          <div style="width:100%;height:6px;background:var(--brd);border-radius:3px;overflow:hidden;margin-bottom:10px">
-            <div id="import-progress-bar" style="width:0%;height:100%;background:var(--ac);transition:width 0.2s"></div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:4px;font-size:12px">
-            <div id="import-col-media">⏸ Media</div>
-            <div id="import-col-games">⏸ Games</div>
-            <div id="import-col-books">⏸ Books</div>
-            <div id="import-col-music">⏸ Music</div>
-            <div id="import-col-notes">⏸ Notes</div>
-            <div id="import-col-vault">⏸ Vault</div>
-            <div id="import-col-logs">⏸ Logs</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    ` : ''}
-
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:12px">
       <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
         <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">Database Backup & Recovery</div>
