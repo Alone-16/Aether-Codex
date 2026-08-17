@@ -49,11 +49,18 @@ export function nav(id, push = true) {
     document.querySelectorAll('.bn-item') .forEach(el => el.classList.toggle('active', el.dataset.r === id));
 
     const m = SECTION_META[id] || { title: id, label: id };
-    document.getElementById('nb-title').textContent = m.title;
-    document.getElementById('nb-sec').textContent   = m.label;
+    const nbTitle = document.getElementById('nb-title');
+    if (nbTitle) nbTitle.textContent = m.title;
+    const nbSec = document.getElementById('nb-sec');
+    if (nbSec) nbSec.textContent = m.label;
 
     const srch = document.getElementById('srch');
-    srch.placeholder = id === 'home' ? 'Search everything...' : `Search ${m.label}...`;
+    if (srch) srch.placeholder = 'Search';
+
+    const addBtn = document.getElementById('add-btn');
+    if (addBtn) {
+      addBtn.style.display = (id === 'home' || id === 'settings' || id === 'tools' || id === 'log') ? 'none' : 'flex';
+    }
 
     // Auto-lock games when leaving
     if (CURRENT !== 'games' && typeof GAMES_UNLOCKED !== 'undefined') {

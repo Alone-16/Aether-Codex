@@ -215,24 +215,49 @@ export async function submitServerSignUp() {
 // ═══════════════════════════════════════════════════════════════════
 export function updateNavbarUserUI() {
   const container = document.getElementById('user-auth-wrap');
-  if (!container) return;
+  const mobContainer = document.getElementById('mob-user-auth-wrap');
 
   const user = getCurrentUser();
   if (user) {
     const initial = (user.name || user.email || 'A').charAt(0).toUpperCase();
-    container.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="window.openAccountModal()" title="${user.email}">
-        <div style="width:28px;height:28px;border-radius:50%;border:1px solid var(--ac);background:var(--surf2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${initial}</div>
-        <span style="font-size:12px;font-weight:600;color:var(--tx)" class="mob-hide">${user.name ? user.name.split(' ')[0] : 'Account'}</span>
-      </div>
-    `;
+    const displayName = user.name ? user.name.split(' ')[0] : 'Account';
+    if (container) {
+      container.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="window.openAccountModal()" title="${user.email}">
+          <div style="width:28px;height:28px;border-radius:50%;border:1px solid var(--ac);background:var(--surf2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${initial}</div>
+          <span style="font-size:12px;font-weight:600;color:var(--tx)" class="mob-hide">${displayName}</span>
+        </div>
+      `;
+    }
+    if (mobContainer) {
+      mobContainer.innerHTML = `
+        <div class="mob-profile-card" onclick="if(typeof window.closeMob==='function')window.closeMob();window.openAccountModal();" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,255,255,0.04);border:1px solid var(--brd);border-radius:10px;cursor:pointer;margin:4px 0">
+          <div style="width:34px;height:34px;border-radius:50%;border:1.5px solid var(--ac);background:var(--surf2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0">${initial}</div>
+          <div style="min-width:0;flex:1">
+            <div style="font-size:13px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${user.name || 'Account'}</div>
+            <div style="font-size:11px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${user.email}</div>
+          </div>
+          <span style="font-size:13px;color:var(--ac);opacity:0.8">⚙</span>
+        </div>
+      `;
+    }
   } else {
-    container.innerHTML = `
-      <div style="display:flex;gap:6px;align-items:center">
-        <button class="nb-btn" onclick="window.promptServerSignIn()" style="font-size:11px;font-weight:700;padding:4px 10px;background:transparent;color:var(--ac);border:1px solid var(--ac)">Sign In</button>
-        <button class="nb-btn" onclick="window.promptServerSignUp()" style="font-size:11px;font-weight:700;padding:4px 10px;background:var(--ac);color:#000;border:none">Sign Up</button>
-      </div>
-    `;
+    if (container) {
+      container.innerHTML = `
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="nb-btn" onclick="window.promptServerSignIn()" style="font-size:11px;font-weight:700;padding:4px 10px;background:transparent;color:var(--ac);border:1px solid var(--ac)">Sign In</button>
+          <button class="nb-btn" onclick="window.promptServerSignUp()" style="font-size:11px;font-weight:700;padding:4px 10px;background:var(--ac);color:#000;border:none">Sign Up</button>
+        </div>
+      `;
+    }
+    if (mobContainer) {
+      mobContainer.innerHTML = `
+        <div style="display:flex;gap:8px;padding:6px 0;margin-bottom:4px">
+          <button onclick="if(typeof window.closeMob==='function')window.closeMob();window.promptServerSignIn()" style="flex:1;height:34px;border-radius:8px;background:transparent;color:var(--ac);border:1px solid var(--ac);font-size:12px;font-weight:700;cursor:pointer">Sign In</button>
+          <button onclick="if(typeof window.closeMob==='function')window.closeMob();window.promptServerSignUp()" style="flex:1;height:34px;border-radius:8px;background:var(--ac);color:#000;border:none;font-size:12px;font-weight:700;cursor:pointer">Sign Up</button>
+        </div>
+      `;
+    }
   }
 }
 
