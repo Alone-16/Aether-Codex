@@ -38,7 +38,7 @@ button{cursor:pointer;font-family:inherit;border:none;background:none}
 input,select,textarea{font-family:inherit;color:var(--tx)}
 
 /* ═══ LAYOUT ═══ */
-#app{display:flex;height:100vh;overflow:hidden}
+#app{display:flex;height:100vh;height:100dvh;overflow:hidden}
 
 /* ═══ SIDEBAR ═══ */
 #sidebar{width:68px;background:var(--surf);border-right:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;align-items:center;padding:0 0 16px 0;gap:6px;flex-shrink:0;z-index:200;transition:width 0.35s cubic-bezier(0.2,0.8,0.2,1),background 0.35s,border-color 0.35s}
@@ -493,12 +493,13 @@ textarea.fin{resize:vertical;min-height:70px}
   html[data-section="log"] #add-btn{display:none !important}
 
   /* ── HERO ── */
-  .hero-wrap{padding:14px 14px!important;margin-bottom:16px!important;gap:10px}
-  .hero-title{font-size:clamp(13px,4vw,17px)!important;white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis}
-  .hero-sub{font-size:11.5px!important}
+  .hero-wrap{padding:16px 14px!important;margin-bottom:16px!important;gap:10px}
+  .hero-title{font-size:clamp(16px,4.8vw,21px)!important;font-weight:800!important;white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis}
+  .hero-sub{font-size:12px!important;margin-top:4px!important}
 
-  /* ── CONTENT ── */
-  #content{padding:10px}
+  /* ── CONTENT (Extra bottom padding for Firefox/Safari bottom address bar & bottom nav) ── */
+  #content{padding:10px 10px calc(84px + env(safe-area-inset-bottom, 16px)) !important}
+  #main{padding-bottom:0 !important}
 
   /* ── HOME STAT CARDS ── */
   .dc{padding:8px 10px;min-height:0}
@@ -513,8 +514,15 @@ textarea.fin{resize:vertical;min-height:70px}
   #airing-pills{display:flex!important;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:5px}
   #airing-pills button{min-width:44px;flex:1}
 
-  /* ── SECTION OVERVIEW ── */
-  .section-ov-grid{grid-template-columns:1fr!important}
+  /* ── SECTION OVERVIEW (Database Overview Cards — compact 2-col) ── */
+  .section-ov-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
+  .hc-card{padding:10px 12px!important;border-radius:10px!important}
+  .hc-head{margin-bottom:8px!important}
+  .hc-badge{padding:3px 6px!important;font-size:9px!important}
+  .hc-icon-ring{width:22px!important;height:22px!important;font-size:11px!important}
+  .hc-val{font-size:18px!important;font-weight:800!important}
+  .hc-lbl{font-size:10px!important;margin:4px 0 8px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}
+  .hc-bar-bg{height:3px!important}
 
   /* ── ROWS ── */
   .row{min-height:48px}
@@ -527,7 +535,8 @@ textarea.fin{resize:vertical;min-height:70px}
   .prog-txt{font-size:10px}
 
   /* ── PANEL ── */
-  #rpanel{width:100%;max-width:100%;border-radius:12px 12px 0 0;top:52px;height:calc(100vh - 52px)}
+  #rpanel{width:100%;max-width:100%;border-radius:12px 12px 0 0;top:52px;height:calc(100vh - 52px);height:calc(100dvh - 52px)}
+  #panel-inner{padding-bottom:calc(60px + env(safe-area-inset-bottom, 20px))}
   .pstats{grid-template-columns:repeat(2,1fr)}
   .panel-actions{padding:14px 16px;gap:8px}
   .panel-actions button{font-size:12px;padding:10px 14px}
@@ -561,15 +570,10 @@ textarea.fin{resize:vertical;min-height:70px}
 
 /* ── BOTTOM NAV ── */
 @media(min-width:641px){#kb-btn{display:flex!important}}
-#bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:56px;background:var(--surf);border-top:1px solid var(--brd);z-index:500;align-items:stretch;padding-bottom:env(safe-area-inset-bottom)}
+#bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:calc(56px + env(safe-area-inset-bottom, 0px));background:rgba(18,18,22,0.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid rgba(255,255,255,0.08);z-index:500;align-items:stretch;padding-bottom:env(safe-area-inset-bottom, 0px)}
 .bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--tx2);transition:color .15s;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;border:none;background:none}
 .bn-item.active{color:var(--ac)}
 .bn-item .bn-ico{font-size:19px;line-height:1}
-/* Pad content above bottom nav on mobile */
-@media(max-width:640px){
-  #main{padding-bottom:56px}
-  #app{align-items:stretch}
-}
 
 
 /* ═══ NOTES SECTION ═══ */
