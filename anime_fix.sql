@@ -1,0 +1,17 @@
+UPDATE media SET status = 'watching', airing_day = NULL, airing_time = NULL, ep_tot = '12' WHERE id = 'h0b1zxyq6yzgnuitin';
+UPDATE media SET status = 'watching', airing_day = NULL, airing_time = NULL, ep_tot = '14' WHERE id = 'mnrjy8t91vjdgxr5nni';
+UPDATE media SET status = 'watching', airing_day = NULL, airing_time = NULL, ep_tot = '13' WHERE id = 'mal_59062';
+UPDATE media SET status = 'watching', airing_day = NULL, airing_time = NULL, ep_tot = '12' WHERE id = 'mnl4b40s331jbreslq8';
+UPDATE media SET status = 'watching', airing_day = 0, airing_time = '19:45', ep_tot = '1122' WHERE id = 'mal_21';
+UPDATE media SET status = 'watching', airing_day = NULL, airing_time = NULL, ep_tot = '12' WHERE id = 'mal_56907';
+UPDATE media SET status = 'watching', airing_day = 1, airing_time = '18:30', ep_tot = '12' WHERE id = 'mrlrvqfc9i0cbdk8ua6';
+UPDATE media SET status = 'watching', airing_day = NULL, airing_time = NULL, ep_tot = '25' WHERE id = 'mal_51122';
+UPDATE media SET status = 'watching', airing_day = 5, airing_time = '19:30', ep_tot = '24' WHERE id = '8m4d2t6vogjf009dxc';
+UPDATE media SET status = 'watching', airing_day = NULL, airing_time = NULL, ep_tot = '12' WHERE id = '4phfuu0gfay8awl9jz';
+UPDATE media SET status = 'watching', airing_day = NULL, airing_time = NULL, ep_tot = '12' WHERE id = 'zu14gr670mjmp8m9tf';
+UPDATE media SET status = 'watching', airing_day = NULL, airing_time = NULL, ep_tot = '12' WHERE id = 'mnf5ioyv0f0cza52r1r';
+UPDATE media SET status = 'watching', airing_day = 3, airing_time = '20:30', ep_tot = '12' WHERE id = 'msa46qewabdlcl5szjs';
+UPDATE media SET status = 'watching', airing_day = NULL, airing_time = NULL, ep_tot = '12' WHERE id = 'mal_53447';
+UPDATE media SET status = 'watching', airing_day = NULL, airing_time = NULL, ep_tot = '24' WHERE id = 'mal_52741';
+UPDATE media SET status = 'watching', airing_day = NULL, airing_time = NULL, ep_tot = '12' WHERE id = 'mal_60523';
+UPDATE media SET status = 'watching', airing_day = NULL, airing_time = NULL, ep_tot = '13' WHERE id = 'mnrg4cpc2k6qz7xg3ms';
