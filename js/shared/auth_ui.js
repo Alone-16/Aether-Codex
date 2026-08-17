@@ -10,9 +10,31 @@ let currentUser = null;
 export function getCurrentUser() {
   if (currentUser) return currentUser;
   try {
-    const raw = sessionStorage.getItem('ac_v5_user_profile') || localStorage.getItem('ac_v5_user_profile');
-    if (raw) currentUser = JSON.parse(raw);
+    const raw = sessionStorage.getItem('ac_v5_user_profile') || localStorage.getItem('ac_v5_user_profile') || localStorage.getItem('ac_user') || localStorage.getItem('user');
+    if (raw) {
+      let parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.user) parsed = parsed.user;
+        currentUser = parsed;
+      }
+    }
   } catch (e) {}
+
+  if (!currentUser) {
+    const token = getAccessToken();
+    if (token && token.includes('.')) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload && (payload.email || payload.sub)) {
+          currentUser = {
+            id: payload.sub,
+            email: payload.email || (payload.sub && payload.sub.includes('@') ? payload.sub : ''),
+            name: payload.name || (payload.email ? payload.email.split('@')[0] : 'User')
+          };
+        }
+      } catch (e) {}
+    }
+  }
   return currentUser;
 }
 
@@ -29,7 +51,7 @@ export function setCurrentUser(user) {
 }
 
 export async function initServerAuth() {
-  // Just restore user from storage and update UI — no auto network calls
+  // Restore user from storage and update UI
   getCurrentUser();
   updateNavbarUserUI();
 }
@@ -218,12 +240,15 @@ export function updateNavbarUserUI() {
   const mobContainer = document.getElementById('mob-user-auth-wrap');
 
   const user = getCurrentUser();
-  if (user) {
-    const initial = (user.name || user.email || 'A').charAt(0).toUpperCase();
-    const displayName = user.name ? user.name.split(' ')[0] : 'Account';
+  if (user && (user.email || user.name || user.id)) {
+    const userEmail = user.email || (user.id && user.id.includes('@') ? user.id : '');
+    const userName = user.name || (userEmail ? userEmail.split('@')[0] : 'Account');
+    const initial = (userName || userEmail || 'A').charAt(0).toUpperCase();
+    const displayName = userName ? userName.split(' ')[0] : 'Account';
+
     if (container) {
       container.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="window.openAccountModal()" title="${user.email}">
+        <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="window.openAccountModal()" title="${userEmail || userName}">
           <div style="width:28px;height:28px;border-radius:50%;border:1px solid var(--ac);background:var(--surf2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${initial}</div>
           <span style="font-size:12px;font-weight:600;color:var(--tx)" class="mob-hide">${displayName}</span>
         </div>
@@ -231,13 +256,13 @@ export function updateNavbarUserUI() {
     }
     if (mobContainer) {
       mobContainer.innerHTML = `
-        <div class="mob-profile-card" onclick="if(typeof window.closeMob==='function')window.closeMob();window.openAccountModal();" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(255,255,255,0.04);border:1px solid var(--brd);border-radius:10px;cursor:pointer;margin:4px 0">
-          <div style="width:34px;height:34px;border-radius:50%;border:1.5px solid var(--ac);background:var(--surf2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0">${initial}</div>
-          <div style="min-width:0;flex:1">
-            <div style="font-size:13px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${user.name || 'Account'}</div>
-            <div style="font-size:11px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${user.email}</div>
+        <div class="mob-profile-card" onclick="if(typeof window.closeMob==='function')window.closeMob();window.openAccountModal();" title="Account Settings">
+          <div class="mob-profile-avatar">${initial}</div>
+          <div class="mob-profile-info">
+            <div class="mob-profile-name">${userName}</div>
+            ${userEmail ? `<div class="mob-profile-email">${userEmail}</div>` : ''}
           </div>
-          <span style="font-size:13px;color:var(--ac);opacity:0.8">⚙</span>
+          <span class="mob-profile-gear">⚙</span>
         </div>
       `;
     }
@@ -271,13 +296,15 @@ export function openAccountModal() {
     return;
   }
 
-  const initial = (user.name || user.email || 'A').charAt(0).toUpperCase();
+  const userEmail = user.email || (user.id && user.id.includes('@') ? user.id : '');
+  const userName = user.name || (userEmail ? userEmail.split('@')[0] : 'User');
+  const initial = (userName || userEmail || 'A').charAt(0).toUpperCase();
   const html = `
     <div style="padding:20px;max-width:400px;margin:0 auto;color:var(--tx);font-family:var(--fd)">
       <div style="text-align:center;margin-bottom:20px">
         <div style="width:64px;height:64px;border-radius:50%;border:2px solid var(--ac);background:var(--surf2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;margin:0 auto 8px">${initial}</div>
-        <div style="font-size:16px;font-weight:700;color:var(--tx)">${user.name || 'User'}</div>
-        <div style="font-size:12px;color:var(--mu)">${user.email}</div>
+        <div style="font-size:16px;font-weight:700;color:var(--tx)">${userName}</div>
+        ${userEmail ? `<div style="font-size:12px;color:var(--mu);margin-top:2px">${userEmail}</div>` : ''}
       </div>
       <div style="display:flex;flex-direction:column;gap:10px">
         <button onclick="window.handleLogoutCurrent()" style="padding:10px;border-radius:8px;background:var(--surf2);border:1px solid var(--brd);color:var(--tx);font-weight:600;cursor:pointer">Logout Current Session</button>

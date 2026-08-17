@@ -281,11 +281,12 @@ textarea.fin{resize:vertical;min-height:70px}
 }
 .hero-title {
   font-family: var(--fd);
-  font-size: clamp(24px, 4vw, 34px);
+  font-size: clamp(16px, 3.8vw, 30px);
   font-weight: 800;
   line-height: 1.2;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.3px;
   color: var(--tx);
+  white-space: nowrap;
 }
 .hero-title em {
   color: transparent;
@@ -428,6 +429,16 @@ textarea.fin{resize:vertical;min-height:70px}
 .mob-close-btn{width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:var(--tx2);font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .mob-close-btn:hover{background:rgba(255,255,255,0.1);color:var(--tx)}
 .mob-auth-wrap{margin:4px 0 6px}
+
+/* Mobile Profile Card */
+.mob-profile-card{display:flex!important;align-items:center!important;gap:10px!important;padding:10px 12px!important;background:rgba(255,255,255,0.05)!important;border:1px solid rgba(255,255,255,0.09)!important;border-radius:10px!important;cursor:pointer!important;margin:4px 0 6px!important;transition:all .2s ease!important;text-decoration:none!important}
+.mob-profile-card:hover{background:rgba(255,255,255,0.09)!important;border-color:rgba(var(--ac-rgb),0.35)!important}
+.mob-profile-avatar{width:36px;height:36px;border-radius:50%;border:1.5px solid var(--ac);background:var(--surf2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;flex-shrink:0;box-shadow:0 0 10px rgba(var(--ac-rgb),0.2)}
+.mob-profile-info{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.mob-profile-name{font-size:13.5px!important;font-weight:700!important;color:#ffffff!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}
+.mob-profile-email{font-size:11px!important;font-weight:500!important;color:rgba(255,255,255,0.65)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2}
+.mob-profile-gear{font-size:14px;color:var(--ac);opacity:0.8;flex-shrink:0}
+
 .mob-ni{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:8px;color:var(--tx2);cursor:pointer;transition:all .15s;font-weight:600;font-size:13px}
 .mob-ni span{font-size:15px;width:18px;text-align:center}
 .mob-ni:hover{background:rgba(255,255,255,0.06);color:var(--tx)}
@@ -450,9 +461,6 @@ textarea.fin{resize:vertical;min-height:70px}
 @media(max-width:640px){
   .mob-hide{display:none!important}
   .desktop-only-auth{display:none !important}
-  .drive-status-txt{display:none!important}
-  .drive-txt{display:none!important}
-  #drive-btn{min-width:32px!important;padding:0 8px}
 
   /* ── NAVBAR ── */
   #navbar{padding:0 10px;gap:8px;height:52px}
@@ -466,6 +474,11 @@ textarea.fin{resize:vertical;min-height:70px}
   .nb-ico{width:32px;height:32px;font-size:14px;border-radius:8px}
   .nb-btn{height:32px;padding:0 8px;font-size:11px;border-radius:8px;gap:4px}
 
+  /* Saved Cloud Status button */
+  #sync-btn{display:inline-flex!important;align-items:center;gap:4px;padding:0 8px;min-width:54px!important}
+  #sync-icon{display:inline-block!important;font-size:10px}
+  #sync-status-txt, .sync-status-txt{display:inline!important;font-size:11px!important;font-weight:700!important;color:rgba(255,255,255,0.85)!important}
+
   /* Ensure Data button icon + text are visible and styled on mobile */
   #nb-data-dropdown{display:inline-flex}
   #nb-data-btn{display:inline-flex !important;align-items:center;gap:4px;padding:0 8px;height:32px}
@@ -478,6 +491,11 @@ textarea.fin{resize:vertical;min-height:70px}
   html[data-section="settings"] #add-btn,
   html[data-section="tools"] #add-btn,
   html[data-section="log"] #add-btn{display:none !important}
+
+  /* ── HERO ── */
+  .hero-wrap{padding:14px 14px!important;margin-bottom:16px!important;gap:10px}
+  .hero-title{font-size:clamp(13px,4vw,17px)!important;white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis}
+  .hero-sub{font-size:11.5px!important}
 
   /* ── CONTENT ── */
   #content{padding:10px}
