@@ -70,7 +70,7 @@ export async function handleAuth(request, env, ctx, requestId, pathname) {
     const userId = 'usr_' + btoa(cleanEmail).replace(/=/g, '').replace(/[^a-zA-Z0-9]/g, '');
 
     // Check if user already exists
-    const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?;').bind(cleanEmail).first();
+    const existing = await env.DB.prepare('SELECT id FROM users WHERE LOWER(TRIM(email)) = ? OR id = ?;').bind(cleanEmail, userId).first();
     if (existing) {
       return errorResponse('USER_EXISTS', 'An account with this email already exists. Please sign in.', requestId, 409);
     }
@@ -108,9 +108,10 @@ export async function handleAuth(request, env, ctx, requestId, pathname) {
     }
 
     const cleanEmail = email.toLowerCase().trim();
+    const userId = 'usr_' + btoa(cleanEmail).replace(/=/g, '').replace(/[^a-zA-Z0-9]/g, '');
 
-    // Find user by email
-    const userRow = await env.DB.prepare('SELECT id, email, name, picture, password_hash FROM users WHERE email = ?;').bind(cleanEmail).first();
+    // Find user by email (case-insensitive & userId match)
+    const userRow = await env.DB.prepare('SELECT id, email, name, picture, password_hash FROM users WHERE LOWER(TRIM(email)) = ? OR id = ?;').bind(cleanEmail, userId).first();
     if (!userRow) {
       return errorResponse('USER_NOT_FOUND', 'No account found with this email. Please sign up first.', requestId, 401);
     }

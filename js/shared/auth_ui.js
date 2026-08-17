@@ -60,7 +60,7 @@ export function promptServerSignIn() {
       </div>
       <div class="fg">
         <label class="flbl">Email Address *</label>
-        <input class="fin" id="cf-auth-email" type="email" placeholder="user@example.com" autofocus>
+        <input class="fin" id="cf-auth-email" type="email" placeholder="user@example.com" autocapitalize="none" autocorrect="off" spellcheck="false" autofocus>
       </div>
       <div class="fg">
         <label class="flbl">Password *</label>
@@ -82,7 +82,7 @@ export function promptServerSignIn() {
 export async function submitServerSignIn() {
   const emailInput = document.getElementById('cf-auth-email');
   const passInput = document.getElementById('cf-auth-password');
-  const email = emailInput?.value?.trim();
+  const email = emailInput?.value?.trim()?.toLowerCase();
   const password = passInput?.value || '';
 
   if (!email || !email.includes('@')) {
@@ -148,7 +148,7 @@ export function promptServerSignUp() {
       </div>
       <div class="fg">
         <label class="flbl">Email Address *</label>
-        <input class="fin" id="reg-email" type="email" placeholder="user@example.com">
+        <input class="fin" id="reg-email" type="email" placeholder="user@example.com" autocapitalize="none" autocorrect="off" spellcheck="false">
       </div>
       <div class="fg">
         <label class="flbl">Password * (min 6 chars)</label>
@@ -177,7 +177,7 @@ export async function submitServerSignUp() {
   const passInput = document.getElementById('reg-password');
   const pass2Input = document.getElementById('reg-password2');
   const name = nameInput?.value?.trim();
-  const email = emailInput?.value?.trim();
+  const email = emailInput?.value?.trim()?.toLowerCase();
   const password = passInput?.value || '';
   const password2 = pass2Input?.value || '';
 
