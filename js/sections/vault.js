@@ -246,13 +246,13 @@ function checkVaultMigration() {
 
 function renderVault(c) {
   c.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <div class="sec-top-bar">
+      <div class="sec-top-start">
         <div class="sub-tabs"><button class="stab active">Links</button></div>
-        <span style="font-size:10px;color:#4ade80;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.2);border-radius:4px;padding:2px 7px">🔐 Private Encrypted</span>
-        <button id="vault-lock-btn" style="display:none;height:28px;border-radius:5px;background:rgba(251,113,133,.1);border:1px solid rgba(251,113,133,.25);color:#fb7185;font-size:11px;font-weight:600;padding:0 10px;cursor:pointer" onclick="lockVault()">🔓 Lock Private</button>
+        <span style="font-size:11px;font-weight:700;color:#4ade80;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.2);border-radius:6px;padding:4px 9px;white-space:nowrap">🔐 Encrypted</span>
+        <button id="vault-lock-btn" style="display:none;height:32px;border-radius:8px;background:rgba(251,113,133,.1);border:1px solid rgba(251,113,133,.25);color:#fb7185;font-size:12px;font-weight:600;padding:0 12px;cursor:pointer" onclick="lockVault()">🔓 Lock Private</button>
       </div>
-      <button class="nb-btn ac" onclick="openAddLink()">+ Add Link</button>
+      <button class="nb-btn ac sec-add-btn" onclick="openAddLink()">+ Add Link</button>
     </div>
     <div id="vault-body"></div>`;
   renderVaultBody();

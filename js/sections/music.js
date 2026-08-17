@@ -175,11 +175,13 @@ function renderMusic(c) {
         animation: mu-cardEnter 0.5s cubic-bezier(0.16,1,0.3,1) both;
       }
     </style>
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-      <div class="sub-tabs">
-        ${tabs.map((t,i) => `<button class="stab${MUSIC_PAGE===['library','playlists','dashboard'][i]?' active':''}" onclick="setMusicPage('${['library','playlists','dashboard'][i]}')">${t}</button>`).join('')}
+    <div class="sec-top-bar">
+      <div class="sec-top-start">
+        <div class="sub-tabs">
+          ${tabs.map((t,i) => `<button class="stab${MUSIC_PAGE===['library','playlists','dashboard'][i]?' active':''}" onclick="setMusicPage('${['library','playlists','dashboard'][i]}')">${t}</button>`).join('')}
+        </div>
       </div>
-      <div style="display:flex;gap:6px;align-items:center">
+      <div class="sec-actions">
         <button id="music-sync-btn" onclick="openAddPlaylistModal()" class="nb-btn" style="color:var(--ac)">⟳ Sync Link</button>
         <button onclick="openAddSong()" class="nb-btn ac">+ Add Song</button>
       </div>

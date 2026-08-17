@@ -642,9 +642,9 @@ function rowHtml(e, idx = 0) {
         </div>` : ''}
         <div class="m-card-actions" onclick="event.stopPropagation()">
           ${showCtrl && hasBar ? `<div class="m-ep-ctrl">
-            <button class="m-ep-btn" onclick="quickEp('${e.id}',-1)">−</button>
+            <button class="m-ep-btn" onclick="quickEp('${e.id}',-1,event)">−</button>
             <span class="m-ep-num">${rCur}</span>
-            <button class="m-ep-btn" onclick="quickEp('${e.id}',1)">+</button>
+            <button class="m-ep-btn" onclick="quickEp('${e.id}',1,event)">+</button>
           </div>` : ''}
           <button class="m-act-btn m-act-more" onclick="openEdit('${e.id}')" title="Edit">⋯</button>
           <button class="m-act-btn m-act-del" onclick="askDel('${e.id}')" title="Delete">✕</button>
@@ -656,8 +656,39 @@ function rowHtml(e, idx = 0) {
   </div>`;
 }
 
-/* ── Quick ep controls ── */
-function quickEp(id, delta) {
+function _updateCardDomInPlace(e) {
+  const cardEl = document.getElementById('row-' + e.id);
+  if (!cardEl) return;
+
+  const col  = _mediaStatusBar(e.status);
+  const rCur = parseInt(e.epCur || 0);
+  const rTot = parseInt(e.epTot || 0);
+  const rPct = rTot ? Math.round(rCur / rTot * 100) : (rCur > 0 ? 100 : 0);
+
+  const epNum = cardEl.querySelector('.m-ep-num');
+  const progTxt = cardEl.querySelector('.m-prog-txt');
+  const progFill = cardEl.querySelector('.m-prog-fill');
+
+  if (epNum && progTxt && progFill) {
+    epNum.textContent = rCur;
+    progTxt.textContent = `${rCur}${rTot ? '/' + rTot : ''}`;
+    progFill.style.width = `${rPct}%`;
+    progFill.style.background = col;
+
+    cardEl.style.setProperty('--card-glow', col);
+    cardEl.style.setProperty('--status-col', col);
+    const strip = cardEl.querySelector('.m-card-strip');
+    if (strip) strip.style.setProperty('--strip-col', col);
+  } else {
+    cardEl.outerHTML = rowHtml(e);
+  }
+}
+
+function quickEp(id, delta, ev) {
+  if (ev) {
+    if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    if (typeof ev.preventDefault === 'function') ev.preventDefault();
+  }
   const e = DATA.find(x => x.id === id); if (!e) return;
   e.epCur = Math.max(0, (parseInt(e.epCur) || 0) + delta);
   if (e.epTot && e.epCur >= parseInt(e.epTot) && e.status !== 'dropped' && e.status !== 'upcoming') {
@@ -672,7 +703,8 @@ function quickEp(id, delta) {
     e.airingDay = null;
     e.airingTime = null;
   }
-  e.updatedAt = Date.now(); saveData(DATA); renderMediaBody();
+  e.updatedAt = Date.now(); saveData(DATA);
+  _updateCardDomInPlace(e);
   mediaApi.patch(id, { ep_cur: e.epCur, epCur: e.epCur, status: e.status, airing_day: e.airingDay, airingDay: e.airingDay, airing_time: e.airingTime, airingTime: e.airingTime }).catch(err => console.warn('[quickEp Sync Fail]', err));
   if (PANEL === 'detail' && PEDIT === id) renderDetailPanel(DATA.find(x => x.id === id));
   _malSyncQuiet(e);
@@ -1034,9 +1066,9 @@ function renderLinkedEntries(entry) {
       </div>
       <div class="linked-controls" onclick="event.stopPropagation()">
         <div class="ep-inline">
-          <button class="ep-pm" onclick="linkedEpDelta('${entry.id}','${le.id}',-1)">−</button>
+          <button class="ep-pm" onclick="linkedEpDelta('${entry.id}','${le.id}',-1,event)">−</button>
           <span class="ep-val">${st.cur}</span>
-          <button class="ep-pm" onclick="linkedEpDelta('${entry.id}','${le.id}',1)">+</button>
+          <button class="ep-pm" onclick="linkedEpDelta('${entry.id}','${le.id}',1,event)">+</button>
         </div>
         <button onclick="unlinkEntry('${le.id}')" title="Unlink this entry"
           style="width:22px;height:22px;border-radius:4px;background:rgba(251,113,133,.08);border:1px solid rgba(251,113,133,.2);color:#fb7185;font-size:10px;cursor:pointer;flex-shrink:0;margin-left:2px">✕</button>
@@ -1056,7 +1088,11 @@ function renderLinkedEntries(entry) {
  * linkedEpDelta — increments/decrements a flat linked entry's episode count,
  * then re-renders the parent's detail panel.
  */
-function linkedEpDelta(parentId, linkedId, delta) {
+function linkedEpDelta(parentId, linkedId, delta, ev) {
+  if (ev) {
+    if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    if (typeof ev.preventDefault === 'function') ev.preventDefault();
+  }
   const linked = DATA.find(x => x.id === linkedId);
   if (!linked) return;
 
@@ -1078,7 +1114,7 @@ function linkedEpDelta(parentId, linkedId, delta) {
 
   const parent = DATA.find(x => x.id === parentId);
   if (parent) renderDetailPanel(parent);
-  renderMediaBody();
+  _updateCardDomInPlace(linked);
 }
 
 /* ── Link Picker ── */

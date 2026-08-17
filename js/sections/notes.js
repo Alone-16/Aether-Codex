@@ -98,14 +98,16 @@ function lockPrivateNotes() {
 // ── Main render ──
 function renderNotes(c) {
   c.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
-      <div>
-        <div class="page-ttl" style="margin-bottom:0">✎ <em>Notes</em></div>
-        <div style="font-size:12px;color:var(--mu);margin-top:3px">Your thoughts, checklists &amp; ideas</div>
+    <div class="sec-top-bar">
+      <div class="sec-top-start">
+        <div>
+          <div class="page-ttl" style="margin-bottom:0">✎ <em>Notes</em></div>
+          <div style="font-size:12px;color:var(--mu);margin-top:3px">Your thoughts, checklists &amp; ideas</div>
+        </div>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <div class="sec-actions">
         ${NOTES_UNLOCKED
-          ? `<button onclick="lockPrivateNotes()" style="height:28px;border-radius:5px;background:rgba(var(--ac-rgb),.1);border:1px solid rgba(var(--ac-rgb),.25);color:var(--ac);font-size:11px;font-weight:700;padding:0 10px;cursor:pointer">🔓 Lock Private</button>`
+          ? `<button onclick="lockPrivateNotes()" style="height:32px;border-radius:8px;background:rgba(var(--ac-rgb),.1);border:1px solid rgba(var(--ac-rgb),.25);color:var(--ac);font-size:12px;font-weight:700;padding:0 12px;cursor:pointer">🔓 Lock Private</button>`
           : ''}
         <button class="nb-btn ac" onclick="openNewNote('text')">✎ Text</button>
         <button class="nb-btn" onclick="openNewNote('checklist')">☑ List</button>

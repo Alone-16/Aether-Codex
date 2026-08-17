@@ -162,9 +162,8 @@ function rebuildSidebar() {
   // Also rebuild mobile sidebar
   const mobSb = document.getElementById('mob-sb');
   if (mobSb) {
-    const mobLogo = mobSb.querySelector('.mob-logo');
-    const mobSep  = mobSb.querySelector('.mob-sep');
-    mobSb.querySelectorAll('.mob-ni').forEach(el => el.remove());
+    const list = mobSb.querySelector('.mob-nav-list') || mobSb;
+    list.querySelectorAll('.mob-ni').forEach(el => el.remove());
     const mobFrag = document.createDocumentFragment();
     order.filter(id => enabled[id] !== false).forEach(id => {
       const m = sidebarMeta[id]; if (!m) return;
@@ -175,14 +174,22 @@ function rebuildSidebar() {
       el.onclick = () => nav(id);
       mobFrag.appendChild(el);
     });
-    // Insert sep then settings
-    mobSb.appendChild(mobFrag);
-    if (mobSep) mobSb.appendChild(mobSep.cloneNode());
+    list.appendChild(mobFrag);
+    let sep = list.querySelector('.mob-sep');
+    if (!sep) {
+      sep = document.createElement('div');
+      sep.className = 'mob-sep';
+      list.appendChild(sep);
+    } else {
+      list.appendChild(sep);
+    }
     const settingsEl = document.createElement('div');
     settingsEl.className = 'mob-ni' + (CURRENT === 'settings' ? ' active' : '');
+    settingsEl.dataset.r = 'settings';
     settingsEl.innerHTML = '<span>⚙</span>Settings';
     settingsEl.onclick = () => nav('settings');
-    mobSb.appendChild(settingsEl);
+    list.appendChild(settingsEl);
+    if (typeof window.updateNavbarUserUI === 'function') window.updateNavbarUserUI();
   }
 }
 
@@ -192,8 +199,8 @@ function renderSettings(c) {
   const tabLabels  = ['Sections','Cloud DB','Storage','Security','Public Share'];
 
   c.innerHTML = `
-    <div style="font-family:var(--fd);font-size:20px;font-weight:700;margin-bottom:20px;color:var(--tx)">⚙ Settings</div>
-    <div style="display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap">
+    <div style="font-family:var(--fd);font-size:20px;font-weight:700;margin-bottom:16px;color:var(--tx)">⚙ Settings</div>
+    <div class="sub-tabs set-tabs" style="margin-bottom:20px">
       ${tabs.map((t,i) => `<button class="stab${SETTINGS_TAB===t?' active':''}" onclick="setSettingsTab('${t}')">${tabLabels[i]}</button>`).join('')}
     </div>
     <div id="settings-body" style="max-width:560px"></div>`;

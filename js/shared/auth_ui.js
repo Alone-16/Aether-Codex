@@ -215,24 +215,54 @@ export async function submitServerSignUp() {
 // ═══════════════════════════════════════════════════════════════════
 export function updateNavbarUserUI() {
   const container = document.getElementById('user-auth-wrap');
-  if (!container) return;
-
+  const mobCard = document.getElementById('mob-user-card');
   const user = getCurrentUser();
-  if (user) {
-    const initial = (user.name || user.email || 'A').charAt(0).toUpperCase();
-    container.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="window.openAccountModal()" title="${user.email}">
-        <div style="width:28px;height:28px;border-radius:50%;border:1px solid var(--ac);background:var(--surf2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${initial}</div>
-        <span style="font-size:12px;font-weight:600;color:var(--tx)" class="mob-hide">${user.name ? user.name.split(' ')[0] : 'Account'}</span>
-      </div>
-    `;
-  } else {
-    container.innerHTML = `
-      <div style="display:flex;gap:6px;align-items:center">
-        <button class="nb-btn" onclick="window.promptServerSignIn()" style="font-size:11px;font-weight:700;padding:4px 10px;background:transparent;color:var(--ac);border:1px solid var(--ac)">Sign In</button>
-        <button class="nb-btn" onclick="window.promptServerSignUp()" style="font-size:11px;font-weight:700;padding:4px 10px;background:var(--ac);color:#000;border:none">Sign Up</button>
-      </div>
-    `;
+
+  if (container) {
+    if (user) {
+      const initial = (user.name || user.email || 'A').charAt(0).toUpperCase();
+      container.innerHTML = `
+        <div class="nb-user-pill" onclick="window.openAccountModal()" title="${user.email}">
+          <div class="nb-avatar">${initial}</div>
+          <span class="nb-username mob-hide">${user.name ? user.name.split(' ')[0] : 'Account'}</span>
+        </div>
+      `;
+    } else {
+      container.innerHTML = `
+        <div class="nb-auth-btns">
+          <button class="nb-btn ac nb-auth-btn-mob" onclick="window.promptServerSignIn()" title="Sign In" style="gap:4px;padding:0 8px">
+            <span style="font-size:13px">👤</span>
+            <span class="mob-hide" style="font-size:11px;font-weight:700">Sign In</span>
+          </button>
+          <button class="nb-btn mob-hide" onclick="window.promptServerSignUp()" style="font-size:11px;font-weight:700;padding:0 10px;background:var(--ac);color:#000;border:none">Sign Up</button>
+        </div>
+      `;
+    }
+  }
+
+  if (mobCard) {
+    if (user) {
+      const initial = (user.name || user.email || 'A').charAt(0).toUpperCase();
+      mobCard.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border:1px solid var(--brd);border-radius:10px;cursor:pointer" onclick="window.openAccountModal();closeMob()">
+          <div style="width:34px;height:34px;border-radius:50%;border:2px solid var(--ac);background:rgba(var(--ac-rgb),.15);color:var(--ac);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0">${initial}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${user.name || 'Account'}</div>
+            <div style="font-size:11px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${user.email}</div>
+          </div>
+          <span style="font-size:12px;color:var(--mu)">⚙</span>
+        </div>
+      `;
+      mobCard.style.display = 'block';
+    } else {
+      mobCard.innerHTML = `
+        <div style="display:flex;gap:8px;padding:4px 0">
+          <button onclick="window.promptServerSignIn();closeMob()" style="flex:1;height:34px;border-radius:8px;background:transparent;border:1px solid var(--ac);color:var(--ac);font-size:12px;font-weight:700;cursor:pointer">Sign In</button>
+          <button onclick="window.promptServerSignUp();closeMob()" style="flex:1;height:34px;border-radius:8px;background:var(--ac);border:none;color:#000;font-size:12px;font-weight:700;cursor:pointer">Sign Up</button>
+        </div>
+      `;
+      mobCard.style.display = 'block';
+    }
   }
 }
 

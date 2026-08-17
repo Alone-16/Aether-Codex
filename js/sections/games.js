@@ -522,16 +522,14 @@ function renderGames(c) {
     </style>
     <canvas id="games-anim-bg" style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:-1;pointer-events:none;opacity:0;transition:opacity 1.5s ease;"></canvas>
 
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div class="sec-top-bar">
+      <div class="sec-top-start">
         <div class="sub-tabs">
           ${tabs.map((t,i)=>`<button class="stab${GAMES_PAGE===['library','dashboard','upcoming'][i]?' active':''}" onclick="setGamesPage('${['library','dashboard','upcoming'][i]}')">${t}</button>`).join('')}
         </div>
-        <button id="games-lock-btn" onclick="toggleGamesLock()" style="display:${GAMES_UNLOCKED?'block':'none'};height:28px;border-radius:5px;background:var(--surf2);border:1px solid var(--brd);color:var(--tx2);font-size:11px;font-weight:600;padding:0 10px;cursor:pointer">🔓 Lock</button>
+        <button id="games-lock-btn" onclick="toggleGamesLock()" style="display:${GAMES_UNLOCKED?'block':'none'};height:32px;border-radius:8px;background:var(--surf2);border:1px solid var(--brd);color:var(--tx2);font-size:12px;font-weight:600;padding:0 12px;cursor:pointer">🔓 Lock</button>
       </div>
-      <div style="display:flex;gap:6px">
-        <button class="nb-btn ac" onclick="openAddGame()">+ Add Game</button>
-      </div>
+      <button class="nb-btn ac sec-add-btn" onclick="openAddGame()">+ Add Game</button>
     </div>
     <div id="games-body"></div>`;
 

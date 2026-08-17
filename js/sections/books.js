@@ -54,14 +54,14 @@ function renderBooks(c) {
   ).join('');
 
   c.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <div class="sub-tabs" style="font-family:var(--fb)">
-          ${tabs.map((t,i) => `<button class="stab${BOOKS_PAGE===['list','dashboard','upcoming'][i]?' active':''}" onclick="setBooksPage('${['list','dashboard','upcoming'][i]}')" style="font-family:var(--fb)">${t}</button>`).join('')}
+    <div class="sec-top-bar">
+      <div class="sec-top-start">
+        <div class="sub-tabs">
+          ${tabs.map((t,i) => `<button class="stab${BOOKS_PAGE===['list','dashboard','upcoming'][i]?' active':''}" onclick="setBooksPage('${['list','dashboard','upcoming'][i]}')">${t}</button>`).join('')}
         </div>
         <div class="sub-tabs">${genreOpts}</div>
       </div>
-      <button class="nb-btn ac" onclick="openAddBook()" style="font-family:var(--fb);font-weight:700">+ Add Book</button>
+      <button class="nb-btn ac sec-add-btn" onclick="openAddBook()">+ Add Book</button>
     </div>
     <div id="books-body"></div>`;
   renderBooksBody();
@@ -157,9 +157,9 @@ function bookRowHtml(b) {
       </div>`:''}
       <div class="row-btns" onclick="event.stopPropagation()">
         ${b.status==='reading'&&hasBar?`<div class="ep-inline">
-          <button class="ep-pm" onclick="quickBookPage('${b.id}',-10)">−</button>
+          <button class="ep-pm" onclick="quickBookPage('${b.id}',-10,event)">−</button>
           <span class="ep-val" style="font-family:var(--fb)">${st.cur}</span>
-          <button class="ep-pm" onclick="quickBookPage('${b.id}',10)">+</button>
+          <button class="ep-pm" onclick="quickBookPage('${b.id}',10,event)">+</button>
         </div>`:''}
         <button class="rbt" onclick="openEditBook('${b.id}')">✏</button>
         <button class="rbt del" onclick="askDelBook('${b.id}')">✕</button>
@@ -170,7 +170,35 @@ function bookRowHtml(b) {
 
 function toggleBColl(s) { BCOLLAPSED['b_'+s] = !BCOLLAPSED['b_'+s]; renderBooksBody(); }
 
-function quickBookPage(id, delta) {
+function _updateBookCardDomInPlace(b) {
+  const cardEl = document.getElementById('brow-' + b.id);
+  if (!cardEl) return;
+
+  const st = bookEntryStats(b);
+  const col = BS_COLOR[b.status] || 'var(--ac)';
+
+  const epVal = cardEl.querySelector('.ep-val');
+  const progTxt = cardEl.querySelector('.prog-txt');
+  const progFill = cardEl.querySelector('.prog-fill');
+
+  if (epVal && progTxt && progFill) {
+    epVal.textContent = st.cur;
+    progTxt.textContent = `${st.cur}${st.tot ? '/' + st.tot : ''}p`;
+    progFill.style.width = `${st.pct}%`;
+    progFill.style.background = col;
+
+    const rowBar = cardEl.querySelector('.row-bar');
+    if (rowBar) rowBar.style.background = col;
+  } else {
+    cardEl.outerHTML = bookRowHtml(b);
+  }
+}
+
+function quickBookPage(id, delta, ev) {
+  if (ev) {
+    if (typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    if (typeof ev.preventDefault === 'function') ev.preventDefault();
+  }
   const b = BDATA.find(x=>x.id===id); if(!b) return;
   const vols = b.volumes||[];
   if (vols.length) {
@@ -184,7 +212,8 @@ function quickBookPage(id, delta) {
     b.currentPage = Math.max(0, parseInt(b.currentPage||0)+delta);
     if (b.totalPages && b.currentPage >= parseInt(b.totalPages) && b.status==='reading') { b.status='completed'; b.endDate=today(); }
   }
-  b.updatedAt = Date.now(); saveBooks(BDATA); renderBooksBody();
+  b.updatedAt = Date.now(); saveBooks(BDATA);
+  _updateBookCardDomInPlace(b);
   if (BPANEL==='detail' && BPEDIT===id) renderBookDetailPanel(BDATA.find(x=>x.id===id));
 }
 
