@@ -81,16 +81,16 @@ function renderHome(c){
       .hc-card:hover .hc-icon-ring { transform: rotate(15deg) scale(1.1); background: var(--ac); color: #000; box-shadow: 0 0 15px rgba(var(--ac-rgb), 0.5); }
     </style>
     <div class="hero-wrap">
-      <div class="hero-content">
+      <div style="display:flex; flex-direction:column; gap:6px; position:relative; z-index:1;">
         <div class="hero-title">Welcome to <em>The Aether Codex</em></div>
-        <div class="hero-sub">Your personal universe of everything you track</div>
+        <div class="hero-sub" style="color:#e2e8f0; font-size:15px; font-weight:500; letter-spacing:0.3px;">Your personal universe of everything you track</div>
       </div>
-      <div class="hero-right">
-        <div class="hero-date-box">
-          <strong class="hero-date-day">${now.toLocaleString('default',{weekday:'long'})}</strong>
-          <span class="hero-date-full">${now.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</span>
+      <div style="text-align:right; display:flex; gap:20px; align-items:center; position:relative; z-index:1;">
+        <div class="hero-date-box" style="border-right-color:rgba(255,255,255,0.15); padding-right:20px;">
+          <strong class="hero-date-day" style="font-size:16px;">${now.toLocaleString('default',{weekday:'long'})}</strong>
+          <span class="hero-date-full" style="color:rgba(255,255,255,0.6); font-size:11px;">${now.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</span>
         </div>
-        <button class="hero-wrapped-btn" onclick="openWrapped()">✦ Wrapped</button>
+        <button onclick="openWrapped()" style="height:44px;background:rgba(var(--ac-rgb),0.1);color:var(--tx);border:1px solid rgba(var(--ac-rgb),0.3);border-radius:12px;padding:0 24px;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.3s cubic-bezier(0.2,0.8,0.2,1);display:flex;align-items:center;gap:8px;box-shadow:0 4px 14px rgba(0,0,0,0.2); backdrop-filter:blur(5px)" onmouseover="this.style.background='var(--ac)';this.style.color='#000';this.style.transform='translateY(-2px) scale(1.02)';this.style.boxShadow='0 8px 20px rgba(var(--ac-rgb),0.3)'" onmouseout="this.style.background='rgba(var(--ac-rgb),0.1)';this.style.color='var(--tx)';this.style.transform='translateY(0) scale(1)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.2)'">✦ Wrapped</button>
       </div>
     </div>
     <div class="dash-grid" style="margin-bottom:24px">
