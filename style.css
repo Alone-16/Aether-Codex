@@ -725,9 +725,9 @@ textarea.fin{resize:vertical;min-height:70px}
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 1 1 0px;
+  flex: initial;
+  width: auto;
   min-width: 0;
-  width: 100%;
   box-sizing: border-box;
 }
 
@@ -901,10 +901,10 @@ textarea.fin{resize:vertical;min-height:70px}
 
 /* ── View tabs (segmented) ── */
 .m-tabs {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  flex: 1 1 0px;
-  min-width: 0;
+  flex: initial;
+  width: auto;
   gap: 4px;
   padding: 3px;
   background: rgba(255, 255, 255, 0.03);
@@ -916,14 +916,14 @@ textarea.fin{resize:vertical;min-height:70px}
   box-sizing: border-box;
 }
 .m-tab {
-  flex: 1 1 0px;
-  min-width: 0;
+  flex: initial;
+  width: auto;
   text-align: center;
   justify-content: center;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   position: relative;
-  padding: 7px 8px;
+  padding: 7px 18px;
   margin: 0;
   font-size: 12px;
   font-weight: 600;

@@ -1722,9 +1722,9 @@ function _injectPremiumStyles() {
     .m-topbar-start {
       display: flex;
       align-items: center;
-      gap: 8px;
-      width: 100%;
-      flex: 1 1 0px;
+      gap: 10px;
+      width: auto;
+      flex: initial;
       min-width: 0;
       box-sizing: border-box;
     }
@@ -1732,35 +1732,35 @@ function _injectPremiumStyles() {
       flex-shrink: 0;
     }
     .m-tabs {
-      display: flex;
+      display: inline-flex;
       align-items: center;
-      flex: 1 1 0px;
-      min-width: 0;
-      gap: 3px;
+      flex: initial;
+      width: auto;
+      gap: 4px;
       padding: 3px;
       background: rgba(255, 255, 255, 0.03);
       border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 10px;
+      border-radius: 12px;
       box-sizing: border-box;
     }
 
     /* Modern Tabs with Animated Indicators */
     .m-tab {
-      flex: 1 1 0px;
-      min-width: 0;
+      flex: initial;
+      width: auto;
       text-align: center;
       justify-content: center;
-      display: flex;
+      display: inline-flex;
       align-items: center;
       position: relative;
       background: transparent !important;
       color: rgba(255,255,255,0.6) !important;
       font-weight: 600 !important;
-      padding: 6px 4px !important;
-      font-size: 11.5px !important;
+      padding: 7px 18px !important;
+      font-size: 12px !important;
       transition: color 0.3s ease !important;
       overflow: hidden;
-      border-radius: 7px;
+      border-radius: 8px;
       white-space: nowrap;
     }
     .m-tab:hover {
