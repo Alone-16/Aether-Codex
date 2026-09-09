@@ -1705,23 +1705,28 @@ function _injectPremiumStyles() {
       background: rgba(15, 15, 20, 0.4) !important;
       backdrop-filter: blur(24px) saturate(1.5) !important;
       -webkit-backdrop-filter: blur(24px) saturate(1.5) !important;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-      padding: 10px 16px !important;
-      border-radius: 0 0 20px 20px;
-      margin: -16px -16px 14px -16px !important;
+      border: 1px solid rgba(255, 255, 255, 0.05) !important;
+      padding: 8px 12px !important;
+      border-radius: 12px;
+      margin: 0 0 12px 0 !important;
       box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
       position: relative;
       z-index: 10;
       transition: all 0.3s ease;
       display: flex;
       align-items: center;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
     }
     .m-topbar-start {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       width: 100%;
-      flex: 1;
+      flex: 1 1 0px;
+      min-width: 0;
+      box-sizing: border-box;
     }
     .m-gdrop-wrap {
       flex-shrink: 0;
@@ -1729,9 +1734,9 @@ function _injectPremiumStyles() {
     .m-tabs {
       display: flex;
       align-items: center;
-      flex: 1;
-      width: 100%;
-      gap: 4px;
+      flex: 1 1 0px;
+      min-width: 0;
+      gap: 3px;
       padding: 3px;
       background: rgba(255, 255, 255, 0.03);
       border: 1px solid rgba(255, 255, 255, 0.06);
@@ -1741,7 +1746,8 @@ function _injectPremiumStyles() {
 
     /* Modern Tabs with Animated Indicators */
     .m-tab {
-      flex: 1;
+      flex: 1 1 0px;
+      min-width: 0;
       text-align: center;
       justify-content: center;
       display: flex;
@@ -1750,11 +1756,11 @@ function _injectPremiumStyles() {
       background: transparent !important;
       color: rgba(255,255,255,0.6) !important;
       font-weight: 600 !important;
-      padding: 7px 10px !important;
-      font-size: 12px !important;
+      padding: 6px 4px !important;
+      font-size: 11.5px !important;
       transition: color 0.3s ease !important;
       overflow: hidden;
-      border-radius: 8px;
+      border-radius: 7px;
       white-space: nowrap;
     }
     .m-tab:hover {
@@ -1786,7 +1792,7 @@ function _injectPremiumStyles() {
     .m-topbar-sep {
       height: 1px;
       background: linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
-      margin: 0 0 14px 0;
+      margin: 0 0 12px 0;
       width: 100%;
     }
     .m-sort-add-row {
@@ -1794,13 +1800,16 @@ function _injectPremiumStyles() {
       align-items: center;
       justify-content: space-between;
       width: 100%;
+      max-width: 100%;
       margin-bottom: 12px;
       gap: 10px;
+      box-sizing: border-box;
     }
     .m-sort-wrap {
       display: flex;
       align-items: center;
       gap: 6px;
+      flex-shrink: 0;
     }
 
     /* Sleek & Refined Add Button */
@@ -2202,56 +2211,59 @@ function _injectPremiumStyles() {
     /* ── Mobile Responsive Overrides ── */
     @media (max-width: 640px) {
       .m-topbar {
-        padding: 8px 10px !important;
-        margin: -10px -10px 0 -10px !important;
-        border-radius: 0 !important;
-        border-bottom: none !important;
-        background: transparent !important;
+        padding: 6px 8px !important;
+        margin: 0 0 10px 0 !important;
+        border-radius: 10px !important;
+        border: 1px solid rgba(255, 255, 255, 0.05) !important;
+        background: rgba(15, 15, 20, 0.4) !important;
         box-shadow: none !important;
         display: flex !important;
         flex-direction: row !important;
         align-items: center !important;
-        width: calc(100% + 20px) !important;
+        width: 100% !important;
+        max-width: 100% !important;
         box-sizing: border-box !important;
       }
       .m-topbar-start {
         display: flex !important;
         align-items: center !important;
-        gap: 8px !important;
+        gap: 6px !important;
         width: 100% !important;
-        flex: 1 !important;
+        flex: 1 1 0px !important;
         min-width: 0 !important;
+        box-sizing: border-box !important;
       }
       .m-gdrop-wrap {
         flex-shrink: 0 !important;
       }
       .m-genre-btn {
-        height: 34px !important;
-        padding: 0 10px 0 10px !important;
-        font-size: 12px !important;
-        border-radius: 9px !important;
-        gap: 6px !important;
+        height: 32px !important;
+        padding: 0 8px !important;
+        font-size: 11.5px !important;
+        border-radius: 8px !important;
+        gap: 4px !important;
       }
       .m-tabs {
         display: flex !important;
         align-items: center !important;
-        flex: 1 !important;
-        width: 100% !important;
+        flex: 1 1 0px !important;
+        width: auto !important;
         min-width: 0 !important;
         gap: 2px !important;
-        padding: 3px !important;
-        border-radius: 10px !important;
+        padding: 2px !important;
+        border-radius: 8px !important;
         box-sizing: border-box !important;
       }
       .m-tab {
-        flex: 1 !important;
+        flex: 1 1 0px !important;
+        min-width: 0 !important;
         text-align: center !important;
         justify-content: center !important;
         display: flex !important;
         align-items: center !important;
-        padding: 6px 4px !important;
-        font-size: 11.5px !important;
-        border-radius: 8px !important;
+        padding: 5px 2px !important;
+        font-size: 11px !important;
+        border-radius: 6px !important;
         margin: 0 !important;
         white-space: nowrap !important;
       }
@@ -2261,7 +2273,7 @@ function _injectPremiumStyles() {
       .m-topbar-sep {
         height: 1px !important;
         background: rgba(255, 255, 255, 0.07) !important;
-        margin: 4px 0 12px 0 !important;
+        margin: 0 0 10px 0 !important;
         width: 100% !important;
       }
       .m-sort-add-row {
@@ -2269,8 +2281,10 @@ function _injectPremiumStyles() {
         align-items: center !important;
         justify-content: space-between !important;
         width: 100% !important;
+        max-width: 100% !important;
         margin-bottom: 10px !important;
         gap: 8px !important;
+        box-sizing: border-box !important;
       }
       .m-sort-wrap {
         display: flex !important;
@@ -2278,6 +2292,7 @@ function _injectPremiumStyles() {
         justify-content: flex-start !important;
         gap: 6px !important;
         width: auto !important;
+        flex-shrink: 0 !important;
       }
       .m-add-btn {
         width: auto !important;
@@ -2313,13 +2328,6 @@ function _injectPremiumStyles() {
         padding: 5px 10px !important;
         font-size: 11px !important;
         border-radius: 999px !important;
-      }
-      .m-sort-wrap {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: flex-end !important;
-        gap: 6px !important;
-        width: 100% !important;
       }
       .m-sort-hint { display: none !important; }
       .m-dd-btn { font-size: 11px !important; height: 30px !important; padding: 0 9px 0 11px !important; }
