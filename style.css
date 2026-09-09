@@ -945,56 +945,42 @@ textarea.fin{resize:vertical;min-height:70px}
 
 /* ── Add title ── */
 .m-add-btn {
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  height:38px;
-  padding:0 20px;
-  background:#0a0a0a;
-  border:1px solid rgba(255,255,255,0.12);
-  border-radius:12px;
-  color:var(--tx);
-  font-size:13px;
-  font-weight:800;
-  font-family:var(--fb);
-  white-space:nowrap;
-  transition:all .3s cubic-bezier(0.16,1,0.3,1);
-  flex-shrink:0;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-  position: relative;
-  overflow: hidden;
-}
-.m-add-btn::after {
-  content: "";
-  position: absolute;
-  top: 0; left: -100%;
-  width: 50%; height: 100%;
-  background: linear-gradient(to right, transparent, rgba(255,255,255,0.25), transparent);
-  transform: skewX(-25deg);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 15px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  color: var(--tx);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: var(--fb);
+  white-space: nowrap;
+  transition: all .25s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  cursor: pointer;
 }
 .m-add-btn:hover {
-  transform: translateY(-2px);
-  border-color: rgba(var(--ac-rgb), 0.6);
+  background: rgba(var(--ac-rgb), 0.08);
+  border-color: rgba(var(--ac-rgb), 0.35);
   color: var(--ac);
-  box-shadow: 0 8px 25px rgba(0,0,0, 0.6), 0 0 20px rgba(var(--ac-rgb), 0.15);
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 4px 16px rgba(var(--ac-rgb), 0.15);
 }
-.m-add-btn:hover::after {
-  animation: btn-shine 0.6s ease-out forwards;
-}
-@keyframes btn-shine {
-  0% { left: -100%; }
-  100% { left: 200%; }
-}
-.m-add-btn:active { transform:scale(.98) translateY(0); }
+.m-add-btn:active { transform: scale(.98); }
 .m-add-btn:focus-visible {
-  outline:2px solid rgba(var(--ac-rgb),.45);
-  outline-offset:2px;
+  outline: 2px solid rgba(var(--ac-rgb), .45);
+  outline-offset: 2px;
 }
 .m-add-plus {
-  font-size:16px;
-  font-weight:800;
-  line-height:1;
-  opacity:0.9;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ac);
 }
 
 /* ── Filter row ── */
@@ -1721,14 +1707,14 @@ textarea.fin{resize:vertical;min-height:70px}
     width: 40% !important;
   }
   .m-add-btn {
-    width: 100% !important;
-    height: 36px !important;
-    padding: 0 16px !important;
-    font-size: 13px !important;
-    font-weight: 700 !important;
-    border-radius: 10px !important;
-    justify-content: center !important;
-    box-shadow: 0 4px 14px rgba(var(--ac-rgb), 0.25) !important;
+    width: auto !important;
+    height: 32px !important;
+    padding: 0 13px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    align-self: flex-start !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
   }
   .m-filter-row {
     display: flex !important;

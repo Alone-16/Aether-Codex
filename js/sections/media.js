@@ -311,7 +311,9 @@ function renderMedia(c) {
   runLinkedMigrationV3();
   _injectPremiumStyles();
   _initMediaDropdownClose();
-  const tabs = ['List', 'Dashboard', 'Upcoming', 'Incomplete'];
+  if (MEDIA_PAGE === 'upcoming') MEDIA_PAGE = 'list';
+  const tabs = ['List', 'Dashboard', 'Incomplete'];
+  const tabKeys = ['list', 'dashboard', 'incomplete'];
   const g    = gbyid(GACTIVE) || { id: 'all', name: 'All Media', color: '#60a5fa' };
 
   c.innerHTML = `
@@ -327,8 +329,8 @@ function renderMedia(c) {
         </div>
 
         <nav class="m-tabs" aria-label="Media views">
-          ${tabs.map((t,i) => `<button type="button" class="m-tab${MEDIA_PAGE === ['list','dashboard','upcoming','incomplete'][i] ? ' active' : ''}"
-            onclick="setMediaPage('${['list','dashboard','upcoming','incomplete'][i]}')">${t}</button>`).join('')}
+          ${tabs.map((t,i) => `<button type="button" class="m-tab${MEDIA_PAGE === tabKeys[i] ? ' active' : ''}"
+            onclick="setMediaPage('${tabKeys[i]}')">${t}</button>`).join('')}
         </nav>
       </div>
 
@@ -695,7 +697,7 @@ function renderDash(c) {
     if (e.rating) { rSum += parseFloat(e.rating); rN++; }
   });
   const avg = rN ? (rSum/rN).toFixed(1) : '—';
-  const g   = gbyid(GACTIVE);
+  const g   = gbyid(GACTIVE) || { id: 'all', name: 'All Media', color: '#60a5fa' };
   const maxGenre = Math.max(...GENRES.map(gg => DATA.filter(e=>e.genreId===gg.id).length), 1);
 
   const genreRows = GENRES.map(gg => {
@@ -724,15 +726,15 @@ function renderDash(c) {
   c.innerHTML = `
     <div class="m-dash-title">◉ ${esc(g.name)} <span>// dashboard</span></div>
     <div class="m-dash-grid">
-      ${stats.map((s,i) => `<div class="m-dash-stat m-card-lazy" style="--card-glow:rgba(var(--ac-rgb),0.5)" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')"><div class="m-dash-stat-v">${s.v}</div><div class="m-dash-stat-l">${s.l}</div></div>`).join('')}
+      ${stats.map((s,i) => `<div class="m-dash-stat m-card-lazy m-card-visible" style="--card-glow:rgba(var(--ac-rgb),0.5);animation-delay:${i * 0.03}s" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')"><div class="m-dash-stat-v">${s.v}</div><div class="m-dash-stat-l">${s.l}</div></div>`).join('')}
     </div>
     <div class="m-dash-time-row">
-      <div class="m-dash-tc m-card-lazy" style="--card-glow:rgba(var(--ac-rgb),0.5)" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
+      <div class="m-dash-tc m-card-lazy m-card-visible" style="--card-glow:rgba(var(--ac-rgb),0.5);animation-delay:0.25s" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
         <div class="m-dash-tc-v">${fmtMin(totalMin)}</div>
         <div class="m-dash-tc-l">Time Watched</div>
         <div class="m-dash-tc-d">${(totalMin/60).toFixed(0)} hours total</div>
       </div>
-      <div class="m-dash-tc m-card-lazy" style="--card-glow:rgba(var(--ac-rgb),0.5)" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
+      <div class="m-dash-tc m-card-lazy m-card-visible" style="--card-glow:rgba(var(--ac-rgb),0.5);animation-delay:0.3s" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
         <div class="m-dash-tc-v">${Math.floor(totalMin/1440)}</div>
         <div class="m-dash-tc-l">Days Watched</div>
         <div class="m-dash-tc-d">of continuous watching</div>
@@ -1589,6 +1591,11 @@ const _slotCache = new WeakMap();
 function _observeCardVisibility(container) {
   if (_cardObserver) _cardObserver.disconnect();
 
+  // Immediately reveal any non-slotted lazy elements (e.g. Dashboard / Upcoming stats)
+  container.querySelectorAll('.m-card-lazy:not(.m-card-slot *)').forEach((el, i) => {
+    el.classList.add('m-card-visible');
+  });
+
   const slots = container.querySelectorAll('.m-card-slot');
   if (!slots.length) return;
 
@@ -1744,17 +1751,38 @@ function _injectPremiumStyles() {
       to { width: 60%; opacity: 1; }
     }
 
-    /* Add Button Radiant Glow */
+    /* Sleek & Refined Add Button */
     .m-add-btn {
-      background: linear-gradient(135deg, rgba(var(--ac-rgb), 0.9), rgba(var(--ac-rgb), 0.6)) !important;
-      box-shadow: 0 4px 20px rgba(var(--ac-rgb), 0.4) !important;
-      border: 1px solid rgba(255,255,255,0.2) !important;
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+      background: rgba(255, 255, 255, 0.04) !important;
+      backdrop-filter: blur(12px) !important;
+      -webkit-backdrop-filter: blur(12px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+      color: var(--tx) !important;
+      font-size: 12.5px !important;
+      font-weight: 600 !important;
+      padding: 0 15px !important;
+      height: 34px !important;
+      border-radius: 9px !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
     .m-add-btn:hover {
-      transform: translateY(-2px) scale(1.05);
-      box-shadow: 0 8px 30px rgba(var(--ac-rgb), 0.6) !important;
-      background: linear-gradient(135deg, rgba(var(--ac-rgb), 1), rgba(var(--ac-rgb), 0.7)) !important;
+      background: rgba(var(--ac-rgb), 0.08) !important;
+      border-color: rgba(var(--ac-rgb), 0.35) !important;
+      color: var(--ac) !important;
+      transform: translateY(-1px) scale(1.02);
+      box-shadow: 0 4px 16px rgba(var(--ac-rgb), 0.15) !important;
+    }
+    .m-add-btn:active {
+      transform: scale(0.98);
+    }
+    .m-add-plus {
+      color: var(--ac);
+      font-size: 14px;
+      font-weight: 700;
     }
 
     /* Context Menu */
@@ -2172,14 +2200,14 @@ function _injectPremiumStyles() {
         width: 40% !important;
       }
       .m-add-btn {
-        width: 100% !important;
-        height: 36px !important;
-        padding: 0 16px !important;
-        font-size: 13px !important;
-        font-weight: 700 !important;
-        border-radius: 10px !important;
-        justify-content: center !important;
-        box-shadow: 0 4px 14px rgba(var(--ac-rgb), 0.25) !important;
+        width: auto !important;
+        height: 32px !important;
+        padding: 0 13px !important;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        border-radius: 8px !important;
+        align-self: flex-start !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
       }
       .m-filter-row {
         display: flex !important;
