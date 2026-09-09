@@ -333,9 +333,8 @@ function renderMedia(c) {
             onclick="setMediaPage('${tabKeys[i]}')">${t}</button>`).join('')}
         </nav>
       </div>
-
-      <button type="button" class="m-add-btn" onclick="openAdd()"><span class="m-add-plus" aria-hidden="true">+</span> Add title</button>
     </div>
+    <div class="m-topbar-sep"></div>
 
     <div id="media-body"></div>`;
 
@@ -516,10 +515,8 @@ function renderList(c) {
   const sortLbl = sortVal === 'added' ? 'Recently added' : 'A → Z';
 
   let html = `
-    <div class="m-filter-row">
-      <div class="m-filter-chips">${_renderFilterChips()}</div>
+    <div class="m-sort-add-row">
       <div class="m-sort-wrap">
-        <span class="m-sort-hint">Sort</span>
         <div class="m-sort-dd m-dd">
           <button type="button" class="m-dd-btn" onclick="toggleMediaSortDd(event)" aria-haspopup="listbox" aria-expanded="false" aria-label="Sort list">
             <span class="m-dd-lbl">${sortLbl}</span>
@@ -531,6 +528,10 @@ function renderList(c) {
           </div>
         </div>
       </div>
+      <button type="button" class="m-add-btn" onclick="openAdd()"><span class="m-add-plus" aria-hidden="true">+</span> Add title</button>
+    </div>
+    <div class="m-filter-row">
+      <div class="m-filter-chips">${_renderFilterChips()}</div>
     </div>
     <div class="m-cnt-lbl">${pCount} title${pCount!==1?'s':''}</div>`;
 
@@ -1705,25 +1706,56 @@ function _injectPremiumStyles() {
       backdrop-filter: blur(24px) saturate(1.5) !important;
       -webkit-backdrop-filter: blur(24px) saturate(1.5) !important;
       border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-      padding: 12px 24px !important;
-      border-radius: 0 0 24px 24px;
-      margin: -16px -16px 20px -16px !important;
+      padding: 10px 16px !important;
+      border-radius: 0 0 20px 20px;
+      margin: -16px -16px 14px -16px !important;
       box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
       position: relative;
       z-index: 10;
       transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+    }
+    .m-topbar-start {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      flex: 1;
+    }
+    .m-gdrop-wrap {
+      flex-shrink: 0;
+    }
+    .m-tabs {
+      display: flex;
+      align-items: center;
+      flex: 1;
+      width: 100%;
+      gap: 4px;
+      padding: 3px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      box-sizing: border-box;
     }
 
     /* Modern Tabs with Animated Indicators */
     .m-tab {
+      flex: 1;
+      text-align: center;
+      justify-content: center;
+      display: flex;
+      align-items: center;
       position: relative;
       background: transparent !important;
       color: rgba(255,255,255,0.6) !important;
       font-weight: 600 !important;
-      padding: 8px 16px !important;
+      padding: 7px 10px !important;
+      font-size: 12px !important;
       transition: color 0.3s ease !important;
       overflow: hidden;
       border-radius: 8px;
+      white-space: nowrap;
     }
     .m-tab:hover {
       color: rgba(255,255,255,0.9) !important;
@@ -1739,7 +1771,7 @@ function _injectPremiumStyles() {
       bottom: 0;
       left: 50%;
       transform: translateX(-50%);
-      width: 60%;
+      width: 50%;
       height: 3px;
       background: rgba(var(--ac-rgb), 1);
       box-shadow: 0 0 12px rgba(var(--ac-rgb), 0.8);
@@ -1748,7 +1780,27 @@ function _injectPremiumStyles() {
     }
     @keyframes tabUnderline {
       from { width: 0; opacity: 0; }
-      to { width: 60%; opacity: 1; }
+      to { width: 50%; opacity: 1; }
+    }
+
+    .m-topbar-sep {
+      height: 1px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
+      margin: 0 0 14px 0;
+      width: 100%;
+    }
+    .m-sort-add-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      margin-bottom: 12px;
+      gap: 10px;
+    }
+    .m-sort-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     /* Sleek & Refined Add Button */
@@ -2150,19 +2202,24 @@ function _injectPremiumStyles() {
     /* ── Mobile Responsive Overrides ── */
     @media (max-width: 640px) {
       .m-topbar {
-        padding: 10px 14px !important;
-        margin: -10px -10px 14px -10px !important;
-        border-radius: 0 0 16px 16px !important;
-        gap: 10px !important;
+        padding: 8px 10px !important;
+        margin: -10px -10px 0 -10px !important;
+        border-radius: 0 !important;
+        border-bottom: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
         display: flex !important;
-        flex-direction: column !important;
-        align-items: stretch !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        width: calc(100% + 20px) !important;
+        box-sizing: border-box !important;
       }
       .m-topbar-start {
         display: flex !important;
         align-items: center !important;
         gap: 8px !important;
         width: 100% !important;
+        flex: 1 !important;
         min-width: 0 !important;
       }
       .m-gdrop-wrap {
@@ -2179,25 +2236,48 @@ function _injectPremiumStyles() {
         display: flex !important;
         align-items: center !important;
         flex: 1 !important;
+        width: 100% !important;
         min-width: 0 !important;
-        overflow-x: auto !important;
-        -webkit-overflow-scrolling: touch !important;
-        scrollbar-width: none !important;
-        gap: 3px !important;
+        gap: 2px !important;
         padding: 3px !important;
         border-radius: 10px !important;
+        box-sizing: border-box !important;
       }
-      .m-tabs::-webkit-scrollbar { display: none !important; }
       .m-tab {
-        flex-shrink: 0 !important;
-        white-space: nowrap !important;
-        padding: 6px 12px !important;
-        font-size: 12px !important;
+        flex: 1 !important;
+        text-align: center !important;
+        justify-content: center !important;
+        display: flex !important;
+        align-items: center !important;
+        padding: 6px 4px !important;
+        font-size: 11.5px !important;
         border-radius: 8px !important;
         margin: 0 !important;
+        white-space: nowrap !important;
       }
       .m-tab.active::after {
         width: 40% !important;
+      }
+      .m-topbar-sep {
+        height: 1px !important;
+        background: rgba(255, 255, 255, 0.07) !important;
+        margin: 4px 0 12px 0 !important;
+        width: 100% !important;
+      }
+      .m-sort-add-row {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+        margin-bottom: 10px !important;
+        gap: 8px !important;
+      }
+      .m-sort-wrap {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        gap: 6px !important;
+        width: auto !important;
       }
       .m-add-btn {
         width: auto !important;
@@ -2206,7 +2286,7 @@ function _injectPremiumStyles() {
         font-size: 12px !important;
         font-weight: 600 !important;
         border-radius: 8px !important;
-        align-self: flex-start !important;
+        align-self: center !important;
         box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
       }
       .m-filter-row {
