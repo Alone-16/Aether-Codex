@@ -991,6 +991,7 @@ textarea.fin{resize:vertical;min-height:70px}
   white-space: nowrap;
   transition: all .25s cubic-bezier(0.16, 1, 0.3, 1);
   flex-shrink: 0;
+  margin-left: auto;
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
   cursor: pointer;
 }
@@ -1080,7 +1081,7 @@ textarea.fin{resize:vertical;min-height:70px}
   align-items:center;
   gap:8px;
   flex-shrink:0;
-  margin-left:auto;
+  margin-left:0;
 }
 .m-sort-hint {
   font-size:10px;
