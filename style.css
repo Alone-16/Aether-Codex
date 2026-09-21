@@ -1127,7 +1127,8 @@ textarea.fin{resize:vertical;min-height:70px}
   display:none;
   position:absolute;
   top:calc(100% + 6px);
-  right:0;
+  left:0;
+  right:auto;
   min-width:200px;
   padding:6px;
   background:rgba(22,22,22,.94);
