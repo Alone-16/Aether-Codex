@@ -1811,6 +1811,10 @@ function _injectPremiumStyles() {
       gap: 6px;
       flex-shrink: 0;
     }
+    .m-dd-menu {
+      left: 0 !important;
+      right: auto !important;
+    }
 
     /* Sleek & Refined Add Button */
     .m-add-btn {
@@ -2332,6 +2336,7 @@ function _injectPremiumStyles() {
       .m-sort-hint { display: none !important; }
       .m-dd-btn { font-size: 11px !important; height: 30px !important; padding: 0 9px 0 11px !important; }
       .m-dd-opt { font-size: 12px !important; padding: 8px 10px 8px 30px !important; }
+      .m-dd-menu { left: 0 !important; right: auto !important; max-width: calc(100vw - 24px) !important; }
       .m-cnt-lbl {
         font-size: 11px !important;
         margin-bottom: 8px !important;

@@ -1130,6 +1130,7 @@ textarea.fin{resize:vertical;min-height:70px}
   left:0;
   right:auto;
   min-width:200px;
+  max-width:calc(100vw - 24px);
   padding:6px;
   background:rgba(22,22,22,.94);
   backdrop-filter:blur(12px);
@@ -1774,6 +1775,7 @@ textarea.fin{resize:vertical;min-height:70px}
   .m-sort-hint { display: none !important; }
   .m-dd-btn { font-size: 11px !important; height: 30px !important; padding: 0 9px 0 11px !important; }
   .m-dd-opt { font-size: 12px !important; padding: 8px 10px 8px 30px !important; }
+  .m-dd-menu { left: 0 !important; right: auto !important; max-width: calc(100vw - 24px) !important; }
   .m-add-btn {
     width: auto !important;
     height: 32px !important;
