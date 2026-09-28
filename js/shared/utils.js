@@ -13,12 +13,40 @@ export const DRIVE_SCOPE   = 'https://www.googleapis.com/auth/drive.file';
 export const DRIVE_FOLDER  = 'Aether Codex';
 export const DRIVE_FILE    = 'AetherCodex_data.json';  // legacy single-file (migration only)
 
+const _memStore = new Map();
+
 export const ls = {
-  get    : k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
-  set    : (k, v) => localStorage.setItem(k, JSON.stringify(v)),
-  str    : k => localStorage.getItem(k),
-  setStr : (k, v) => localStorage.setItem(k, v),
-  del    : k => localStorage.removeItem(k),
+  get    : k => {
+    try {
+      if (typeof localStorage !== 'undefined') return JSON.parse(localStorage.getItem(k));
+      return _memStore.has(k) ? JSON.parse(_memStore.get(k)) : null;
+    } catch { return null; }
+  },
+  set    : (k, v) => {
+    try {
+      const json = JSON.stringify(v);
+      if (typeof localStorage !== 'undefined') localStorage.setItem(k, json);
+      else _memStore.set(k, json);
+    } catch {}
+  },
+  str    : k => {
+    try {
+      if (typeof localStorage !== 'undefined') return localStorage.getItem(k);
+      return _memStore.has(k) ? _memStore.get(k) : null;
+    } catch { return null; }
+  },
+  setStr : (k, v) => {
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(k, String(v));
+      else _memStore.set(k, String(v));
+    } catch {}
+  },
+  del    : k => {
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem(k);
+      else _memStore.delete(k);
+    } catch {}
+  },
 };
 
 export function DEFAULT_GENRES() {
@@ -213,15 +241,17 @@ export function toggleGdrop(e) {
     _syncGdropAria(open);
   }
 }
-document.addEventListener('click', e => {
-  const m = document.getElementById('gdrop-menu');
-  const d = document.getElementById('gdrop');
-  if (m && d && !d.contains(e.target)) {
-    m.classList.remove('open');
-    d.classList.remove('open');
-    _syncGdropAria(false);
-  }
-});
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', e => {
+    const m = document.getElementById('gdrop-menu');
+    const d = document.getElementById('gdrop');
+    if (m && d && !d.contains(e.target)) {
+      m.classList.remove('open');
+      d.classList.remove('open');
+      _syncGdropAria(false);
+    }
+  });
+}
 
 export function selectGenre(id) {
   setGACTIVE(id); ls.setStr(K.GENRE, id);

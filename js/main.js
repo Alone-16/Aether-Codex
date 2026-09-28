@@ -24,6 +24,7 @@ import {
   driveBootstrap, openMob, closeMob, driveAction, syncDrive,
   initGIS,
 } from './shared/drive.js';
+import { initAiringSync, checkAiringAnime, isMediaAiring } from './shared/airing_sync.js';
 
 // ── Expose globals IMMEDIATELY so inline onclick="" handlers work ──
 Object.assign(window, {
@@ -40,6 +41,7 @@ Object.assign(window, {
   applyGenre, buildGenreMenu, toggleGdrop,
   selectGenre, changeGenreColor, addGenre,
   SECTION_META,
+  checkAiringAnime, isMediaAiring,
 });
 
 // ── Section renderers ─────────────────────────────────────────────
@@ -208,6 +210,13 @@ async function boot() {
     } catch (e) {
       console.warn('[Boot] Data fetch error:', e.message);
     }
+  } else {
+    // If not authenticated, ensure user is prompted to sign in so they know where their data is
+    setTimeout(() => {
+      if (!getAccessToken() && typeof window.promptServerSignIn === 'function') {
+        window.promptServerSignIn('Sign in to load your saved collection from Cloudflare.');
+      }
+    }, 400);
   }
 
   // Re-render active section with memory data
@@ -215,6 +224,9 @@ async function boot() {
 
   // 5. Initialize Drive/OAuth — handles MAL callback redirect & Google sync
   driveBootstrap().catch(e => console.error('[Boot] driveBootstrap error:', e));
+
+  // 6. Initialize Automatic Airing Anime Sync & Midnight Scheduler
+  initAiringSync();
 }
 
 window.bootApp = boot;

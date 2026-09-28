@@ -72,6 +72,11 @@ export function clearTokens() {
   sessionStorage.removeItem(K_ACCESS);
   localStorage.removeItem(K_ACCESS);
   localStorage.removeItem(K_REFRESH);
+  sessionStorage.removeItem('ac_v5_user_profile');
+  localStorage.removeItem('ac_v5_user_profile');
+  if (typeof window.onTokensCleared === 'function') {
+    window.onTokensCleared();
+  }
 }
 
 // ── HEALTH CHECK ───────────────────────────────────────────────────
@@ -104,8 +109,8 @@ export async function apiReq(endpoint, opts = {}, retries = 3, backoffMs = 500) 
     try {
       let res = await fetch(`${API_BASE}${endpoint}`, { ...opts, headers });
 
-      // Handle 401 token refresh on first attempt
-      if (res.status === 401 && attempt === 1 && getRefreshToken()) {
+      // Handle 401 token refresh on first attempt (skip for auth routes to prevent loops)
+      if (res.status === 401 && attempt === 1 && !endpoint.includes('/v1/auth/') && getRefreshToken()) {
         const refreshed = await refreshAuth();
         if (refreshed) {
           token = getAccessToken();
@@ -178,11 +183,19 @@ export async function refreshAuth() {
       method: 'POST',
       body: JSON.stringify({ refresh_token: refresh }),
     });
-    if (data.access_token) {
+    if (data && data.access_token) {
       setTokens(data.access_token, null);
+      if (data.user && typeof window.setCurrentUser === 'function') {
+        window.setCurrentUser(data.user);
+      }
       return true;
     }
-  } catch (e) { clearTokens(); }
+  } catch (e) {
+    clearTokens();
+    if (typeof window.onAuthSessionExpired === 'function') {
+      window.onAuthSessionExpired();
+    }
+  }
   return false;
 }
 
@@ -211,6 +224,7 @@ export const mediaApi = {
   create: item => apiReq('/v1/media', { method: 'POST', body: JSON.stringify(item) }),
   patch: (id, changes) => apiReq(`/v1/media/${id}`, { method: 'PATCH', body: JSON.stringify(changes) }),
   delete: id => apiReq(`/v1/media/${id}`, { method: 'DELETE' }),
+  syncAiring: () => apiReq('/v1/media/sync-airing', { method: 'POST' }),
 };
 
 // ── GAMES RESOURCE APIS ────────────────────────────────────────────

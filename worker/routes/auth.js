@@ -1,6 +1,6 @@
 import { successResponse, errorResponse } from '../utils/response.js';
 import { signJWT, hashToken } from '../services/jwt.js';
-import { upsertUser, storeRefreshToken, findRefreshToken, deleteRefreshToken, deleteAllUserRefreshTokens, getUserRefreshTokens } from '../services/d1.js';
+import { upsertUser, storeRefreshToken, findRefreshToken, touchRefreshToken, deleteRefreshToken, deleteAllUserRefreshTokens, getUserRefreshTokens } from '../services/d1.js';
 
 // ── Password Hashing (PBKDF2 via WebCrypto) ──────────────────────
 async function hashPassword(password) {
@@ -152,12 +152,29 @@ export async function handleAuth(request, env, ctx, requestId, pathname) {
       return errorResponse('INVALID_REFRESH_TOKEN', 'Refresh token expired or revoked', requestId, 401);
     }
 
+    // Touch refresh token (sliding window + update last_used_at)
+    await touchRefreshToken(env.DB, tokenHash);
+
+    // Look up user row to preserve real email and user profile
+    const userRow = await env.DB.prepare('SELECT id, email, name, picture FROM users WHERE id = ?;').bind(record.user_id).first();
+
     const jwtSecret = env.JWT_SECRET || 'aether-codex-jwt-secret-key-change-in-prod-vars';
-    const accessToken = await signJWT({ sub: record.user_id }, jwtSecret, 900);
+    const claims = {
+      sub: record.user_id,
+      email: userRow?.email || undefined,
+      name: userRow?.name || undefined,
+    };
+    const accessToken = await signJWT(claims, jwtSecret, 900);
 
     return successResponse({
       access_token: accessToken,
       expires_in: 900,
+      user: userRow ? {
+        id: userRow.id,
+        email: userRow.email,
+        name: userRow.name,
+        picture: userRow.picture,
+      } : null,
     }, requestId);
   }
 

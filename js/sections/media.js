@@ -4,6 +4,7 @@
 
 import { toast, showConfirm, showAlert, closePanel } from '../shared/ui.js';
 import { mediaApi } from '../shared/api.js';
+import { isMediaAiring } from '../shared/airing_sync.js';
 
 /* ---------- visual helpers ---------- */
 function _mediaStatusBar(s) {
@@ -20,8 +21,9 @@ function _mediaStatusClass(s) {
 }
 
 function _airBadge(e) {
-  if (e.airingDay == null || e.status !== 'watching') return '';
-  const diff = (e.airingDay - new Date().getDay() + 7) % 7;
+  if (!isMediaAiring(e)) return '';
+  const dNum = parseInt(e.airingDay, 10);
+  const diff = (dNum - new Date().getDay() + 7) % 7;
   const lbl  = diff === 0 ? 'Airs Today!' : diff === 1 ? 'Tomorrow' : `in ${diff}d`;
   const col  = diff === 0 ? '#4ade80'     : diff === 1 ? '#fbbf24'  : 'rgba(255,255,255,.3)';
   return `<span class="m-air-badge" style="color:${col}">📺 ${lbl}</span>`;
@@ -667,11 +669,11 @@ function quickEp(id, delta) {
     if (['watching', 'plan', 'not_started', 'on_hold'].includes(e.status)) {
       e.status = 'completed';
       if (!e.endDate) e.endDate = today();
-      e.airingDay = null;
+      e.airingDay = 'finished';
       e.airingTime = null;
     }
   }
-  if (e.status !== 'watching') {
+  if (e.status !== 'watching' && e.airingDay !== 'finished') {
     e.airingDay = null;
     e.airingTime = null;
   }
@@ -939,9 +941,12 @@ function renderDetailPanel(e) {
             <div class="m-detail-lbl">RATING</div>
             <div class="m-detail-val" style="color:#fbbf24">★ ${e.rating} / 10</div>
           </div>` : ''}
-          ${e.airingDay!=null ? `<div class="m-detail-box" style="grid-column:span 2">
+          ${isMediaAiring(e) ? `<div class="m-detail-box" style="grid-column:span 2">
             <div class="m-detail-lbl">AIRING</div>
-            <div class="m-detail-val" style="color:var(--ac)">📺 ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][e.airingDay]}${e.airingTime?' at '+e.airingTime:''}</div>
+            <div class="m-detail-val" style="color:var(--ac)">📺 ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][parseInt(e.airingDay, 10)]}${e.airingTime?' at '+e.airingTime:''}</div>
+          </div>` : e.airingDay === 'finished' ? `<div class="m-detail-box" style="grid-column:span 2">
+            <div class="m-detail-lbl">AIRING</div>
+            <div class="m-detail-val" style="color:var(--mu)">📺 Finished Airing</div>
           </div>` : ''}
         </div>
       </div>
@@ -1328,7 +1333,8 @@ function renderFormPanel(e) {
         <div class="fg"><label class="flbl">Airing Day</label>
           <select class="fin" id="f-airingday">
             <option value="">Not airing</option>
-            ${airingDays.map((d,i)=>`<option value="${i}" ${e&&e.airingDay===i?'selected':''}>${d}</option>`).join('')}
+            <option value="finished" ${e && e.airingDay === 'finished' ? 'selected' : ''}>Finished Airing</option>
+            ${airingDays.map((d,i)=>`<option value="${i}" ${e && String(e.airingDay) === String(i) ? 'selected' : ''}>${d}</option>`).join('')}
           </select>
         </div>
         <div class="fg"><label class="flbl">Airing Time (optional)</label>
@@ -1396,7 +1402,13 @@ function saveEntry(eid) {
   const existing = eid ? DATA.find(x=>x.id===eid) : null;
   const g  = f => { const el=document.getElementById(f); return el?el.value||null:null; };
   const airingDayEl = document.getElementById('f-airingday');
-  const airingDay   = airingDayEl?.value !== '' ? parseInt(airingDayEl.value) : null;
+  const airingDayRaw = airingDayEl?.value;
+  let airingDay = null;
+  if (airingDayRaw === 'finished') {
+    airingDay = 'finished';
+  } else if (airingDayRaw !== '' && airingDayRaw !== null && !isNaN(parseInt(airingDayRaw, 10))) {
+    airingDay = parseInt(airingDayRaw, 10);
+  }
   const linkedGroupId = document.getElementById('f-linked-group')?.value || existing?.linkedGroupId || null;
   const linkedGroupOrderRaw = document.getElementById('f-linked-order')?.value;
   const linkedGroupOrder = linkedGroupOrderRaw !== null && linkedGroupOrderRaw !== ''
@@ -1414,8 +1426,8 @@ function saveEntry(eid) {
   const entry = {
     id:eid||uid(), title,
     genreId: selectedGenre, status:g('f-status'),
-    airingDay:isNaN(airingDay)?null:airingDay,
-    airingTime:g('f-airingtime'),
+    airingDay,
+    airingTime: airingDay === 'finished' ? null : g('f-airingtime'),
     rewatchCount:document.getElementById('f-rewatch')?.value?parseInt(document.getElementById('f-rewatch').value):(existing?.rewatchCount||null),
     rewatches:existing?.rewatches||[],
     favorite:document.getElementById('f-fav')?.checked||false,
@@ -1446,8 +1458,10 @@ function saveEntry(eid) {
   if (entry.status==='completed'&&!entry.endDate) entry.endDate=today();
 
   // Clear airing day & time when status is not watching (e.g. completed, on hold, dropped)
-  if (entry.status !== 'watching') {
+  if (entry.status !== 'watching' && entry.airingDay !== 'finished') {
     entry.airingDay = null;
+    entry.airingTime = null;
+  } else if (entry.airingDay === 'finished') {
     entry.airingTime = null;
   }
   if (eid) {
@@ -2697,7 +2711,7 @@ function _malSelect(rJson) {
 
   if (r.status === 'finished_airing') {
     if (statusEl) statusEl.value = 'completed';
-    if (airingDayEl) airingDayEl.value = '';
+    if (airingDayEl) airingDayEl.value = 'finished';
     if (airingTimeEl) airingTimeEl.value = '';
   } else if (statusEl && r.status) {
     const map = {
@@ -2736,7 +2750,7 @@ function _malSelect(rJson) {
       if (airingTimeEl) airingTimeEl.value = `${formattedHour}:${formattedMin}`;
     }
   } else if (r.status !== 'currently_airing') {
-    if (airingDayEl) airingDayEl.value = '';
+    if (airingDayEl) airingDayEl.value = 'finished';
     if (airingTimeEl) airingTimeEl.value = '';
   }
 

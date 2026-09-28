@@ -172,8 +172,9 @@ export default {
       if (request.method === 'GET' && pathname.startsWith('/mal/anime/')) {
         const id = pathname.split('/mal/anime/')[1];
         if (!id || isNaN(Number(id))) return errorResponse('INVALID_ID', 'Provide numeric MAL anime ID', requestId, 400);
-        const fields = ['id', 'title', 'alternative_titles', 'main_picture', 'synopsis', 'mean', 'rank', 'popularity', 'num_episodes', 'status', 'start_date', 'end_date', 'genres', 'media_type', 'average_episode_duration', 'studios', 'source', 'rating', 'related_anime'].join(',');
-        const malRes = await fetch(`https://api.myanimelist.net/v2/anime/${id}?fields=${fields}`, { headers: { 'X-MAL-CLIENT-ID': env.MAL_CLIENT_ID } });
+        const fields = ['id', 'title', 'alternative_titles', 'main_picture', 'synopsis', 'mean', 'rank', 'popularity', 'num_episodes', 'status', 'start_date', 'end_date', 'genres', 'media_type', 'average_episode_duration', 'broadcast', 'studios', 'source', 'rating', 'related_anime'].join(',');
+        const malClientId = env.MAL_CLIENT_ID || '97959fe7356ea8135f3b19db28cb941f';
+        const malRes = await fetch(`https://api.myanimelist.net/v2/anime/${id}?fields=${fields}`, { headers: { 'X-MAL-CLIENT-ID': malClientId } });
         const data = await malRes.json();
         if (!malRes.ok) return errorResponse('MAL_ERROR', data.message || 'MAL detail failed', requestId, malRes.status);
         return successResponse(data, requestId);

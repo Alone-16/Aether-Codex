@@ -7,9 +7,13 @@ export async function upsertUser(db, user) {
     INSERT INTO users (id, email, name, picture, created_at)
     VALUES (?, ?, ?, ?, unixepoch())
     ON CONFLICT(id) DO UPDATE SET
-      email = excluded.email,
-      name = excluded.name,
-      picture = excluded.picture;
+      email = CASE
+        WHEN excluded.email IS NOT NULL AND excluded.email != '' AND excluded.email != 'unknown@user'
+        THEN excluded.email
+        ELSE users.email
+      END,
+      name = COALESCE(excluded.name, users.name),
+      picture = COALESCE(excluded.picture, users.picture);
   `;
   await db.prepare(query).bind(user.id, user.email, user.name || null, user.picture || null).run();
 }
@@ -25,6 +29,16 @@ export async function storeRefreshToken(db, { id, userId, tokenHash, deviceName,
 export async function findRefreshToken(db, tokenHash) {
   const query = `SELECT * FROM refresh_tokens WHERE token_hash = ? AND expires_at > unixepoch();`;
   return await db.prepare(query).bind(tokenHash).first();
+}
+
+export async function touchRefreshToken(db, tokenHash, extensionSeconds = 30 * 24 * 3600) {
+  const query = `
+    UPDATE refresh_tokens
+    SET last_used_at = unixepoch(),
+        expires_at = unixepoch() + ?
+    WHERE token_hash = ?;
+  `;
+  await db.prepare(query).bind(extensionSeconds, tokenHash).run();
 }
 
 export async function deleteRefreshToken(db, tokenHash) {

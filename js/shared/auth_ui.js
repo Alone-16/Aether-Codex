@@ -51,21 +51,47 @@ export function setCurrentUser(user) {
 }
 
 export async function initServerAuth() {
-  // Restore user from storage and update UI
-  getCurrentUser();
+  // If tokens do not exist, clear user profile as well
+  if (!getAccessToken()) {
+    currentUser = null;
+    sessionStorage.removeItem('ac_v5_user_profile');
+    localStorage.removeItem('ac_v5_user_profile');
+  } else {
+    getCurrentUser();
+  }
   updateNavbarUserUI();
+}
+
+export function onAuthSessionExpired() {
+  setCurrentUser(null);
+  updateNavbarUserUI();
+  toast('Your session has expired. Please sign in to view your collection.', '#f59e0b', 5000);
+  setTimeout(() => {
+    promptServerSignIn('Your session expired. Please sign in to reload your collection.');
+  }, 350);
+}
+
+if (typeof window !== 'undefined') {
+  window.onAuthSessionExpired = onAuthSessionExpired;
+  window.onTokensCleared = () => {
+    setCurrentUser(null);
+    updateNavbarUserUI();
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════
 //  SIGN IN PANEL
 // ═══════════════════════════════════════════════════════════════════
-export function promptServerSignIn() {
+export function promptServerSignIn(customSubtitle = null) {
   const panelInner = document.getElementById('panel-inner');
   const rpanel = document.getElementById('rpanel');
   const poverlay = document.getElementById('poverlay');
   const content = document.getElementById('content');
 
   if (!panelInner || !rpanel) return;
+
+  const savedEmail = localStorage.getItem('ac_last_auth_email') || (currentUser && currentUser.email ? currentUser.email : '');
+  const subtitle = customSubtitle || 'Sign in to access your cloud collection.';
 
   rpanel.classList.add('open');
   if (poverlay) poverlay.classList.add('show');
@@ -77,16 +103,16 @@ export function promptServerSignIn() {
       <button class="ph-close" onclick="closePanel()">✕</button>
     </div>
     <div class="form-wrap" style="padding:20px">
-      <div style="font-size:13px;color:var(--tx2);margin-bottom:16px">
-        Sign in to your Aether Codex account.
+      <div style="font-size:13px;color:var(--tx2);margin-bottom:16px;line-height:1.5">
+        ${subtitle}
       </div>
       <div class="fg">
         <label class="flbl">Email Address *</label>
-        <input class="fin" id="cf-auth-email" type="email" placeholder="user@example.com" autocapitalize="none" autocorrect="off" spellcheck="false" autofocus>
+        <input class="fin" id="cf-auth-email" type="email" placeholder="user@example.com" value="${savedEmail}" autocapitalize="none" autocorrect="off" spellcheck="false" ${savedEmail ? '' : 'autofocus'}>
       </div>
       <div class="fg">
         <label class="flbl">Password *</label>
-        <input class="fin" id="cf-auth-password" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')submitServerSignIn()">
+        <input class="fin" id="cf-auth-password" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')submitServerSignIn()" ${savedEmail ? 'autofocus' : ''}>
       </div>
     </div>
     <div class="panel-actions" style="flex-direction:column;gap:8px">
@@ -115,6 +141,8 @@ export async function submitServerSignIn() {
     showAlert('Please enter your password.', { title: 'Password Required' });
     return;
   }
+
+  localStorage.setItem('ac_last_auth_email', email);
 
   try {
     toast('Signing in...', 'var(--ac)');

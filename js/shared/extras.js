@@ -1,6 +1,8 @@
 // ═══════════════════════════════════════════════════════
 //  REWATCH MODE
 // ═══════════════════════════════════════════════════════
+import { isMediaAiring } from './airing_sync.js';
+
 function startRewatch(id) {
   const e = DATA.find(x => x.id === id); if (!e) return;
   showConfirm(`Start a rewatch of "${e.title}"? Your original data will be preserved.`, () => {
@@ -223,7 +225,7 @@ function initNotifications() {
 function sendAiringNotifications() {
   const todayNum = new Date().getDay();
   const airingToday = DATA.filter(e =>
-    e.status === 'watching' && e.airingDay === todayNum
+    isMediaAiring(e) && parseInt(e.airingDay, 10) === todayNum
   );
 
   if (!airingToday.length) return;
@@ -413,17 +415,18 @@ function setCDD(id, value, label) {
 function airingMobileList() {
   const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const todayNum = new Date().getDay();
-  const watching = DATA.filter(e => e.status==='watching' && e.airingDay != null);
+  const watching = DATA.filter(isMediaAiring);
   if (!watching.length) return '<div style="font-size:12px;color:var(--mu);padding:8px 0">No airing shows tracked</div>';
   
   // Sort by proximity to today
   const sorted = watching.map(e => {
-    const diff = (e.airingDay - todayNum + 7) % 7;
-    return { e, diff };
+    const dNum = parseInt(e.airingDay, 10);
+    const diff = (dNum - todayNum + 7) % 7;
+    return { e, diff, dNum };
   }).sort((a,b) => a.diff - b.diff);
 
-  return sorted.map(({e, diff}) => {
-    const lbl = diff===0 ? 'Today' : diff===1 ? 'Tomorrow' : days[e.airingDay];
+  return sorted.map(({e, diff, dNum}) => {
+    const lbl = diff===0 ? 'Today' : diff===1 ? 'Tomorrow' : days[dNum];
     const col = diff===0 ? '#4ade80' : diff===1 ? '#fbbf24' : 'var(--tx2)';
     return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--brd)">
       <div style="width:56px;flex-shrink:0;text-align:right">

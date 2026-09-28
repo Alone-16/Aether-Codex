@@ -1,3 +1,5 @@
+import { isMediaAiring, checkAiringAnime } from '../shared/airing_sync.js';
+
 function renderHome(c){
   // Show/hide drive hint based on state
   setTimeout(()=>{
@@ -41,9 +43,10 @@ function renderHome(c){
     const pct=st.pct>0?st.pct:(st.tot?2:null);
     const progressBar=pct!=null?`<div class="ql-progress"><div class="ql-progress-fill" style="width:${pct}%"></div></div>`:'';
     let airingHtml='';
-    if(e.airingDay!=null){
-      const diff=(e.airingDay-todayNum+7)%7;
-      const lbl=diff===0?'Airs Today!':diff===1?'Airs Tomorrow':`Airs ${days_[e.airingDay]}`;
+    if(isMediaAiring(e)){
+      const dNum=parseInt(e.airingDay, 10);
+      const diff=(dNum-todayNum+7)%7;
+      const lbl=diff===0?'Airs Today!':diff===1?'Airs Tomorrow':`Airs ${days_[dNum]}`;
       airingHtml=`<div class="ql-airing">📺 ${lbl}${e.airingTime?' '+e.airingTime:''}</div>`;
     }
     return`<div class="ql-card" onclick="openDetail('${e.id}')">
@@ -224,11 +227,11 @@ let AIRING_DAY = new Date().getDay(); // defaults to today
 function renderAiringWidget(){
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const todayN = new Date().getDay();
-  const airingEntries = DATA.filter(e=>e.airingDay!=null&&e.status==='watching');
+  const airingEntries = DATA.filter(isMediaAiring);
 
   // Build day pills
   const pills = days.map((d,i)=>{
-    const hasShows = airingEntries.some(e=>e.airingDay===i);
+    const hasShows = airingEntries.some(e=>parseInt(e.airingDay, 10)===i);
     const isToday  = i===todayN;
     const isSel    = i===AIRING_DAY;
     return `<button onclick="selectAiringDay(${i})"
@@ -239,7 +242,7 @@ function renderAiringWidget(){
   }).join('');
 
   // Shows for selected day
-  const sel = airingEntries.filter(e=>e.airingDay===AIRING_DAY);
+  const sel = airingEntries.filter(e=>parseInt(e.airingDay, 10)===AIRING_DAY);
   const diff = (AIRING_DAY - todayN + 7) % 7;
   const dayLbl = diff===0?'Today':diff===1?'Tomorrow':`in ${diff}d`;
   const lblCol = diff===0?'#4ade80':diff===1?'#fbbf24':'var(--mu)';
@@ -259,7 +262,10 @@ function renderAiringWidget(){
   return`<div style="background:linear-gradient(to bottom right, var(--surf2), var(--surf)); border-radius:12px; border:1px solid rgba(255,255,255,0.06); box-shadow:0 4px 15px rgba(0,0,0,0.1); overflow:hidden">
     <div style="padding:14px 18px 12px; border-bottom:1px solid rgba(255,255,255,0.04); display:flex; justify-content:space-between; align-items:center">
       <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:var(--tx)">📺 Airing This Week</div>
-      <div style="font-size:11px;color:var(--ac);cursor:pointer;padding:4px 8px;background:rgba(var(--ac-rgb),0.1);border-radius:6px;transition:all 0.2s;font-weight:600" onmouseover="this.style.background='rgba(var(--ac-rgb),0.2)'" onmouseout="this.style.background='rgba(var(--ac-rgb),0.1)'" onclick="nav('media')">Manage →</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button type="button" onclick="checkAiringAnime(true)" title="Check MyAnimeList for airing updates" style="padding:4px 8px;background:rgba(var(--ac-rgb),0.1);border-radius:6px;transition:all 0.2s;color:var(--ac);font-size:11px;font-weight:600;border:none;cursor:pointer" onmouseover="this.style.background='rgba(var(--ac-rgb),0.2)'" onmouseout="this.style.background='rgba(var(--ac-rgb),0.1)'">🔄 Check</button>
+        <div style="font-size:11px;color:var(--ac);cursor:pointer;padding:4px 8px;background:rgba(var(--ac-rgb),0.1);border-radius:6px;transition:all 0.2s;font-weight:600" onmouseover="this.style.background='rgba(var(--ac-rgb),0.2)'" onmouseout="this.style.background='rgba(var(--ac-rgb),0.1)'" onclick="nav('media')">Manage →</div>
+      </div>
     </div>
     <div style="padding:12px 18px 8px; display:grid; grid-template-columns:repeat(7,1fr); gap:6px" id="airing-pills">
       ${pills}
@@ -275,13 +281,13 @@ function selectAiringDay(d) {
   // Re-render just the widget
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const todayN = new Date().getDay();
-  const airingEntries = DATA.filter(e=>e.airingDay!=null&&e.status==='watching');
+  const airingEntries = DATA.filter(isMediaAiring);
 
   // Update pills
   const pillsEl = document.getElementById('airing-pills');
   if (pillsEl) {
     pillsEl.innerHTML = days.map((day,i)=>{
-      const hasShows = airingEntries.some(e=>e.airingDay===i);
+      const hasShows = airingEntries.some(e=>parseInt(e.airingDay, 10)===i);
       const isToday  = i===todayN;
       const isSel    = i===d;
       return `<button onclick="selectAiringDay(${i})"
@@ -293,7 +299,7 @@ function selectAiringDay(d) {
   }
 
   // Update show list
-  const sel = airingEntries.filter(e=>e.airingDay===d);
+  const sel = airingEntries.filter(e=>parseInt(e.airingDay, 10)===d);
   const diff = (d - todayN + 7) % 7;
   const dayLbl = diff===0?'Today':diff===1?'Tomorrow':`in ${diff}d`;
   const lblCol = diff===0?'#4ade80':diff===1?'#fbbf24':'var(--mu)';

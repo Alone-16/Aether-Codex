@@ -55,6 +55,48 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
     return successResponse(items, requestId);
   }
 
+  // ── POST /v1/media/sync-airing — Check and update airing statuses from MAL ──
+  if (method === 'POST' && pathname === '/v1/media/sync-airing') {
+    const { results } = await env.DB.prepare(
+      `SELECT id, title, status, ep_cur, ep_tot, airing_day, airing_time, mal_id 
+       FROM media 
+       WHERE user_id = ? AND genre_id = 'anime' AND mal_id IS NOT NULL 
+         AND (airing_day IS NOT NULL AND airing_day != 'finished');`
+    ).bind(userId).all();
+
+    const updated = [];
+    const malClientId = env.MAL_CLIENT_ID || '97959fe7356ea8135f3b19db28cb941f';
+
+    for (const item of (results || [])) {
+      try {
+        const numericId = String(item.mal_id).replace(/\D/g, '');
+        if (!numericId) continue;
+
+        const malRes = await fetch(
+          `https://api.myanimelist.net/v2/anime/${numericId}?fields=id,status,num_episodes,end_date`,
+          { headers: { 'X-MAL-CLIENT-ID': malClientId } }
+        );
+        if (!malRes.ok) continue;
+
+        const data = await malRes.json();
+        if (data && data.status === 'finished_airing') {
+          const newEpTot = (!item.ep_tot || item.ep_tot === 0 || item.ep_tot === '0') && data.num_episodes ? String(data.num_episodes) : item.ep_tot;
+          const newEndDate = !item.end_date && data.end_date ? data.end_date : item.end_date;
+
+          await env.DB.prepare(
+            `UPDATE media SET airing_day = 'finished', airing_time = NULL, ep_tot = ?, end_date = ?, updated_at = unixepoch() WHERE id = ? AND user_id = ?;`
+          ).bind(newEpTot, newEndDate, item.id, userId).run();
+
+          updated.push({ id: item.id, title: item.title, status: data.status });
+        }
+      } catch (e) {
+        console.warn(`[Sync-Airing Worker Error for ${item.title}]`, e.message);
+      }
+    }
+
+    return successResponse({ checked: (results || []).length, updated }, requestId);
+  }
+
   // ── POST /v1/media — Create new media entry ──
   if (method === 'POST' && pathname === '/v1/media') {
     let body = {};
@@ -124,6 +166,7 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
     if (body.airing_time !== undefined || body.airingTime !== undefined) { updates.push('airing_time = ?'); params.push(body.airing_time ?? body.airingTime ?? null); }
     if (body.cover_image !== undefined || body.coverImage !== undefined) { updates.push('cover_image = ?'); params.push(body.cover_image ?? body.coverImage ?? null); }
     if (body.watch_url !== undefined || body.watchUrl !== undefined) { updates.push('watch_url = ?'); params.push(body.watch_url ?? body.watchUrl ?? null); }
+    if (body.mal_id !== undefined || body.malId !== undefined) { updates.push('mal_id = ?'); params.push(body.mal_id ? parseInt(body.mal_id) : (body.malId ? parseInt(body.malId) : null)); }
     if (body.notes !== undefined) { updates.push('notes = ?'); params.push(sanitizeString(body.notes, 5000)); }
     if (body.pinned !== undefined) { updates.push('pinned = ?'); params.push(body.pinned ? 1 : 0); }
 
