@@ -59,7 +59,7 @@ export function nav(id, push = true) {
 
     const addBtn = document.getElementById('add-btn');
     if (addBtn) {
-      addBtn.style.display = (id === 'home' || id === 'settings' || id === 'log') ? 'none' : 'flex';
+      addBtn.style.display = (id === 'home' || id === 'settings' || id === 'log' || id === 'wrapped') ? 'none' : 'flex';
     }
 
     // Auto-lock games when leaving

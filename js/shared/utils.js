@@ -320,4 +320,5 @@ export const SECTION_META = {
   log     : { title:'Activity Log',     label:'Log'      },
   notes   : { title:'Notes Codex',      label:'Notes'    },
   settings: { title:'Settings',         label:'Settings' },
+  wrapped : { title:'Your Wrapped',     label:'Wrapped'  },
 };

@@ -42,6 +42,7 @@ Object.assign(window, {
   selectGenre, changeGenreColor, addGenre,
   SECTION_META,
   checkAiringAnime, isMediaAiring,
+  openWrapped: () => import('./sections/wrapped.js').then(m => m.openWrapped()),
 });
 
 // ── Section renderers ─────────────────────────────────────────────
@@ -57,7 +58,8 @@ const sections = [
   './sections/vault.js',
   './sections/log.js',
   './sections/settings.js',
-  './sections/ai.js'
+  './sections/ai.js',
+  './sections/wrapped.js'
 ];
 
 await Promise.all(

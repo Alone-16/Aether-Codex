@@ -122,14 +122,15 @@ function rebuildSidebar() {
   const order = SETTINGS.sectionOrder || ['home','media','games','books','music'];
   const enabled = SETTINGS.sectionEnabled || {};
   const sidebarMeta = {
-    home:  { icon:'⌂', label:'Home' },
-    media: { icon:'◉', label:'Media' },
-    games: { icon:'◈', label:'Games' },
-    books: { icon:'◎', label:'Books' },
-    music: { icon:'♪', label:'Music' },
-    vault: { icon:'◈', label:'Vault' },
-    notes: { icon:'✎', label:'Notes' },
-    log:   { icon:'◎', label:'Log' },
+    home:    { icon:'⌂', label:'Home' },
+    media:   { icon:'◉', label:'Media' },
+    games:   { icon:'◈', label:'Games' },
+    books:   { icon:'◎', label:'Books' },
+    music:   { icon:'♪', label:'Music' },
+    vault:   { icon:'◈', label:'Vault' },
+    notes:   { icon:'✎', label:'Notes' },
+    log:     { icon:'◎', label:'Log' },
+    wrapped: { icon:'✦', label:'Wrapped' },
   };
   // Desktop sidebar
   const sb = document.getElementById('sidebar');
@@ -275,14 +276,15 @@ function renderSettingsSections(el) {
   const order   = [...(SETTINGS.sectionOrder || ['home','media','games','books','music'])];
   const enabled = SETTINGS.sectionEnabled || {};
   const meta = {
-    home:  { icon:'⌂', color:'var(--ac)', desc:'Master dashboard' },
-    media: { icon:'◉', color:'var(--ac)', desc:'Anime, K-Drama, Manhwa & more' },
-    games: { icon:'◈', color:'var(--ac)', desc:'PC & Mobile game tracker' },
-    books: { icon:'◎', color:'var(--ac)', desc:'Novels, Audiobooks & Manga' },
-    music: { icon:'♪', color:'var(--ac)', desc:'Music library & YouTube sync' },
-    vault: { icon:'🔗', color:'var(--ac)', desc:'Save and manage links privately' },
-    log:   { icon:'◎', color:'var(--ac)', desc:'Activity timeline and recent changes' },
-    notes: { icon:'✎', color:'var(--ac)', desc:'Personal notes, checklists & ideas' },
+    home:    { icon:'⌂', color:'var(--ac)', desc:'Master dashboard' },
+    media:   { icon:'◉', color:'var(--ac)', desc:'Anime, K-Drama, Manhwa & more' },
+    games:   { icon:'◈', color:'var(--ac)', desc:'PC & Mobile game tracker' },
+    books:   { icon:'◎', color:'var(--ac)', desc:'Novels, Audiobooks & Manga' },
+    music:   { icon:'♪', color:'var(--ac)', desc:'Music library & YouTube sync' },
+    vault:   { icon:'🔗', color:'var(--ac)', desc:'Save and manage links privately' },
+    log:     { icon:'◎', color:'var(--ac)', desc:'Activity timeline and recent changes' },
+    notes:   { icon:'✎', color:'var(--ac)', desc:'Personal notes, checklists & ideas' },
+    wrapped: { icon:'✦', color:'var(--ac)', desc:'Cinematic viewing & activity recap' },
   };
 
   el.innerHTML = `

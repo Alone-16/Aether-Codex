@@ -18,6 +18,7 @@ const SECTION_RENDERERS = {
   notes   : 'renderNotes',
   log     : 'renderLog',
   settings: 'renderSettings',
+  wrapped : 'renderWrapped',
 };
 
 let renderSeq = 0;
