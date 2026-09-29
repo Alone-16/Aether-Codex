@@ -16,7 +16,7 @@ import { handleSettingsRoutes } from './routes/settings.js';
 import { handleSearchRoutes } from './routes/search.js';
 import { handleFilesRoutes } from './routes/files.js';
 import { handleHealthRoute } from './routes/health.js';
-import { handlePublicShareRead, handlePublicShareRoutes } from './routes/public_share.js';
+import { handlePublicShareRoutes } from './routes/public_share.js';
 import { upsertUser } from './services/d1.js';
 import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
 import manifestJSON from '__STATIC_CONTENT_MANIFEST';
@@ -81,9 +81,9 @@ export default {
       const healthRes = await handleHealthRoute(request, env, ctx, requestId, pathname);
       if (healthRes) return healthRes;
 
-      // 1.8 Unauthenticated Public Share Read Route (/v1/public/share/:shareId, /v1/public/drive)
-      const publicShareReadRes = await handlePublicShareRead(request, env, ctx, requestId, pathname, url);
-      if (publicShareReadRes) return publicShareReadRes;
+      // 1.8 Public Share Routes (NO LOGIN REQUIRED to view, generate, or manage)
+      const publicShareRes = await handlePublicShareRoutes(request, env, ctx, requestId, pathname, url);
+      if (publicShareRes) return publicShareRes;
 
       // 2. Unauthenticated Auth Routes (/v1/auth/cf-access, /v1/auth/login, /v1/auth/refresh, /v1/auth/logout)
       const authRes = await handleAuth(request, env, ctx, requestId, pathname);
@@ -351,9 +351,6 @@ export default {
 
       const filesRes = await handleFilesRoutes(request, env, ctx, requestId, pathname, claims);
       if (filesRes) return filesRes;
-
-      const publicShareRes = await handlePublicShareRoutes(request, env, ctx, requestId, pathname, claims);
-      if (publicShareRes) return publicShareRes;
 
       return errorResponse('NOT_FOUND', `Route ${pathname} not found on server`, requestId, 404);
     } catch (err) {

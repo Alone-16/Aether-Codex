@@ -282,16 +282,53 @@ export const settingsApi = {
   put: (settings, genres) => apiReq('/v1/settings', { method: 'PUT', body: JSON.stringify({ settings, genres }) }),
 };
 
-// ── PUBLIC SHARE APIS ─────────────────────────────────────────────
+// ── PUBLIC SHARE APIS (NO LOGIN REQUIRED) ─────────────────────────
 export const publicShareApi = {
-  getStatus: () => apiReq('/v1/public/share'),
-  publish: (snapshot, shareId) => apiReq('/v1/public/share', { method: 'POST', body: JSON.stringify({ snapshot, shareId }) }),
-  revoke: () => apiReq('/v1/public/share', { method: 'DELETE' }),
+  getStatus: async (shareId, manageKey) => {
+    const params = new URLSearchParams();
+    if (shareId) params.append('shareId', shareId);
+    if (manageKey) params.append('manageKey', manageKey);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const token = getAccessToken();
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    const res = await fetch(`${API_BASE}/v1/public/share${qs}`, { headers });
+    const json = await res.json().catch(() => ({}));
+    return json.data || json;
+  },
+  publish: async (snapshot, shareId, manageKey) => {
+    const token = getAccessToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/v1/public/share`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ snapshot, shareId, manageKey })
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.success === false) {
+      throw new Error(json?.error?.message || `Publish failed (${res.status})`);
+    }
+    return json.data || json;
+  },
+  revoke: async (shareId, manageKey) => {
+    const token = getAccessToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/v1/public/share`, {
+      method: 'DELETE',
+      headers,
+      body: JSON.stringify({ shareId, manageKey })
+    });
+    const json = await res.json().catch(() => ({}));
+    return json.data || json;
+  },
   getPublicList: async (shareId) => {
     const res = await fetch(`${API_BASE}/v1/public/share/${encodeURIComponent(shareId)}`);
-    const json = await res.json();
-    if (!res.ok || !json.success) throw new Error(json?.error?.message || 'List not found or revoked');
-    return json.data;
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.success === false) {
+      throw new Error(json?.error?.message || 'List not found or revoked');
+    }
+    return json.data || json;
   },
 };
 

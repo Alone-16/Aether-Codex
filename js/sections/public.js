@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════
-//  public.js — Public List Sharing & Read-Only Viewer
+//  public.js — Zero-Login Public List Sharing & Read-Only Viewer
 // ═══════════════════════════════════════════════════════════════════
 
 const SHARE_KEY = 'ac_v4_share';
@@ -20,7 +20,7 @@ function loadShareSettings() {
       }
     }
   } catch (e) {}
-  return window.SHARE_SETTINGS || { fileId: null, shareId: null, sections: ['media', 'games', 'books'], enabled: false };
+  return window.SHARE_SETTINGS || { shareId: null, manageKey: null, sections: ['media', 'games', 'books'], enabled: false };
 }
 
 function saveShareSettings(s) {
@@ -30,13 +30,14 @@ function saveShareSettings(s) {
   } catch (e) {}
 }
 
-// ── Check if we're in public view mode (?share=...) ──
+// ── Check if we're in public view mode (?share=... or #share=...) ──
 export function checkPublicView() {
   const searchParams = new URLSearchParams(window.location.search);
   let shareId = searchParams.get('share');
 
   if (!shareId && window.location.hash.includes('share=')) {
-    const hp = new URLSearchParams(window.location.hash.split('?')[1] || window.location.hash.replace('#/', '').replace('#', ''));
+    const hashStr = window.location.hash.replace(/^#\/?/, '');
+    const hp = new URLSearchParams(hashStr.includes('?') ? hashStr.split('?')[1] : hashStr);
     shareId = hp.get('share');
   }
 
@@ -87,45 +88,31 @@ export async function renderPublicView(shareId) {
 
   let snapData = null;
 
-  // 1. Try Worker /v1/public/share/:shareId
-  try {
-    if (window.publicShareApi && typeof window.publicShareApi.getPublicList === 'function') {
-      snapData = await window.publicShareApi.getPublicList(shareId);
-    } else {
-      const apiBase = (window.ENV && window.ENV.API_URL) ? window.ENV.API_URL : location.origin;
-      const res = await fetch(`${apiBase}/v1/public/share/${encodeURIComponent(shareId)}`);
-      const json = await res.json().catch(() => ({}));
-      if (res.ok && json.success) snapData = json.data;
+  // 1. Direct URL data encoding (data:<base64>)
+  if (shareId.startsWith('data:')) {
+    try {
+      const b64 = shareId.slice(5);
+      const raw = decodeURIComponent(escape(atob(b64)));
+      snapData = JSON.parse(raw);
+    } catch (e) {
+      console.warn('[Public View] URL data decode error:', e);
     }
-  } catch (e) {
-    console.warn('[Public View] API fetch error:', e.message);
   }
 
-  // 2. Fallback: Google Drive proxy /v1/public/drive?fileId=...
+  // 2. Worker /v1/public/share/:shareId
   if (!snapData) {
     try {
-      const apiBase = (window.ENV && window.ENV.API_URL) ? window.ENV.API_URL : location.origin;
-      const res = await fetch(`${apiBase}/v1/public/drive?fileId=${encodeURIComponent(shareId)}`);
-      if (res.ok) {
-        const text = await res.text();
-        const jsonStart = text.indexOf('{');
-        if (jsonStart !== -1) snapData = JSON.parse(text.slice(jsonStart));
+      if (window.publicShareApi && typeof window.publicShareApi.getPublicList === 'function') {
+        snapData = await window.publicShareApi.getPublicList(shareId);
+      } else {
+        const apiBase = (window.ENV && window.ENV.API_URL) ? window.ENV.API_URL : location.origin;
+        const res = await fetch(`${apiBase}/v1/public/share/${encodeURIComponent(shareId)}`);
+        const json = await res.json().catch(() => ({}));
+        if (res.ok && json.success) snapData = json.data;
       }
     } catch (e) {
-      console.warn('[Public View] Drive proxy error:', e.message);
+      console.warn('[Public View] API fetch error:', e.message);
     }
-  }
-
-  // 3. Fallback: Direct Google Drive UC link
-  if (!snapData && shareId.length >= 25) {
-    try {
-      const res = await fetch(`https://drive.google.com/uc?export=download&id=${encodeURIComponent(shareId)}`);
-      if (res.ok) {
-        const text = await res.text();
-        const jsonStart = text.indexOf('{');
-        if (jsonStart !== -1) snapData = JSON.parse(text.slice(jsonStart));
-      }
-    } catch (e) {}
   }
 
   if (snapData && typeof snapData === 'object') {
@@ -358,7 +345,7 @@ function renderPublicContent(snap) {
   };
 }
 
-// ── Generate / Update public snapshot ──
+// ── Generate / Update public snapshot (NO LOGIN OR DRIVE REQUIRED) ──
 export async function generatePublicLink(sections) {
   const shareSettings = loadShareSettings();
 
@@ -395,91 +382,50 @@ export async function generatePublicLink(sections) {
     })) : [],
   };
 
-  // 1. Primary Path: Cloudflare Server
-  const token = typeof window.getAccessToken === 'function' ? window.getAccessToken() : null;
-  if (token && window.publicShareApi) {
+  // 1. Primary: Cloudflare Worker API (Zero login required!)
+  if (window.publicShareApi) {
     try {
-      const res = await window.publicShareApi.publish(snap, shareSettings.shareId || shareSettings.fileId);
+      const res = await window.publicShareApi.publish(snap, shareSettings.shareId, shareSettings.manageKey);
       const shareId = res.shareId;
       shareSettings.shareId = shareId;
-      shareSettings.fileId = shareId;
+      if (res.manageKey) shareSettings.manageKey = res.manageKey;
       shareSettings.sections = sections;
       shareSettings.enabled = true;
       saveShareSettings(shareSettings);
       return `${location.origin}/?share=${encodeURIComponent(shareId)}`;
     } catch (e) {
       console.warn('[Public Share] Server publish error:', e);
-      if (!window._isConnected || !window._isConnected()) {
-        throw new Error(e.message || 'Failed to publish to server');
-      }
     }
   }
 
-  // 2. Fallback Path: Google Drive if connected
-  if (typeof window._isConnected === 'function' && window._isConnected()) {
-    const getFolder = window._getOrCreateFolder;
-    const reqFn = window._req;
-    if (!getFolder || !reqFn) throw new Error('Drive integration not initialized');
-    const folderId = await getFolder();
-    if (!folderId) throw new Error('No Drive folder available');
-    const payload = JSON.stringify(snap);
-    let fileId = shareSettings.fileId;
-    if (fileId) {
-      const r = await reqFn(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: payload
-      });
-      if (!r?.ok) fileId = null;
-    }
-    if (!fileId) {
-      const cr = await reqFn('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method: 'POST',
-        headers: { 'Content-Type': 'multipart/related; boundary=boundary' },
-        body: `--boundary\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({ name: 'AetherCodex_public.json', parents: [folderId] })}\r\n--boundary\r\nContent-Type: application/json\r\n\r\n${payload}\r\n--boundary--`
-      });
-      if (!cr?.ok) throw new Error('Failed to create public snapshot file on Drive');
-      fileId = (await cr.json()).id;
-    }
-    await reqFn(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'reader', type: 'anyone' })
-    });
-    shareSettings.fileId = fileId;
-    shareSettings.shareId = fileId;
+  // 2. Offline / Serverless Zero-Dependency Fallback: Portable data URI
+  try {
+    const jsonStr = JSON.stringify(snap);
+    const b64 = btoa(unescape(encodeURIComponent(jsonStr)));
+    const shareId = 'data:' + b64;
+    shareSettings.shareId = shareId;
     shareSettings.sections = sections;
     shareSettings.enabled = true;
     saveShareSettings(shareSettings);
-    return `${location.origin}/?share=${encodeURIComponent(fileId)}`;
+    return `${location.origin}/#share=${shareId}`;
+  } catch (err) {
+    throw new Error('Failed to create snapshot link: ' + err.message);
   }
-
-  // 3. Neither account connected
-  if (typeof window.showAlert === 'function') {
-    window.showAlert('Please sign in to your Aether Codex user account (under Settings → Cloud DB) to publish a public list link.', { title: 'Sign In Required' });
-  }
-  throw new Error('Please sign in to your account first.');
 }
 
 export async function revokePublicLink() {
   const shareSettings = loadShareSettings();
-  const token = typeof window.getAccessToken === 'function' ? window.getAccessToken() : null;
 
-  if (token && window.publicShareApi) {
+  if (window.publicShareApi && shareSettings.shareId && !shareSettings.shareId.startsWith('data:')) {
     try {
-      await window.publicShareApi.revoke();
+      await window.publicShareApi.revoke(shareSettings.shareId, shareSettings.manageKey);
     } catch (e) {
-      console.warn('[Public Share] Cloudflare revoke error:', e);
+      console.warn('[Public Share] Revoke error:', e);
     }
   }
 
-  if (shareSettings.fileId && typeof window._isConnected === 'function' && window._isConnected() && window._req) {
-    try {
-      await window._req(`https://www.googleapis.com/drive/v3/files/${shareSettings.fileId}/permissions/anyoneWithLink`, {
-        method: 'DELETE'
-      });
-    } catch (e) {}
-  }
-
-  shareSettings.fileId = null;
   shareSettings.shareId = null;
+  shareSettings.manageKey = null;
   shareSettings.enabled = false;
   saveShareSettings(shareSettings);
 }
@@ -487,8 +433,9 @@ export async function revokePublicLink() {
 // ── Settings UI for public share ──
 export function renderSettingsPublicShare(el) {
   const s = loadShareSettings();
-  const shareId = s.shareId || s.fileId;
-  const publicUrl = shareId ? `${location.origin}/?share=${encodeURIComponent(shareId)}` : null;
+  const shareId = s.shareId;
+  const isDataUri = shareId && shareId.startsWith('data:');
+  const publicUrl = shareId ? (isDataUri ? `${location.origin}/#share=${shareId}` : `${location.origin}/?share=${encodeURIComponent(shareId)}`) : null;
 
   const sectionOpts = [
     { id: 'media', label: 'Media', color: '#38bdf8', icon: '◉' },
@@ -496,21 +443,20 @@ export function renderSettingsPublicShare(el) {
     { id: 'books', label: 'Books', color: '#a78bfa', icon: '◎' },
   ];
 
-  // Auto-sync status with server in background if logged in
-  if (typeof window.getAccessToken === 'function' && window.getAccessToken() && window.publicShareApi) {
-    window.publicShareApi.getStatus().then(res => {
+  // Auto-sync status with server in background
+  if (window.publicShareApi && shareId && !isDataUri) {
+    window.publicShareApi.getStatus(shareId, s.manageKey).then(res => {
       if (res && res.active && res.shareId && res.shareId !== shareId) {
         s.shareId = res.shareId;
-        s.fileId = res.shareId;
+        s.manageKey = res.manageKey || s.manageKey;
         s.sections = res.sections || s.sections;
         s.enabled = true;
         saveShareSettings(s);
         const curEl = document.getElementById('settings-body');
         if (curEl && window.SETTINGS_TAB === 'share') renderSettingsPublicShare(curEl);
       } else if (res && !res.active && shareId && s.enabled) {
-        // If server revoked it
         s.shareId = null;
-        s.fileId = null;
+        s.manageKey = null;
         s.enabled = false;
         saveShareSettings(s);
         const curEl = document.getElementById('settings-body');
@@ -526,7 +472,7 @@ export function renderSettingsPublicShare(el) {
           <span style="font-size:16px;color:var(--ac)">🔗</span>
           <div style="font-size:14px;font-weight:700;color:var(--tx)">Public List Link</div>
         </div>
-        <div style="font-size:12px;color:var(--mu)">Share a read-only live snapshot of your library with anyone — no login required to view.</div>
+        <div style="font-size:12px;color:var(--mu)">Share a read-only live snapshot of your library with anyone — no login or Google Drive required.</div>
       </div>
       <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
         <div>
@@ -575,7 +521,7 @@ export function renderSettingsPublicShare(el) {
         </div>
 
         <div style="font-size:11px;color:var(--mu);line-height:1.5;padding-top:4px">
-          🔒 <b>Privacy Protection:</b> Private vault links, sensitive credentials, and 18+ items are strictly excluded from public snapshots. Anyone with the URL can view your chosen lists without needing an account.
+          🔒 <b>Instant & Private:</b> Anyone with the link can view your selected lists without logging in. Sensitive vault notes and 18+ items are strictly excluded.
         </div>
       </div>
     </div>`;
@@ -589,10 +535,10 @@ export async function handleGeneratePublicLink() {
     }
     return;
   }
-  if (typeof window.toast === 'function') window.toast('Publishing public list...', 'var(--ch)');
+  if (typeof window.toast === 'function') window.toast('Generating public list...', 'var(--ch)');
   try {
     const url = await generatePublicLink(sections);
-    if (typeof window.toast === 'function') window.toast('✓ Public link updated and live!', 'var(--cd)');
+    if (typeof window.toast === 'function') window.toast('✓ Public link ready and live!', 'var(--cd)');
     const el = document.getElementById('settings-body');
     if (el) renderSettingsPublicShare(el);
   } catch (e) {

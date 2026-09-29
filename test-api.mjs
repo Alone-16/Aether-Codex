@@ -216,7 +216,7 @@ async function main() {
   log('POST /v1/music/sync-playlist (Sync 5-day interval)', playlistSync);
 
   // ── Test 20: Public Share Integration Tests ──
-  console.log('\n── Public Share Tests ──');
+  console.log('\n── Public Share Tests (Authenticated) ──');
   const pubShareSnap = {
     owner: 'Test Cloud User',
     sections: ['media', 'games', 'books'],
@@ -225,7 +225,7 @@ async function main() {
     books: [{ title: 'Three Body Problem', status: 'plan', rating: 9 }],
   };
   const pubShareRes = await req('POST', '/v1/public/share', { snapshot: pubShareSnap }, token);
-  log('POST /v1/public/share (publish snapshot)', pubShareRes);
+  log('POST /v1/public/share (publish snapshot with token)', pubShareRes);
   const testShareId = pubShareRes.json?.data?.shareId;
 
   if (testShareId) {
@@ -240,6 +240,33 @@ async function main() {
 
     const pubReadAfter = await req('GET', `/v1/public/share/${testShareId}`);
     log(`GET /v1/public/share/${testShareId} (read after revoke) → 404`, pubReadAfter);
+  }
+
+  // ── Test 20b: Public Share (Completely Anonymous / No Login) ──
+  console.log('\n── Public Share Tests (Anonymous / No Login Required) ──');
+  const anonSnap = {
+    owner: 'Guest Explorer',
+    sections: ['games', 'books'],
+    games: [{ title: 'Hades II', status: 'playing', rating: 9.5 }],
+    books: [{ title: 'Neuromancer', status: 'completed', rating: 9.0 }],
+  };
+  const anonShareRes = await req('POST', '/v1/public/share', { snapshot: anonSnap }); // No token!
+  log('POST /v1/public/share (anonymous publish without login)', anonShareRes);
+  const anonShareId = anonShareRes.json?.data?.shareId;
+  const anonManageKey = anonShareRes.json?.data?.manageKey;
+
+  if (anonShareId && anonManageKey) {
+    const anonRead = await req('GET', `/v1/public/share/${anonShareId}`);
+    log(`GET /v1/public/share/${anonShareId} (anonymous read) → 200`, anonRead);
+
+    const anonStatus = await req('GET', `/v1/public/share?shareId=${anonShareId}&manageKey=${anonManageKey}`);
+    log('GET /v1/public/share?shareId=...&manageKey=... (anonymous status check)', anonStatus);
+
+    const anonRevoke = await req('DELETE', '/v1/public/share', { shareId: anonShareId, manageKey: anonManageKey });
+    log('DELETE /v1/public/share with manageKey (anonymous revoke)', anonRevoke);
+
+    const anonReadAfter = await req('GET', `/v1/public/share/${anonShareId}`);
+    log(`GET /v1/public/share/${anonShareId} (read after revoke) → 404`, anonReadAfter);
   }
 
   // ── Test 21: 404 Route ──

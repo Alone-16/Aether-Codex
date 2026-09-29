@@ -225,8 +225,8 @@ function renderSettingsBody() {
   }
 
   // Update active tab
+  const tabs = ['sections','sync','storage','security','share'];
   document.querySelectorAll('.stab').forEach((t, i) => {
-    const tabs = ['sections','sync','storage','desktop','ai','security','share'];
     t.classList.toggle('active', tabs[i] === SETTINGS_TAB);
   });
 }
