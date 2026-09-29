@@ -17,7 +17,6 @@ const SECTION_RENDERERS = {
   vault   : 'renderVault',
   notes   : 'renderNotes',
   log     : 'renderLog',
-  tools   : 'renderTools',
   settings: 'renderSettings',
 };
 

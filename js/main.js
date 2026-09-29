@@ -55,7 +55,6 @@ const sections = [
   './sections/music.js',
   './sections/notes.js',
   './sections/vault.js',
-  './sections/tools.js',
   './sections/log.js',
   './sections/settings.js',
   './sections/ai.js'
@@ -88,8 +87,11 @@ window.onunhandledrejection = function(e) {
 
 import {
   refreshAuth, getAccessToken, checkHealth,
-  mediaApi, gamesApi, booksApi, musicApi, notesApi, vaultApi, logsApi, settingsApi
+  mediaApi, gamesApi, booksApi, musicApi, notesApi, vaultApi, logsApi, settingsApi,
+  publicShareApi
 } from './shared/api.js';
+
+window.publicShareApi = publicShareApi;
 
 import { initServerAuth, updateNavbarUserUI } from './shared/auth_ui.js';
 
@@ -100,8 +102,28 @@ await import('./shared/extras.js').catch(e =>
 
 // ── Boot ──────────────────────────────────────────────────────────
 async function boot() {
-  // ── 0. Handle MAL OAuth Callback FIRST (before anything clears the URL) ──
+  // ── 0. Handle Public Share View Mode (?share=...) FIRST ──
   const searchParams = new URLSearchParams(location.search);
+  let shareId = searchParams.get('share');
+  if (!shareId && location.hash.includes('share=')) {
+    const hp = new URLSearchParams(location.hash.split('?')[1] || location.hash.replace('#/', '').replace('#', ''));
+    shareId = hp.get('share');
+  }
+
+  if (shareId) {
+    try {
+      const { checkPublicView } = await import('./sections/public.js');
+      if (checkPublicView()) {
+        document.body.style.visibility = 'visible';
+        document.documentElement.style.visibility = 'visible';
+        return;
+      }
+    } catch (e) {
+      console.error('[Boot] Public share boot error:', e);
+    }
+  }
+
+  // ── 0.1 Handle MAL OAuth Callback (before anything clears the URL) ──
   let oauthCode  = searchParams.get('code');
   let oauthState = searchParams.get('state');
   let oauthError = searchParams.get('error');
@@ -148,7 +170,7 @@ async function boot() {
   // Determine initial section
   const VALID_SECTIONS = [
     'home','media','games','books','music',
-    'vault','notes','log','tools','settings',
+    'vault','notes','log','settings',
     'ai','wrapped','public',
   ];
 

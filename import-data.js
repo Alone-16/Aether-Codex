@@ -13,8 +13,8 @@ localStorage.setItem("ac_v4_log","[{\"id\":\"ms4kjw77t1vhw7cr58\",\"section\":\"
 localStorage.setItem("ac_v4_theme","\"dark\"");
 localStorage.setItem("ac_v4_ver","\"4.0\"");
 localStorage.setItem("ac_v4_saved","\"1785765401203\"");
-localStorage.setItem("_ac_section_order","[\"home\",\"media\",\"games\",\"books\",\"music\",\"notes\",\"vault\",\"tools\",\"log\"]");
-localStorage.setItem("_ac_section_enabled","{\"home\":true,\"media\":true,\"games\":true,\"books\":false,\"music\":true,\"vault\":true,\"log\":true,\"tools\":true,\"notes\":true}");
+localStorage.setItem("_ac_section_order","[\"home\",\"media\",\"games\",\"books\",\"music\",\"notes\",\"vault\",\"log\"]");
+localStorage.setItem("_ac_section_enabled","{\"home\":true,\"media\":true,\"games\":true,\"books\":false,\"music\":true,\"vault\":true,\"log\":true,\"notes\":true}");
 localStorage.setItem("_ac_density","\"comfortable\"");
 localStorage.setItem("_ac_fontsize","\"medium\"");
 localStorage.setItem("ac_v4_mal_token","\"eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImp0aSI6IjYyOGU4OGE5NjBjMGQzN2ExNTFhMTU0MTIwNzEwMDcxM2FjYTA1OWEyMjM2MmYzNzZiMjYyM2IxZjU2YzhlMzY4NGMyMWU5ZmRhNTExOWRiIn0.eyJhdWQiOiI5Nzk1OWZlNzM1NmVhODEzNWYzYjE5ZGIyOGNiOTQxZiIsImp0aSI6IjYyOGU4OGE5NjBjMGQzN2ExNTFhMTU0MTIwNzEwMDcxM2FjYTA1OWEyMjM2MmYzNzZiMjYyM2IxZjU2YzhlMzY4NGMyMWU5ZmRhNTExOWRiIiwiaWF0IjoxNzg0NDExODI3LCJuYmYiOjE3ODQ0MTE4MjcsImV4cCI6MTc4NzA5MDIyNywic3ViIjoiMTc5NzQ4ODkiLCJzY29wZXMiOltdfQ.nzrKUGkSLw2t4DCAInKxSwU7mdtK_RKImYL8DGkoAeFmEd1SSZ-UqGqQEVZ9mHZ2iWOoREJP-EJH03-f4akw4Dff91X2DOjJ6IUvojXW8uP2Z92x9mlJ2WngNKpyqxHaZULeIkR9z06T0tgAJKNwqU8JHkUC-OxsD6O5M3-BsAOkx2ysZ0Y3i_B6IFfymS6F-4il54jbJ-Q_RAicxoxK1ctpsErVSePQ_e-4YcIj1g_fkaaizLHPm8NdeVf3IWzB4dmLgrBjF_k7l6cKmBVho4yKEvPt12zYV9xNUKA-L_2QrQA9_rJhvFAv9Uri2QB8YDs9zvh1urL_hezrpktS9w\"");

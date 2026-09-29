@@ -215,7 +215,34 @@ async function main() {
   }, token);
   log('POST /v1/music/sync-playlist (Sync 5-day interval)', playlistSync);
 
-  // ── Test 20: 404 Route ──
+  // ── Test 20: Public Share Integration Tests ──
+  console.log('\n── Public Share Tests ──');
+  const pubShareSnap = {
+    owner: 'Test Cloud User',
+    sections: ['media', 'games', 'books'],
+    media: [{ title: 'Solo Leveling', status: 'watching', score: 9.0 }],
+    games: [{ title: 'Elden Ring', status: 'completed', rating: 10 }],
+    books: [{ title: 'Three Body Problem', status: 'plan', rating: 9 }],
+  };
+  const pubShareRes = await req('POST', '/v1/public/share', { snapshot: pubShareSnap }, token);
+  log('POST /v1/public/share (publish snapshot)', pubShareRes);
+  const testShareId = pubShareRes.json?.data?.shareId;
+
+  if (testShareId) {
+    const pubRead = await req('GET', `/v1/public/share/${testShareId}`);
+    log(`GET /v1/public/share/${testShareId} (unauthenticated read) → 200`, pubRead);
+
+    const pubStatus = await req('GET', '/v1/public/share', null, token);
+    log('GET /v1/public/share (check status) → active: true', pubStatus);
+
+    const pubRevoke = await req('DELETE', '/v1/public/share', null, token);
+    log('DELETE /v1/public/share (revoke)', pubRevoke);
+
+    const pubReadAfter = await req('GET', `/v1/public/share/${testShareId}`);
+    log(`GET /v1/public/share/${testShareId} (read after revoke) → 404`, pubReadAfter);
+  }
+
+  // ── Test 21: 404 Route ──
   const notFound = await req('GET', '/v1/doesnotexist', null, token);
   log('GET /v1/doesnotexist → 404', notFound);
 

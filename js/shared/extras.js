@@ -281,7 +281,7 @@ function globalAdd() {
   else if (c === 'books' && window.openAddBook) window.openAddBook();
   else if (c === 'music' && window.openAddSong) window.openAddSong();
   else if (c === 'vault' && window.openAddLink) window.openAddLink();
-  else if (['home', 'tools', 'settings', 'log'].includes(c) && window.toast) {
+  else if (['home', 'settings', 'log'].includes(c) && window.toast) {
     window.toast('Navigate to a library section to add an entry', '#8888aa');
   }
 }

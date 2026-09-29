@@ -236,3 +236,15 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search_fts USING fts5(
     content,
     tokenize = 'porter unicode61'
 );
+
+-- 17. Public Share Snapshots
+CREATE TABLE IF NOT EXISTS public_shares (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    created_at INTEGER DEFAULT (unixepoch()),
+    updated_at INTEGER DEFAULT (unixepoch()),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_publicshares_user ON public_shares(user_id);
+

@@ -1110,6 +1110,8 @@ window._isConnected = _isConnected;
 window._pushToDrive = _pushToDrive;
 window._startMALAuth = _startMALAuth;
 window._WORKER = _WORKER;
+window._getOrCreateFolder = _getOrCreateFolder;
+window._req = _req;
 
 /** Full bidirectional sync — also assigned on window from main.js for inline onclick. */
 export async function syncDrive() {

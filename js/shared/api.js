@@ -282,6 +282,19 @@ export const settingsApi = {
   put: (settings, genres) => apiReq('/v1/settings', { method: 'PUT', body: JSON.stringify({ settings, genres }) }),
 };
 
+// ── PUBLIC SHARE APIS ─────────────────────────────────────────────
+export const publicShareApi = {
+  getStatus: () => apiReq('/v1/public/share'),
+  publish: (snapshot, shareId) => apiReq('/v1/public/share', { method: 'POST', body: JSON.stringify({ snapshot, shareId }) }),
+  revoke: () => apiReq('/v1/public/share', { method: 'DELETE' }),
+  getPublicList: async (shareId) => {
+    const res = await fetch(`${API_BASE}/v1/public/share/${encodeURIComponent(shareId)}`);
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json?.error?.message || 'List not found or revoked');
+    return json.data;
+  },
+};
+
 // ── FTS5 SEARCH API (WITH ABORT CONTROLLER) ──────────────────────
 export async function searchFTS(query) {
   if (searchAbortController) searchAbortController.abort();

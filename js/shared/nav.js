@@ -24,7 +24,7 @@ export function nav(id, push = true) {
   if (push) try { history.pushState({}, '', ' #/' + (id === 'home' ? '' : id)); } catch(e) {}
 
   const c = document.getElementById('content');
-  const ORDER = ['home','media','games','books','music','notes','vault','tools','log','settings'];
+  const ORDER = ['home','media','games','books','music','notes','vault','log','settings'];
   const pi = ORDER.indexOf(prevId), ni = ORDER.indexOf(id);
   const goingRight = ni > pi;
 
@@ -39,7 +39,7 @@ export function nav(id, push = true) {
     const sectionBg = {
       home:'#000000', media:'#000000', games:'#000000',
       books:'#000000', music:'#000000', vault:'#000000',
-      log:'#000000', tools:'#000000', settings:'#000000', notes:'#000000',
+      log:'#000000', settings:'#000000', notes:'#000000',
     };
     document.documentElement.style.background      = sectionBg[id] || sectionBg.home;
     document.documentElement.style.backgroundColor = sectionBg[id] || sectionBg.home;
@@ -59,7 +59,7 @@ export function nav(id, push = true) {
 
     const addBtn = document.getElementById('add-btn');
     if (addBtn) {
-      addBtn.style.display = (id === 'home' || id === 'settings' || id === 'tools' || id === 'log') ? 'none' : 'flex';
+      addBtn.style.display = (id === 'home' || id === 'settings' || id === 'log') ? 'none' : 'flex';
     }
 
     // Auto-lock games when leaving

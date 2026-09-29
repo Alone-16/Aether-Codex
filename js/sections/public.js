@@ -1,309 +1,632 @@
-// ═══════════════════════════════════════════════════════
-//  PUBLIC LIST SHARE
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+//  public.js — Public List Sharing & Read-Only Viewer
+// ═══════════════════════════════════════════════════════════════════
+
 const SHARE_KEY = 'ac_v4_share';
+const PLAT_LABEL = { pc: 'PC', mobile: 'Mobile', both: 'PC + Mobile' };
+
+function esc(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 function loadShareSettings() {
-  return window.SHARE_SETTINGS || { fileId: null, sections: ['media'], enabled: false };
+  try {
+    const raw = localStorage.getItem(SHARE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        window.SHARE_SETTINGS = { ...parsed };
+        return window.SHARE_SETTINGS;
+      }
+    }
+  } catch (e) {}
+  return window.SHARE_SETTINGS || { fileId: null, shareId: null, sections: ['media', 'games', 'books'], enabled: false };
 }
-function saveShareSettings(s) { window.SHARE_SETTINGS = s; }
 
-// ── Check if we're in public view mode ──
-function checkPublicView() {
-  const params = new URLSearchParams(window.location.search);
-  const shareId = params.get('share');
+function saveShareSettings(s) {
+  window.SHARE_SETTINGS = s;
+  try {
+    localStorage.setItem(SHARE_KEY, JSON.stringify(s));
+  } catch (e) {}
+}
+
+// ── Check if we're in public view mode (?share=...) ──
+export function checkPublicView() {
+  const searchParams = new URLSearchParams(window.location.search);
+  let shareId = searchParams.get('share');
+
+  if (!shareId && window.location.hash.includes('share=')) {
+    const hp = new URLSearchParams(window.location.hash.split('?')[1] || window.location.hash.replace('#/', '').replace('#', ''));
+    shareId = hp.get('share');
+  }
+
   if (shareId) {
-    renderPublicView(shareId);
+    renderPublicView(shareId.trim());
     return true;
   }
   return false;
 }
 
-async function renderPublicView(fileId) {
+export async function renderPublicView(shareId) {
+  // Reveal body and set full-scroll styling
+  document.body.style.visibility = 'visible';
+  document.documentElement.style.visibility = 'visible';
+  document.documentElement.style.cssText = 'height:auto!important;overflow:auto!important;background:#000;color:rgba(255,255,255,.93)';
+  document.body.style.cssText = 'height:auto!important;overflow:auto!important;display:block!important;background:#000;color:rgba(255,255,255,.93);font-family:Outfit,sans-serif;margin:0;padding:0';
+
   document.body.innerHTML = `
-    <style>html,body{height:auto!important;overflow:auto!important;display:block!important}</style>
-    <div style="min-height:100vh;background:#000000;color:rgba(255,255,255,.93);font-family:'Outfit',sans-serif;display:flex;flex-direction:column">
-      <div style="background:#111111;border-bottom:1px solid rgba(255,255,255,.08);padding:14px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10">
-        <div style="font-family:'Outfit',sans-serif;font-size:18px;font-weight:700;color:#38bdf8">The Aether Codex</div>
-        <div style="font-size:12px;color:rgba(255,255,255,.45);padding:2px 8px;background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.22);border-radius:10px">Public List</div>
-      </div>
-      <div id="pub-content" style="flex:1;max-width:860px;margin:0 auto;width:100%;padding:24px 16px">
-        <div style="text-align:center;padding:40px;color:rgba(255,255,255,.45)">Loading...</div>
-      </div>
-      <div style="padding:16px;text-align:center;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:rgba(255,255,255,.45)">
-        Powered by <span style="color:#38bdf8">The Aether Codex</span>
-      </div>
+    <style>
+      html, body { background: #000000 !important; color: rgba(255,255,255,.93) !important; font-family: 'Outfit', sans-serif !important; }
+      .pub-card { transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease; }
+      .pub-card:hover { transform: translateY(-2px); border-color: rgba(56,189,248,.35) !important; box-shadow: 0 8px 24px rgba(0,0,0,.6); }
+      .pub-filter-btn { border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.04); color: rgba(255,255,255,.6); border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s; }
+      .pub-filter-btn:hover { background: rgba(255,255,255,.09); color: #fff; }
+      .pub-filter-btn.active { background: rgba(56,189,248,.15); border-color: #38bdf8; color: #38bdf8; }
+      @keyframes pub-spin { to { transform: rotate(360deg); } }
+    </style>
+    <div style="min-height:100vh;display:flex;flex-direction:column">
+      <nav style="background:rgba(15,15,20,0.85);backdrop-filter:blur(20px);border-bottom:1px solid rgba(255,255,255,.08);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="font-family:'Outfit',sans-serif;font-size:17px;font-weight:800;letter-spacing:.3px;color:#38bdf8">The Aether Codex</div>
+          <span style="font-size:11px;font-weight:700;color:rgba(255,255,255,.6);padding:3px 9px;background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.25);border-radius:12px">Public Share</span>
+        </div>
+        <a href="/" style="font-size:12px;font-weight:600;color:#38bdf8;text-decoration:none;padding:5px 12px;background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.2);border-radius:6px;transition:background .15s">Open App →</a>
+      </nav>
+
+      <main id="pub-content" style="flex:1;max-width:920px;margin:0 auto;width:100%;padding:28px 16px 40px">
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:14px;color:rgba(255,255,255,.5)">
+          <div style="width:28px;height:28px;border:3px solid rgba(255,255,255,.1);border-top-color:#38bdf8;border-radius:50%;animation:pub-spin .6s linear infinite"></div>
+          <div style="font-size:13px;letter-spacing:.5px">Loading collection...</div>
+        </div>
+      </main>
+
+      <footer style="padding:20px;text-align:center;border-top:1px solid rgba(255,255,255,.06);font-size:12px;color:rgba(255,255,255,.4)">
+        Powered by <a href="/" style="color:#38bdf8;text-decoration:none;font-weight:600">The Aether Codex</a>
+      </footer>
     </div>`;
-  // Fix scroll on public view - override app CSS
-  document.documentElement.style.cssText = 'height:auto!important;overflow:auto!important';
-  document.body.style.cssText = 'height:auto!important;overflow:auto!important;display:block!important';
 
-  // Load Google Fonts
-  const link = document.createElement('link');
-  link.href = "https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Outfit:wght@400;500;600&display=swap";
-  link.rel = 'stylesheet';
-  document.head.appendChild(link);
+  let snapData = null;
 
+  // 1. Try Worker /v1/public/share/:shareId
   try {
-    const res = await fetch(`https://aether-codex.nadeempubgmobile2-0.workers.dev?fileId=${fileId}`);
-    if (!res.ok) throw new Error('File not found or not public');
-    const text = await res.text();
-    // Handle Google Drive virus scan warning page
-    const jsonStart = text.indexOf('{');
-    if (jsonStart === -1) throw new Error('Invalid response from Drive');
-    const data = JSON.parse(text.slice(jsonStart));
-    renderPublicContent(data);
-  } catch(e) {
-    document.getElementById('pub-content').innerHTML = `
-      <div style="text-align:center;padding:60px 20px">
-        <div style="font-size:32px;margin-bottom:12px">🔒</div>
-        <div style="font-size:16px;font-weight:600;color:rgba(255,255,255,.93);margin-bottom:6px">List not available</div>
-        <div style="font-size:13px;color:rgba(255,255,255,.45)">This list may have been revoked or the link is invalid.</div>
-      </div>`;
+    if (window.publicShareApi && typeof window.publicShareApi.getPublicList === 'function') {
+      snapData = await window.publicShareApi.getPublicList(shareId);
+    } else {
+      const apiBase = (window.ENV && window.ENV.API_URL) ? window.ENV.API_URL : location.origin;
+      const res = await fetch(`${apiBase}/v1/public/share/${encodeURIComponent(shareId)}`);
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.success) snapData = json.data;
+    }
+  } catch (e) {
+    console.warn('[Public View] API fetch error:', e.message);
+  }
+
+  // 2. Fallback: Google Drive proxy /v1/public/drive?fileId=...
+  if (!snapData) {
+    try {
+      const apiBase = (window.ENV && window.ENV.API_URL) ? window.ENV.API_URL : location.origin;
+      const res = await fetch(`${apiBase}/v1/public/drive?fileId=${encodeURIComponent(shareId)}`);
+      if (res.ok) {
+        const text = await res.text();
+        const jsonStart = text.indexOf('{');
+        if (jsonStart !== -1) snapData = JSON.parse(text.slice(jsonStart));
+      }
+    } catch (e) {
+      console.warn('[Public View] Drive proxy error:', e.message);
+    }
+  }
+
+  // 3. Fallback: Direct Google Drive UC link
+  if (!snapData && shareId.length >= 25) {
+    try {
+      const res = await fetch(`https://drive.google.com/uc?export=download&id=${encodeURIComponent(shareId)}`);
+      if (res.ok) {
+        const text = await res.text();
+        const jsonStart = text.indexOf('{');
+        if (jsonStart !== -1) snapData = JSON.parse(text.slice(jsonStart));
+      }
+    } catch (e) {}
+  }
+
+  if (snapData && typeof snapData === 'object') {
+    renderPublicContent(snapData);
+  } else {
+    const el = document.getElementById('pub-content');
+    if (el) {
+      el.innerHTML = `
+        <div style="text-align:center;padding:80px 20px;max-width:440px;margin:0 auto">
+          <div style="font-size:42px;margin-bottom:16px">🔒</div>
+          <div style="font-size:20px;font-weight:700;color:rgba(255,255,255,.93);margin-bottom:8px">List Unavailable</div>
+          <div style="font-size:13px;color:rgba(255,255,255,.5);line-height:1.6;margin-bottom:24px">
+            This collection snapshot could not be found. It may have been revoked by its owner or the link is invalid.
+          </div>
+          <a href="/" style="display:inline-block;background:#38bdf8;color:#000;font-weight:700;font-size:13px;padding:10px 22px;border-radius:6px;text-decoration:none">
+            Go to The Aether Codex
+          </a>
+        </div>`;
+    }
   }
 }
 
-function renderPublicContent(snap) {
-  const el = document.getElementById('pub-content'); if (!el) return;
-  const sections = snap.sections || [];
-  const owner = snap.owner || 'Someone';
-  const generated = snap.generatedAt ? new Date(snap.generatedAt).toLocaleDateString() : '';
+let _currentPublicFilter = 'all';
 
-  const STATUS_COLORS = { watching:'#7dd3fc', completed:'#4ade80', plan:'#a78bfa', on_hold:'#fbbf24', dropped:'#fb7185' };
-  const STATUS_LABELS = { watching:'Watching', completed:'Completed', plan:'Plan', on_hold:'On Hold', dropped:'Dropped' };
+function renderPublicContent(snap) {
+  const el = document.getElementById('pub-content');
+  if (!el) return;
+
+  const sections = snap.sections || [];
+  const owner = snap.owner || 'Aether Codex User';
+  const generated = snap.generatedAt ? new Date(snap.generatedAt).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' }) : '';
+
+  const mediaList = sections.includes('media') && Array.isArray(snap.media) ? snap.media : [];
+  const gamesList = sections.includes('games') && Array.isArray(snap.games) ? snap.games : [];
+  const booksList = sections.includes('books') && Array.isArray(snap.books) ? snap.books : [];
+
+  const totalCount = mediaList.length + gamesList.length + booksList.length;
+
+  const STATUS_CONFIG = {
+    watching:  { label: 'Watching / In Progress', color: '#38bdf8' },
+    completed: { label: 'Completed',             color: '#4ade80' },
+    plan:      { label: 'Plan to Experience',    color: '#a78bfa' },
+    on_hold:   { label: 'On Hold',               color: '#fbbf24' },
+    dropped:   { label: 'Dropped',               color: '#fb7185' },
+  };
+
+  const getStatusInfo = (s) => STATUS_CONFIG[s] || { label: s ? s.toUpperCase() : 'Active', color: '#94a3b8' };
 
   let html = `
-    <div style="margin-bottom:24px">
-      <div style="font-family:'Outfit',sans-serif;font-size:22px;font-weight:700;color:#38bdf8;margin-bottom:4px">${esc(owner)}'s List</div>
-      ${generated ? `<div style="font-size:12px;color:rgba(255,255,255,.45)">Last updated: ${generated}</div>` : ''}
+    <div style="margin-bottom:28px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px">
+        <div>
+          <h1 style="font-size:clamp(22px,4vw,28px);font-weight:800;color:#fff;margin:0 0 4px 0">${esc(owner)}'s Codex</h1>
+          ${generated ? `<div style="font-size:12px;color:rgba(255,255,255,.45)">Snapshot published on ${esc(generated)} · ${totalCount} items</div>` : ''}
+        </div>
+      </div>
+
+      <!-- Filter Tabs -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;padding:4px 0;margin-top:16px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:14px">
+        <button class="pub-filter-btn ${_currentPublicFilter === 'all' ? 'active' : ''}" onclick="window.setPublicFilter('all')">
+          All (${totalCount})
+        </button>
+        ${mediaList.length ? `
+          <button class="pub-filter-btn ${_currentPublicFilter === 'media' ? 'active' : ''}" onclick="window.setPublicFilter('media')">
+            ◉ Media (${mediaList.length})
+          </button>` : ''}
+        ${gamesList.length ? `
+          <button class="pub-filter-btn ${_currentPublicFilter === 'games' ? 'active' : ''}" onclick="window.setPublicFilter('games')">
+            ◈ Games (${gamesList.length})
+          </button>` : ''}
+        ${booksList.length ? `
+          <button class="pub-filter-btn ${_currentPublicFilter === 'books' ? 'active' : ''}" onclick="window.setPublicFilter('books')">
+            ◎ Books (${booksList.length})
+          </button>` : ''}
+      </div>
     </div>`;
 
-  // Media section
-  if (sections.includes('media') && snap.media?.length) {
+  // 1. Media Section
+  if ((_currentPublicFilter === 'all' || _currentPublicFilter === 'media') && mediaList.length) {
     const byStatus = {};
-    snap.media.forEach(e => { if(!byStatus[e.status]) byStatus[e.status] = []; byStatus[e.status].push(e); });
-    const order = ['watching','completed','plan','on_hold','dropped'];
+    mediaList.forEach(e => {
+      const st = e.status || 'watching';
+      if (!byStatus[st]) byStatus[st] = [];
+      byStatus[st].push(e);
+    });
 
-    html += `<div style="margin-bottom:28px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#38bdf8;margin-bottom:12px;display:flex;align-items:center;gap:8px">
-        <span>◉ Media</span><div style="flex:1;height:1px;background:rgba(56,189,248,.2)"></div>
-        <span style="font-size:11px;color:rgba(255,255,255,.45)">${snap.media.length} entries</span>
-      </div>`;
+    const statusOrder = ['watching', 'completed', 'plan', 'on_hold', 'dropped'];
 
-    order.forEach(s => {
-      const rows = byStatus[s]; if (!rows?.length) return;
-      html += `<div style="margin-bottom:16px">
-        <div style="font-size:11px;font-weight:700;color:${STATUS_COLORS[s]};margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">${STATUS_LABELS[s]} (${rows.length})</div>
-        <div style="display:flex;flex-direction:column;gap:4px">
-        ${rows.map(e => `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#111111;border:1px solid rgba(255,255,255,.08);border-radius:6px">
-            <div style="width:3px;height:32px;background:${STATUS_COLORS[s]||'#38bdf8'};border-radius:2px;flex-shrink:0"></div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,.93);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</div>
-              <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:1px">${e.genre||''}</div>
-            </div>
-            ${e.rating ? `<span style="font-size:12px;font-weight:700;color:#fbbf24">★ ${e.rating}</span>` : ''}
-            ${e.progress ? `<span style="font-size:11px;color:rgba(255,255,255,.45)">${e.progress}</span>` : ''}
-          </div>`).join('')}
+    html += `
+      <div style="margin-bottom:36px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+          <span style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#38bdf8">◉ Media Collection</span>
+          <div style="flex:1;height:1px;background:rgba(56,189,248,.18)"></div>
+          <span style="font-size:11px;color:rgba(255,255,255,.4);font-weight:600">${mediaList.length} titles</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:20px">
+          ${statusOrder.map(st => {
+            const rows = byStatus[st];
+            if (!rows || !rows.length) return '';
+            const info = getStatusInfo(st);
+            return `
+              <div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                  <span style="width:8px;height:8px;border-radius:50%;background:${info.color};box-shadow:0 0 8px ${info.color}"></span>
+                  <span style="font-size:12px;font-weight:700;color:${info.color};text-transform:uppercase;letter-spacing:.5px">${info.label} (${rows.length})</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(270px, 1fr));gap:8px">
+                  ${rows.map(e => `
+                    <div class="pub-card" style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:#111115;border:1px solid rgba(255,255,255,.08);border-radius:8px">
+                      <div style="width:3px;height:34px;background:${info.color};border-radius:2px;flex-shrink:0"></div>
+                      <div style="flex:1;min-width:0">
+                        <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,.95);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(e.title)}">${esc(e.title)}</div>
+                        <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:2px;display:flex;align-items:center;gap:6px">
+                          ${e.genre ? `<span style="padding:1px 6px;background:rgba(255,255,255,.06);border-radius:4px">${esc(e.genre)}</span>` : ''}
+                          ${e.progress ? `<span>${esc(e.progress)}</span>` : ''}
+                        </div>
+                      </div>
+                      ${e.rating ? `<span style="font-size:12px;font-weight:700;color:#fbbf24;flex-shrink:0">★ ${e.rating}</span>` : ''}
+                    </div>`).join('')}
+                </div>
+              </div>`;
+          }).join('')}
         </div>
       </div>`;
+  }
+
+  // 2. Games Section
+  if ((_currentPublicFilter === 'all' || _currentPublicFilter === 'games') && gamesList.length) {
+    const byStatus = {};
+    gamesList.forEach(g => {
+      const st = g.status || 'watching';
+      if (!byStatus[st]) byStatus[st] = [];
+      byStatus[st].push(g);
     });
-    html += `</div>`;
+
+    const statusOrder = ['watching', 'completed', 'plan', 'on_hold', 'dropped'];
+
+    html += `
+      <div style="margin-bottom:36px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+          <span style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#f59e0b">◈ Games Collection</span>
+          <div style="flex:1;height:1px;background:rgba(245,158,11,.18)"></div>
+          <span style="font-size:11px;color:rgba(255,255,255,.4);font-weight:600">${gamesList.length} games</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:20px">
+          ${statusOrder.map(st => {
+            const rows = byStatus[st];
+            if (!rows || !rows.length) return '';
+            const info = getStatusInfo(st);
+            return `
+              <div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                  <span style="width:8px;height:8px;border-radius:50%;background:${info.color};box-shadow:0 0 8px ${info.color}"></span>
+                  <span style="font-size:12px;font-weight:700;color:${info.color};text-transform:uppercase;letter-spacing:.5px">${info.label} (${rows.length})</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(270px, 1fr));gap:8px">
+                  ${rows.map(g => `
+                    <div class="pub-card" style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:#111115;border:1px solid rgba(255,255,255,.08);border-radius:8px">
+                      <div style="width:3px;height:34px;background:${info.color};border-radius:2px;flex-shrink:0"></div>
+                      <div style="flex:1;min-width:0">
+                        <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,.95);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(g.title)}">${esc(g.title)}</div>
+                        <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:2px;display:flex;align-items:center;gap:6px">
+                          ${g.platform ? `<span style="padding:1px 6px;background:rgba(255,255,255,.06);border-radius:4px">${esc(g.platform)}</span>` : ''}
+                          ${g.totalHours ? `<span>${esc(g.totalHours)}h played</span>` : ''}
+                        </div>
+                      </div>
+                      ${g.rating ? `<span style="font-size:12px;font-weight:700;color:#fbbf24;flex-shrink:0">★ ${g.rating}</span>` : ''}
+                    </div>`).join('')}
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`;
   }
 
-  // Games section
-  if (sections.includes('games') && snap.games?.length) {
-    html += `<div style="margin-bottom:28px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#38bdf8;margin-bottom:12px;display:flex;align-items:center;gap:8px">
-        <span>◈ Games</span><div style="flex:1;height:1px;background:rgba(56,189,248,.2)"></div>
-        <span style="font-size:11px;color:rgba(255,255,255,.45)">${snap.games.length} entries</span>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:4px">
-      ${snap.games.map(g => `
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#111111;border:1px solid rgba(255,255,255,.08);border-radius:6px">
-          <div style="width:3px;height:32px;background:${STATUS_COLORS[g.status]||'#38bdf8'};border-radius:2px;flex-shrink:0"></div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,.93);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(g.title)}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.45)">${g.platform||''}</div>
-          </div>
-          ${g.rating ? `<span style="font-size:12px;font-weight:700;color:#fbbf24">★ ${g.rating}</span>` : ''}
-          ${g.totalHours ? `<span style="font-size:11px;color:rgba(255,255,255,.45)">${g.totalHours}h</span>` : ''}
-        </div>`).join('')}
-      </div>
-    </div>`;
-  }
+  // 3. Books Section
+  if ((_currentPublicFilter === 'all' || _currentPublicFilter === 'books') && booksList.length) {
+    const byStatus = {};
+    booksList.forEach(b => {
+      const st = b.status || 'watching';
+      if (!byStatus[st]) byStatus[st] = [];
+      byStatus[st].push(b);
+    });
 
-  // Books section
-  if (sections.includes('books') && snap.books?.length) {
-    html += `<div style="margin-bottom:28px">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#38bdf8;margin-bottom:12px;display:flex;align-items:center;gap:8px">
-        <span>◎ Books</span><div style="flex:1;height:1px;background:rgba(56,189,248,.2)"></div>
-        <span style="font-size:11px;color:rgba(255,255,255,.45)">${snap.books.length} entries</span>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:4px">
-      ${snap.books.map(b => `
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#111111;border:1px solid rgba(255,255,255,.08);border-radius:6px">
-          <div style="width:3px;height:32px;background:${STATUS_COLORS[b.status]||'#38bdf8'};border-radius:2px;flex-shrink:0"></div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,.93);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(b.title)}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.45)">${b.author||''}</div>
-          </div>
-          ${b.rating ? `<span style="font-size:12px;font-weight:700;color:#fbbf24">★ ${b.rating}</span>` : ''}
-        </div>`).join('')}
-      </div>
-    </div>`;
+    const statusOrder = ['watching', 'completed', 'plan', 'on_hold', 'dropped'];
+
+    html += `
+      <div style="margin-bottom:36px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+          <span style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#a78bfa">◎ Books Collection</span>
+          <div style="flex:1;height:1px;background:rgba(167,139,250,.18)"></div>
+          <span style="font-size:11px;color:rgba(255,255,255,.4);font-weight:600">${booksList.length} books</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:20px">
+          ${statusOrder.map(st => {
+            const rows = byStatus[st];
+            if (!rows || !rows.length) return '';
+            const info = getStatusInfo(st);
+            return `
+              <div>
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                  <span style="width:8px;height:8px;border-radius:50%;background:${info.color};box-shadow:0 0 8px ${info.color}"></span>
+                  <span style="font-size:12px;font-weight:700;color:${info.color};text-transform:uppercase;letter-spacing:.5px">${info.label} (${rows.length})</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(270px, 1fr));gap:8px">
+                  ${rows.map(b => `
+                    <div class="pub-card" style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:#111115;border:1px solid rgba(255,255,255,.08);border-radius:8px">
+                      <div style="width:3px;height:34px;background:${info.color};border-radius:2px;flex-shrink:0"></div>
+                      <div style="flex:1;min-width:0">
+                        <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,.95);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(b.title)}">${esc(b.title)}</div>
+                        <div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:2px;display:flex;align-items:center;gap:6px">
+                          ${b.author ? `<span style="padding:1px 6px;background:rgba(255,255,255,.06);border-radius:4px">${esc(b.author)}</span>` : ''}
+                          ${b.progress ? `<span>${esc(b.progress)}</span>` : ''}
+                        </div>
+                      </div>
+                      ${b.rating ? `<span style="font-size:12px;font-weight:700;color:#fbbf24;flex-shrink:0">★ ${b.rating}</span>` : ''}
+                    </div>`).join('')}
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`;
   }
 
   el.innerHTML = html;
+
+  window.setPublicFilter = function(filter) {
+    _currentPublicFilter = filter;
+    renderPublicContent(snap);
+  };
 }
 
 // ── Generate / Update public snapshot ──
-async function generatePublicLink(sections) {
-  if (!_isConnected()) { showAlert('Please connect Google Drive first.', {title:'Drive Required'}); return; }
-
+export async function generatePublicLink(sections) {
   const shareSettings = loadShareSettings();
 
-  // Build snapshot — exclude private/locked data
+  const gbyidFn = window.gbyid || (id => (window.GENRES || []).find(g => g.id === id));
+  const entryStatsFn = window.entryStats || (e => ({ cur: e.ep_cur || 0, tot: e.ep_tot || 0 }));
+
+  const currentUser = (typeof window.getCurrentUser === 'function') ? window.getCurrentUser() : null;
+  const owner = currentUser?.name || (currentUser?.email ? currentUser.email.split('@')[0] : 'Aether Codex User');
+
   const snap = {
-    owner: 'Aether Codex User',
+    owner,
     generatedAt: Date.now(),
     sections,
-    media: sections.includes('media') ? DATA.filter(e=>e.status!=='dropped').map(e => ({
-      title: e.title, status: e.status, rating: e.rating,
-      genre: gbyid(e.genreId)?.name,
-      progress: (() => { const s=entryStats(e); return s.tot?`${s.cur}/${s.tot}ep`:null; })()
+    media: sections.includes('media') && Array.isArray(window.DATA) ? window.DATA.filter(e => e.status !== 'dropped').map(e => ({
+      title: e.title,
+      status: e.status,
+      rating: e.score || e.rating || null,
+      genre: gbyidFn(e.genre_id || e.genreId)?.name || '',
+      progress: (() => { const s = entryStatsFn(e); return s.tot ? `${s.cur}/${s.tot}ep` : (s.cur ? `${s.cur}ep` : null); })()
     })) : [],
-    games: sections.includes('games') ? window.GDATA.filter(g=>!g.adult18).map(g => ({
-      title: g.title, status: g.status, rating: g.rating,
-      platform: PLAT_LABEL[g.platform], totalHours: g.totalHours
+    games: sections.includes('games') && Array.isArray(window.GDATA) ? window.GDATA.filter(g => !g.adult18).map(g => ({
+      title: g.title,
+      status: g.status,
+      rating: g.rating || null,
+      platform: PLAT_LABEL[g.platform] || g.platform || 'PC',
+      totalHours: g.hours_played || g.totalHours || null,
     })) : [],
-    books: sections.includes('books') ? window.BDATA.map(b => ({
-      title: b.title, status: b.status, rating: b.rating, author: b.author
+    books: sections.includes('books') && Array.isArray(window.BDATA) ? window.BDATA.map(b => ({
+      title: b.title,
+      status: b.status,
+      rating: b.rating || null,
+      author: b.author || '',
+      progress: b.progress_tot ? `${b.progress_cur || 0}/${b.progress_tot}` : (b.progress_cur ? `${b.progress_cur}` : null)
     })) : [],
   };
 
-  try {
-    const folderId = await _getOrCreateFolder(); if (!folderId) throw new Error('No Drive folder');
+  // 1. Primary Path: Cloudflare Server
+  const token = typeof window.getAccessToken === 'function' ? window.getAccessToken() : null;
+  if (token && window.publicShareApi) {
+    try {
+      const res = await window.publicShareApi.publish(snap, shareSettings.shareId || shareSettings.fileId);
+      const shareId = res.shareId;
+      shareSettings.shareId = shareId;
+      shareSettings.fileId = shareId;
+      shareSettings.sections = sections;
+      shareSettings.enabled = true;
+      saveShareSettings(shareSettings);
+      return `${location.origin}/?share=${encodeURIComponent(shareId)}`;
+    } catch (e) {
+      console.warn('[Public Share] Server publish error:', e);
+      if (!window._isConnected || !window._isConnected()) {
+        throw new Error(e.message || 'Failed to publish to server');
+      }
+    }
+  }
+
+  // 2. Fallback Path: Google Drive if connected
+  if (typeof window._isConnected === 'function' && window._isConnected()) {
+    const getFolder = window._getOrCreateFolder;
+    const reqFn = window._req;
+    if (!getFolder || !reqFn) throw new Error('Drive integration not initialized');
+    const folderId = await getFolder();
+    if (!folderId) throw new Error('No Drive folder available');
     const payload = JSON.stringify(snap);
     let fileId = shareSettings.fileId;
-
     if (fileId) {
-      // Update existing file
-      const r = await _req(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-        method:'PATCH', headers:{'Content-Type':'application/json'}, body:payload
+      const r = await reqFn(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: payload
       });
-      if (!r?.ok) fileId = null; // File gone, create new
+      if (!r?.ok) fileId = null;
     }
-
     if (!fileId) {
-      // Create new file
-      const cr = await _req('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method:'POST',
-        headers:{'Content-Type':'multipart/related; boundary=boundary'},
-        body:`--boundary\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({name:'AetherCodex_public.json',parents:[folderId]})}\r\n--boundary\r\nContent-Type: application/json\r\n\r\n${payload}\r\n--boundary--`
+      const cr = await reqFn('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'multipart/related; boundary=boundary' },
+        body: `--boundary\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({ name: 'AetherCodex_public.json', parents: [folderId] })}\r\n--boundary\r\nContent-Type: application/json\r\n\r\n${payload}\r\n--boundary--`
       });
-      if (!cr?.ok) throw new Error('Failed to create file');
+      if (!cr?.ok) throw new Error('Failed to create public snapshot file on Drive');
       fileId = (await cr.json()).id;
     }
-
-    // Make file publicly readable
-    await _req(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({role:'reader', type:'anyone'})
+    await reqFn(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'reader', type: 'anyone' })
     });
-
     shareSettings.fileId = fileId;
+    shareSettings.shareId = fileId;
     shareSettings.sections = sections;
     shareSettings.enabled = true;
     saveShareSettings(shareSettings);
-
-    const publicUrl = `${location.origin}/?share=${fileId}`;
-    return publicUrl;
-  } catch(e) {
-    throw new Error('Failed to generate link: ' + e.message);
+    return `${location.origin}/?share=${encodeURIComponent(fileId)}`;
   }
+
+  // 3. Neither account connected
+  if (typeof window.showAlert === 'function') {
+    window.showAlert('Please sign in to your Aether Codex user account (under Settings → Cloud DB) to publish a public list link.', { title: 'Sign In Required' });
+  }
+  throw new Error('Please sign in to your account first.');
 }
 
-async function revokePublicLink() {
+export async function revokePublicLink() {
   const shareSettings = loadShareSettings();
-  if (!shareSettings.fileId) return;
-  // Delete permissions (make private again)
-  await _req(`https://www.googleapis.com/drive/v3/files/${shareSettings.fileId}/permissions/anyoneWithLink`, {
-    method:'DELETE'
-  });
+  const token = typeof window.getAccessToken === 'function' ? window.getAccessToken() : null;
+
+  if (token && window.publicShareApi) {
+    try {
+      await window.publicShareApi.revoke();
+    } catch (e) {
+      console.warn('[Public Share] Cloudflare revoke error:', e);
+    }
+  }
+
+  if (shareSettings.fileId && typeof window._isConnected === 'function' && window._isConnected() && window._req) {
+    try {
+      await window._req(`https://www.googleapis.com/drive/v3/files/${shareSettings.fileId}/permissions/anyoneWithLink`, {
+        method: 'DELETE'
+      });
+    } catch (e) {}
+  }
+
   shareSettings.fileId = null;
+  shareSettings.shareId = null;
   shareSettings.enabled = false;
   saveShareSettings(shareSettings);
 }
 
 // ── Settings UI for public share ──
-function renderSettingsPublicShare(el) {
+export function renderSettingsPublicShare(el) {
   const s = loadShareSettings();
-  const publicUrl = s.fileId ? `${location.origin}/?share=${s.fileId}` : null;
+  const shareId = s.shareId || s.fileId;
+  const publicUrl = shareId ? `${location.origin}/?share=${encodeURIComponent(shareId)}` : null;
+
   const sectionOpts = [
-    {id:'media', label:'Media', color:'#e879a0'},
-    {id:'games', label:'Games', color:'#38bdf8'},
-    {id:'books', label:'Books', color:'#a78bfa'},
+    { id: 'media', label: 'Media', color: '#38bdf8', icon: '◉' },
+    { id: 'games', label: 'Games', color: '#f59e0b', icon: '◈' },
+    { id: 'books', label: 'Books', color: '#a78bfa', icon: '◎' },
   ];
 
+  // Auto-sync status with server in background if logged in
+  if (typeof window.getAccessToken === 'function' && window.getAccessToken() && window.publicShareApi) {
+    window.publicShareApi.getStatus().then(res => {
+      if (res && res.active && res.shareId && res.shareId !== shareId) {
+        s.shareId = res.shareId;
+        s.fileId = res.shareId;
+        s.sections = res.sections || s.sections;
+        s.enabled = true;
+        saveShareSettings(s);
+        const curEl = document.getElementById('settings-body');
+        if (curEl && window.SETTINGS_TAB === 'share') renderSettingsPublicShare(curEl);
+      } else if (res && !res.active && shareId && s.enabled) {
+        // If server revoked it
+        s.shareId = null;
+        s.fileId = null;
+        s.enabled = false;
+        saveShareSettings(s);
+        const curEl = document.getElementById('settings-body');
+        if (curEl && window.SETTINGS_TAB === 'share') renderSettingsPublicShare(curEl);
+      }
+    }).catch(() => {});
+  }
+
   el.innerHTML = `
-    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden">
-      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
-        <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:2px">🔗 Public List Link</div>
-        <div style="font-size:12px;color:var(--mu)">Share a read-only snapshot of your lists</div>
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;box-shadow:var(--sh)">
+      <div style="padding:16px;border-bottom:1px solid var(--brd)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+          <span style="font-size:16px;color:var(--ac)">🔗</span>
+          <div style="font-size:14px;font-weight:700;color:var(--tx)">Public List Link</div>
+        </div>
+        <div style="font-size:12px;color:var(--mu)">Share a read-only live snapshot of your library with anyone — no login required to view.</div>
       </div>
-      <div style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+      <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
         <div>
-          <div style="font-size:12px;font-weight:600;color:var(--tx);margin-bottom:8px">Include sections:</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div style="font-size:12px;font-weight:600;color:var(--tx);margin-bottom:8px">Include Sections in Public List:</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
             ${sectionOpts.map(o => `
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--tx2)">
-                <input type="checkbox" id="pub-sec-${o.id}" ${(s.sections||[]).includes(o.id)?'checked':''}
+              <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--tx);background:var(--surf2);border:1px solid var(--brd);border-radius:6px;padding:6px 12px;transition:all .15s">
+                <input type="checkbox" id="pub-sec-${o.id}" ${(s.sections || []).includes(o.id) ? 'checked' : ''}
                   style="width:14px;height:14px;cursor:pointer;accent-color:${o.color}">
-                ${o.label}
+                <span style="color:${o.color}">${o.icon}</span> ${o.label}
               </label>`).join('')}
           </div>
         </div>
+
         ${publicUrl ? `
-          <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:5px;padding:10px 12px">
-            <div style="font-size:11px;color:var(--mu);margin-bottom:4px">Public URL</div>
-            <div style="font-size:12px;color:var(--ac);word-break:break-all;margin-bottom:8px">${publicUrl}</div>
-            <button onclick="navigator.clipboard.writeText('${publicUrl}').then(()=>toast('✓ Link copied','var(--cd)'))"
-              style="background:rgba(var(--ac-rgb),.12);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3);border-radius:4px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">Copy Link</button>
+          <div style="background:var(--surf2);border:1px solid rgba(var(--ac-rgb),.25);border-radius:8px;padding:12px 14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--ac)">✓ Live Public URL</span>
+              <span style="font-size:11px;color:var(--mu)">Active</span>
+            </div>
+            <div style="font-size:12px;color:var(--tx);word-break:break-all;margin-bottom:12px;padding:8px 10px;background:var(--surf3);border:1px solid var(--brd);border-radius:5px;font-family:monospace;user-select:all">
+              ${esc(publicUrl)}
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button onclick="navigator.clipboard.writeText('${esc(publicUrl)}').then(()=>{ if(window.toast) toast('✓ Public link copied to clipboard!','var(--cd)'); })"
+                style="background:rgba(var(--ac-rgb),.15);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.35);border-radius:5px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">
+                📋 Copy Link
+              </button>
+              <a href="${esc(publicUrl)}" target="_blank"
+                style="background:var(--surf3);color:var(--tx);border:1px solid var(--brd);border-radius:5px;padding:6px 12px;font-size:12px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:4px">
+                Open View ↗
+              </a>
+            </div>
           </div>` : ''}
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button onclick="handleGeneratePublicLink()" style="background:var(--ac);color:#000;border:none;border-radius:5px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer">
-            ${publicUrl ? '↻ Update Link' : '+ Generate Link'}
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <button onclick="handleGeneratePublicLink()"
+            style="background:var(--ac);color:#000;border:none;border-radius:6px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+            ${publicUrl ? '↻ Update Snapshot' : '+ Generate Public Link'}
           </button>
-          ${publicUrl ? `<button onclick="handleRevokePublicLink()" style="background:rgba(251,113,133,.08);color:#fb7185;border:1px solid rgba(251,113,133,.2);border-radius:5px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer">Revoke Link</button>` : ''}
+          ${publicUrl ? `
+            <button onclick="handleRevokePublicLink()"
+              style="background:rgba(251,113,133,.08);color:#fb7185;border:1px solid rgba(251,113,133,.22);border-radius:6px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer">
+              Revoke Link
+            </button>` : ''}
         </div>
-        <div style="font-size:11px;color:var(--mu)">Note: 18+ games and private vault links are never included. Anyone with the link can view your list — no login required.</div>
+
+        <div style="font-size:11px;color:var(--mu);line-height:1.5;padding-top:4px">
+          🔒 <b>Privacy Protection:</b> Private vault links, sensitive credentials, and 18+ items are strictly excluded from public snapshots. Anyone with the URL can view your chosen lists without needing an account.
+        </div>
       </div>
     </div>`;
 }
 
-async function handleGeneratePublicLink() {
-  const sections = ['media','games','books'].filter(id => document.getElementById(`pub-sec-${id}`)?.checked);
-  if (!sections.length) { showAlert('Select at least one section to share.', {title:'No Sections'}); return; }
-  toast('Generating public link...', 'var(--ch)');
+export async function handleGeneratePublicLink() {
+  const sections = ['media', 'games', 'books'].filter(id => document.getElementById(`pub-sec-${id}`)?.checked);
+  if (!sections.length) {
+    if (typeof window.showAlert === 'function') {
+      window.showAlert('Please select at least one section (Media, Games, or Books) to include in your public share.', { title: 'Select Sections' });
+    }
+    return;
+  }
+  if (typeof window.toast === 'function') window.toast('Publishing public list...', 'var(--ch)');
   try {
     const url = await generatePublicLink(sections);
-    toast('✓ Public link generated!', 'var(--cd)');
-    renderSettingsPublicShare(document.getElementById('settings-body'));
-  } catch(e) {
-    toast('Failed: ' + e.message, 'var(--err)');
+    if (typeof window.toast === 'function') window.toast('✓ Public link updated and live!', 'var(--cd)');
+    const el = document.getElementById('settings-body');
+    if (el) renderSettingsPublicShare(el);
+  } catch (e) {
+    console.error('[Public Share] Generate error:', e);
+    if (typeof window.toast === 'function') window.toast(e.message || 'Failed to generate link', 'var(--err)');
   }
 }
 
-async function handleRevokePublicLink() {
-  showConfirm('Revoke your public link? Anyone with the link will no longer be able to view your list.', async () => {
-    await revokePublicLink();
-    toast('Public link revoked');
-    renderSettingsPublicShare(document.getElementById('settings-body'));
-  }, {title:'Revoke Link?', okLabel:'Revoke', danger:false});
+export async function handleRevokePublicLink() {
+  const action = async () => {
+    try {
+      await revokePublicLink();
+      if (typeof window.toast === 'function') window.toast('Public link revoked successfully');
+      const el = document.getElementById('settings-body');
+      if (el) renderSettingsPublicShare(el);
+    } catch (e) {
+      if (typeof window.toast === 'function') window.toast('Revoke error: ' + e.message, 'var(--err)');
+    }
+  };
+
+  if (typeof window.showConfirm === 'function') {
+    window.showConfirm('Revoke your public link? Anyone visiting the link will no longer be able to view your list.', action, {
+      title: 'Revoke Public Link?',
+      okLabel: 'Revoke',
+      danger: true
+    });
+  } else {
+    if (confirm('Revoke your public link? Anyone visiting the link will no longer be able to view your list.')) {
+      action();
+    }
+  }
 }
 
-// ── Register all public/share functions as globals ───────────────────────
+// ── Register public share globals for inline HTML event handlers ──
 Object.assign(window, {
   checkPublicView,
   renderPublicView,

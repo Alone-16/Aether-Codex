@@ -319,6 +319,5 @@ export const SECTION_META = {
   vault   : { title:'Link Vault',       label:'Vault'    },
   log     : { title:'Activity Log',     label:'Log'      },
   notes   : { title:'Notes Codex',      label:'Notes'    },
-  tools   : { title:'The Aether Codex', label:'Tools'    },
   settings: { title:'Settings',         label:'Settings' },
 };

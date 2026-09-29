@@ -10,10 +10,10 @@ import {
 // ═══════════════════════════════════════════════════════
 const SETTINGS_KEY = 'ac_v4_settings';
 
-const ALL_SECTION_IDS = ['home','media','games','books','music','vault','tools','notes','log'];
+const ALL_SECTION_IDS = ['home','media','games','books','music','vault','notes','log'];
 
 function _defaultSectionEnabled() {
-  return { home:true, media:true, games:true, books:true, music:true, vault:true, tools:true, notes:true, log:true };
+  return { home:true, media:true, games:true, books:true, music:true, vault:true, notes:true, log:true };
 }
 
 function loadSettings() {
@@ -128,7 +128,6 @@ function rebuildSidebar() {
     books: { icon:'◎', label:'Books' },
     music: { icon:'♪', label:'Music' },
     vault: { icon:'◈', label:'Vault' },
-    tools: { icon:'⬇', label:'Tools' },
     notes: { icon:'✎', label:'Notes' },
     log:   { icon:'◎', label:'Log' },
   };
@@ -283,7 +282,6 @@ function renderSettingsSections(el) {
     music: { icon:'♪', color:'var(--ac)', desc:'Music library & YouTube sync' },
     vault: { icon:'🔗', color:'var(--ac)', desc:'Save and manage links privately' },
     log:   { icon:'◎', color:'var(--ac)', desc:'Activity timeline and recent changes' },
-    tools: { icon:'⬇', color:'var(--ac)', desc:'Instagram downloader & utilities' },
     notes: { icon:'✎', color:'var(--ac)', desc:'Personal notes, checklists & ideas' },
   };
 
