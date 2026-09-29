@@ -109,8 +109,9 @@ export async function apiReq(endpoint, opts = {}, retries = 3, backoffMs = 500) 
     try {
       let res = await fetch(`${API_BASE}${endpoint}`, { ...opts, headers });
 
-      // Handle 401 token refresh on first attempt (skip for auth routes to prevent loops)
-      if (res.status === 401 && attempt === 1 && !endpoint.includes('/v1/auth/') && getRefreshToken()) {
+      // Handle 401 token refresh on first attempt (skip for unauthenticated auth routes to prevent loops)
+      const isUnauthRoute = ['/v1/auth/login', '/v1/auth/register', '/v1/auth/refresh'].includes(endpoint);
+      if (res.status === 401 && attempt === 1 && !isUnauthRoute && getRefreshToken()) {
         const refreshed = await refreshAuth();
         if (refreshed) {
           token = getAccessToken();
@@ -216,6 +217,13 @@ export async function logoutAllSessions() {
 
 export async function getSessions() {
   return await apiReq('/v1/auth/sessions');
+}
+
+export async function updateProfileName(name) {
+  return await apiReq('/v1/auth/me', {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  });
 }
 
 // ── MEDIA RESOURCE APIS ────────────────────────────────────────────

@@ -203,6 +203,27 @@ export async function handleAuthenticatedAuth(request, env, ctx, requestId, path
     return successResponse(user, requestId);
   }
 
+  // ── PATCH or PUT /v1/auth/me — Update Display Name / Profile ──
+  if ((method === 'PATCH' || method === 'PUT') && pathname === '/v1/auth/me') {
+    let body = {};
+    try { body = await request.json(); } catch (e) {}
+    const { name } = body;
+    if (typeof name !== 'string') {
+      return errorResponse('INVALID_INPUT', 'Name must be a string', requestId, 400);
+    }
+    const cleanName = name.trim();
+    if (!cleanName) {
+      return errorResponse('INVALID_INPUT', 'Name cannot be empty', requestId, 400);
+    }
+    if (cleanName.length > 100) {
+      return errorResponse('INVALID_INPUT', 'Name must be 100 characters or fewer', requestId, 400);
+    }
+
+    await env.DB.prepare('UPDATE users SET name = ? WHERE id = ?;').bind(cleanName, claims.sub).run();
+    const updatedUser = await env.DB.prepare('SELECT id, email, name, picture, created_at FROM users WHERE id = ?;').bind(claims.sub).first();
+    return successResponse(updatedUser, requestId);
+  }
+
   // ── GET /v1/auth/sessions — List Active Devices ──
   if (method === 'GET' && pathname === '/v1/auth/sessions') {
     const sessions = await getUserRefreshTokens(env.DB, claims.sub);

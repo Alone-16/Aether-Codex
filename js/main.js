@@ -95,7 +95,13 @@ import {
 
 window.publicShareApi = publicShareApi;
 
-import { initServerAuth, updateNavbarUserUI } from './shared/auth_ui.js';
+import { initServerAuth, updateNavbarUserUI, promptEditName, updateUserName, openAccountModal } from './shared/auth_ui.js';
+
+Object.assign(window, {
+  promptEditName,
+  updateUserName,
+  openAccountModal,
+});
 
 // ── Shared extras ─────────────────────────────────────────────────
 await import('./shared/extras.js').catch(e =>

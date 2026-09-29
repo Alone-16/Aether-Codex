@@ -2,8 +2,9 @@
 //  js/shared/auth_ui.js — Account Sign In / Sign Up & Navbar UI
 // ═══════════════════════════════════════════════════════════════════
 
-import { loginServerAuth, registerUser, logout, logoutAllSessions, getAccessToken } from './api.js';
+import { loginServerAuth, registerUser, logout, logoutAllSessions, getAccessToken, updateProfileName } from './api.js';
 import { toast, showAlert, showConfirm, closePanel } from './ui.js';
+import { esc } from './utils.js';
 
 let currentUser = null;
 
@@ -29,12 +30,24 @@ export function getCurrentUser() {
           currentUser = {
             id: payload.sub,
             email: payload.email || (payload.sub && payload.sub.includes('@') ? payload.sub : ''),
-            name: payload.name || (payload.email ? payload.email.split('@')[0] : 'User')
+            name: payload.name || localStorage.getItem('ac_display_name') || (payload.email ? payload.email.split('@')[0] : 'User')
           };
         }
       } catch (e) {}
     }
   }
+
+  // Also support guest / local user with a saved display name
+  if (!currentUser) {
+    const localName = localStorage.getItem('ac_display_name') || localStorage.getItem('ac_local_name');
+    if (localName && localName.trim()) {
+      currentUser = {
+        name: localName.trim(),
+        isGuest: true
+      };
+    }
+  }
+
   return currentUser;
 }
 
@@ -43,23 +56,137 @@ export function setCurrentUser(user) {
   if (user) {
     sessionStorage.setItem('ac_v5_user_profile', JSON.stringify(user));
     localStorage.setItem('ac_v5_user_profile', JSON.stringify(user));
+    if (user.name) {
+      localStorage.setItem('ac_display_name', user.name);
+    }
   } else {
     sessionStorage.removeItem('ac_v5_user_profile');
     localStorage.removeItem('ac_v5_user_profile');
+    localStorage.removeItem('ac_display_name');
   }
   updateNavbarUserUI();
 }
 
 export async function initServerAuth() {
-  // If tokens do not exist, clear user profile as well
   if (!getAccessToken()) {
-    currentUser = null;
-    sessionStorage.removeItem('ac_v5_user_profile');
-    localStorage.removeItem('ac_v5_user_profile');
+    const localName = localStorage.getItem('ac_display_name') || localStorage.getItem('ac_local_name');
+    if (localName && localName.trim()) {
+      currentUser = { name: localName.trim(), isGuest: true };
+    } else {
+      currentUser = null;
+      sessionStorage.removeItem('ac_v5_user_profile');
+      localStorage.removeItem('ac_v5_user_profile');
+    }
   } else {
     getCurrentUser();
   }
   updateNavbarUserUI();
+}
+
+export async function updateUserName(newName) {
+  const cleanName = (newName || '').trim();
+  if (!cleanName) {
+    showAlert('Please enter a valid display name.', { title: 'Invalid Name' });
+    return false;
+  }
+  if (cleanName.length > 100) {
+    showAlert('Name must be 100 characters or fewer.', { title: 'Name Too Long' });
+    return false;
+  }
+
+  // Always store locally first
+  localStorage.setItem('ac_display_name', cleanName);
+
+  const token = getAccessToken();
+  let serverUpdated = false;
+
+  if (token) {
+    try {
+      const updatedUser = await updateProfileName(cleanName);
+      if (updatedUser) {
+        currentUser = { ...(currentUser || {}), ...updatedUser, name: cleanName };
+        sessionStorage.setItem('ac_v5_user_profile', JSON.stringify(currentUser));
+        localStorage.setItem('ac_v5_user_profile', JSON.stringify(currentUser));
+        serverUpdated = true;
+      }
+    } catch (err) {
+      console.warn('[Auth UI] Cloud profile name update error:', err.message);
+      // Still update local state if cloud request failed (e.g. offline)
+      currentUser = { ...(currentUser || {}), name: cleanName };
+      sessionStorage.setItem('ac_v5_user_profile', JSON.stringify(currentUser));
+      localStorage.setItem('ac_v5_user_profile', JSON.stringify(currentUser));
+      toast(`Name saved locally (cloud sync offline)`, '#fbbf24', 4000);
+      updateNavbarUserUI();
+      if (typeof window.renderSettingsBody === 'function' && window.CURRENT === 'settings') {
+        window.renderSettingsBody();
+      }
+      return true;
+    }
+  } else {
+    // Guest mode
+    currentUser = { ...(currentUser || {}), name: cleanName, isGuest: true };
+    sessionStorage.setItem('ac_v5_user_profile', JSON.stringify(currentUser));
+    localStorage.setItem('ac_v5_user_profile', JSON.stringify(currentUser));
+  }
+
+  updateNavbarUserUI();
+
+  // If settings section is open, re-render it to update name card
+  if (typeof window.renderSettingsBody === 'function' && window.CURRENT === 'settings') {
+    window.renderSettingsBody();
+  }
+
+  toast(serverUpdated ? `Display name updated to "${cleanName}"` : `Name set to "${cleanName}"`, '#4ade80');
+  return true;
+}
+
+export function promptEditName() {
+  const user = getCurrentUser();
+  const currentName = user?.name || localStorage.getItem('ac_display_name') || '';
+
+  const el = document.createElement('div');
+  el.className = 'modal-overlay';
+  el.innerHTML = `
+    <div class="modal-box" style="max-width:380px">
+      <div class="modal-title" style="display:flex;align-items:center;gap:8px">
+        <span>✏</span> Change Display Name
+      </div>
+      <div class="modal-msg" style="margin-bottom:12px;font-size:12px;color:var(--tx2)">
+        Enter the name you'd like displayed across Aether Codex and public shares.
+      </div>
+      <div style="margin-bottom:16px">
+        <input class="fin" id="quick-edit-name-input" type="text" value="${esc(currentName)}" placeholder="e.g. Alex, Shadow, Neo" maxlength="100" style="width:100%;box-sizing:border-box">
+      </div>
+      <div class="modal-btns">
+        <button class="modal-btn cancel" id="quick-edit-name-cancel">Cancel</button>
+        <button class="modal-btn confirm" id="quick-edit-name-save" style="background:var(--ac);color:#000;font-weight:700">Save Name</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(el);
+  const input = el.querySelector('#quick-edit-name-input');
+  const cancelBtn = el.querySelector('#quick-edit-name-cancel');
+  const saveBtn = el.querySelector('#quick-edit-name-save');
+
+  const doSave = async () => {
+    const val = input.value.trim();
+    if (!val) {
+      toast('Please enter a valid name', '#fb7185');
+      input.focus();
+      return;
+    }
+    el.remove();
+    await updateUserName(val);
+  };
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doSave();
+    if (e.key === 'Escape') el.remove();
+  });
+  saveBtn.onclick = doSave;
+  cancelBtn.onclick = () => el.remove();
+  el.addEventListener('click', (e) => { if (e.target === el) el.remove(); });
+  setTimeout(() => { input.focus(); input.select(); }, 60);
 }
 
 export function onAuthSessionExpired() {
@@ -183,6 +310,8 @@ export function promptServerSignUp() {
   if (poverlay) poverlay.classList.add('show');
   if (content) content.classList.add('pushed');
 
+  const guestName = (getCurrentUser()?.name) || localStorage.getItem('ac_display_name') || '';
+
   panelInner.innerHTML = `
     <div class="ph">
       <div class="ph-title">Create Account</div>
@@ -194,7 +323,7 @@ export function promptServerSignUp() {
       </div>
       <div class="fg">
         <label class="flbl">Display Name</label>
-        <input class="fin" id="reg-name" type="text" placeholder="Your Name" autofocus>
+        <input class="fin" id="reg-name" type="text" placeholder="Your Name" value="${esc(guestName)}" ${guestName ? '' : 'autofocus'}>
       </div>
       <div class="fg">
         <label class="flbl">Email Address *</label>
@@ -268,46 +397,70 @@ export function updateNavbarUserUI() {
   const mobContainer = document.getElementById('mob-user-auth-wrap');
 
   const user = getCurrentUser();
-  if (user && (user.email || user.name || user.id)) {
-    const userEmail = user.email || (user.id && user.id.includes('@') ? user.id : '');
-    const userName = user.name || (userEmail ? userEmail.split('@')[0] : 'Account');
-    const initial = (userName || userEmail || 'A').charAt(0).toUpperCase();
-    const displayName = userName ? userName.split(' ')[0] : 'Account';
+  const isLoggedIn = !!(user && (user.email || (user.id && !user.isGuest && !user.id.startsWith('guest_'))));
+  const userEmail = user?.email || '';
+  const userName = user?.name || (userEmail ? userEmail.split('@')[0] : '');
+  const initial = (userName || userEmail || 'U').charAt(0).toUpperCase();
+  const displayName = userName || (userEmail ? userEmail.split('@')[0] : 'Profile');
 
-    if (container) {
+  if (container) {
+    if (isLoggedIn) {
       container.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="window.openAccountModal()" title="${userEmail || userName}">
+        <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="window.openAccountModal()" title="Account: ${userEmail || userName} (Click to edit name)">
           <div style="width:28px;height:28px;border-radius:50%;border:1px solid var(--ac);background:var(--surf2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700">${initial}</div>
           <span style="font-size:12px;font-weight:600;color:var(--tx)" class="mob-hide">${displayName}</span>
         </div>
       `;
-    }
-    if (mobContainer) {
-      mobContainer.innerHTML = `
-        <div class="mob-profile-card" onclick="if(typeof window.closeMob==='function')window.closeMob();window.openAccountModal();" title="Account Settings">
-          <div class="mob-profile-avatar">${initial}</div>
-          <div class="mob-profile-info">
-            <div class="mob-profile-name">${userName}</div>
-            ${userEmail ? `<div class="mob-profile-email">${userEmail}</div>` : ''}
+    } else if (userName) {
+      // Guest user with a custom display name
+      container.innerHTML = `
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="display:flex;align-items:center;gap:6px;cursor:pointer" onclick="window.openAccountModal()" title="Local Profile: ${userName} (Click to edit name)">
+            <div style="width:26px;height:26px;border-radius:50%;border:1px solid var(--ac);background:var(--surf2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">${initial}</div>
+            <span style="font-size:12px;font-weight:600;color:var(--tx)" class="mob-hide">${displayName}</span>
           </div>
-          <span class="mob-profile-gear">⚙</span>
+          <button class="nb-btn" onclick="window.promptServerSignIn()" style="font-size:10px;font-weight:700;padding:3px 7px;background:transparent;color:var(--tx2);border:1px solid var(--brd)">Sign In</button>
         </div>
       `;
-    }
-  } else {
-    if (container) {
+    } else {
+      // Guest without name set yet
       container.innerHTML = `
         <div style="display:flex;gap:6px;align-items:center">
+          <button class="nb-btn" onclick="window.openAccountModal()" title="Edit Name & Profile" style="font-size:11px;font-weight:600;padding:4px 8px;background:var(--surf2);color:var(--tx);border:1px solid var(--brd);display:flex;align-items:center;gap:4px">
+            <span>👤</span><span class="mob-hide">Set Name</span>
+          </button>
           <button class="nb-btn" onclick="window.promptServerSignIn()" style="font-size:11px;font-weight:700;padding:4px 10px;background:transparent;color:var(--ac);border:1px solid var(--ac)">Sign In</button>
           <button class="nb-btn" onclick="window.promptServerSignUp()" style="font-size:11px;font-weight:700;padding:4px 10px;background:var(--ac);color:#000;border:none">Sign Up</button>
         </div>
       `;
     }
-    if (mobContainer) {
+  }
+
+  if (mobContainer) {
+    if (isLoggedIn) {
       mobContainer.innerHTML = `
-        <div style="display:flex;gap:8px;padding:6px 0;margin-bottom:4px">
-          <button onclick="if(typeof window.closeMob==='function')window.closeMob();window.promptServerSignIn()" style="flex:1;height:34px;border-radius:8px;background:transparent;color:var(--ac);border:1px solid var(--ac);font-size:12px;font-weight:700;cursor:pointer">Sign In</button>
-          <button onclick="if(typeof window.closeMob==='function')window.closeMob();window.promptServerSignUp()" style="flex:1;height:34px;border-radius:8px;background:var(--ac);color:#000;border:none;font-size:12px;font-weight:700;cursor:pointer">Sign Up</button>
+        <div class="mob-profile-card" onclick="if(typeof window.closeMob==='function')window.closeMob();window.openAccountModal();" title="Account Settings (Click to edit name)">
+          <div class="mob-profile-avatar">${initial}</div>
+          <div class="mob-profile-info">
+            <div class="mob-profile-name">${userName}</div>
+            <div class="mob-profile-email">${userEmail}</div>
+          </div>
+          <span class="mob-profile-gear">⚙</span>
+        </div>
+      `;
+    } else {
+      mobContainer.innerHTML = `
+        <div class="mob-profile-card" onclick="if(typeof window.closeMob==='function')window.closeMob();window.openAccountModal();" title="Local Profile (Tap to edit name)">
+          <div class="mob-profile-avatar">${userName ? initial : '👤'}</div>
+          <div class="mob-profile-info">
+            <div class="mob-profile-name">${userName || 'Guest User'}</div>
+            <div class="mob-profile-email" style="color:var(--ac)">Tap to edit name ✎</div>
+          </div>
+          <span class="mob-profile-gear" style="font-size:12px">✏</span>
+        </div>
+        <div style="display:flex;gap:8px;padding:4px 0 6px">
+          <button onclick="if(typeof window.closeMob==='function')window.closeMob();window.promptServerSignIn()" style="flex:1;height:32px;border-radius:8px;background:transparent;color:var(--ac);border:1px solid var(--ac);font-size:11px;font-weight:700;cursor:pointer">Sign In</button>
+          <button onclick="if(typeof window.closeMob==='function')window.closeMob();window.promptServerSignUp()" style="flex:1;height:32px;border-radius:8px;background:var(--ac);color:#000;border:none;font-size:11px;font-weight:700;cursor:pointer">Sign Up</button>
         </div>
       `;
     }
@@ -315,29 +468,73 @@ export function updateNavbarUserUI() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  ACCOUNT MODAL
+//  ACCOUNT & PROFILE MODAL
 // ═══════════════════════════════════════════════════════════════════
 export function openAccountModal() {
   const user = getCurrentUser();
-  if (!user) {
-    promptServerSignIn();
-    return;
-  }
+  const userEmail = (user && user.email) ? user.email : '';
+  const userName = (user && user.name) ? user.name : (userEmail ? userEmail.split('@')[0] : '');
+  const initial = (userName || userEmail || 'U').charAt(0).toUpperCase();
 
-  const userEmail = user.email || (user.id && user.id.includes('@') ? user.id : '');
-  const userName = user.name || (userEmail ? userEmail.split('@')[0] : 'User');
-  const initial = (userName || userEmail || 'A').charAt(0).toUpperCase();
   const html = `
     <div style="padding:20px;max-width:400px;margin:0 auto;color:var(--tx);font-family:var(--fd)">
-      <div style="text-align:center;margin-bottom:20px">
-        <div style="width:64px;height:64px;border-radius:50%;border:2px solid var(--ac);background:var(--surf2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;margin:0 auto 8px">${initial}</div>
-        <div style="font-size:16px;font-weight:700;color:var(--tx)">${userName}</div>
-        ${userEmail ? `<div style="font-size:12px;color:var(--mu);margin-top:2px">${userEmail}</div>` : ''}
+      <!-- Profile Header Card -->
+      <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:12px;padding:22px 18px;text-align:center;margin-bottom:16px;position:relative;overflow:hidden">
+        <div style="position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg, var(--ac), var(--ac2, var(--ac)))"></div>
+        <div id="account-modal-avatar" style="width:70px;height:70px;border-radius:50%;border:2px solid var(--ac);background:linear-gradient(135deg, rgba(var(--ac-rgb),0.25) 0%, rgba(var(--ac-rgb),0.05) 100%);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;margin:0 auto 12px;box-shadow:0 0 20px rgba(var(--ac-rgb),0.25)">${initial}</div>
+        <div id="account-modal-display-name" style="font-size:18px;font-weight:700;color:var(--tx);letter-spacing:0.3px">${esc(userName || 'Guest User')}</div>
+        ${userEmail ? `
+          <div style="font-size:12px;color:var(--mu);margin-top:3px">${esc(userEmail)}</div>
+          <div style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#4ade80;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:20px;padding:3px 10px;margin-top:10px">
+            <span>●</span> Cloud Account (Synced)
+          </div>
+        ` : `
+          <div style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--ac);background:rgba(var(--ac-rgb),0.1);border:1px solid rgba(var(--ac-rgb),0.25);border-radius:20px;padding:3px 10px;margin-top:8px">
+            <span>○</span> Local Profile (Guest Mode)
+          </div>
+        `}
       </div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <button onclick="window.handleLogoutCurrent()" style="padding:10px;border-radius:8px;background:var(--surf2);border:1px solid var(--brd);color:var(--tx);font-weight:600;cursor:pointer">Logout Current Session</button>
-        <button onclick="window.handleLogoutAllSessions()" style="padding:10px;border-radius:8px;background:rgba(251,113,133,0.15);border:1px solid rgba(251,113,133,0.3);color:#fb7185;font-weight:600;cursor:pointer">Logout All Devices</button>
+
+      <!-- Edit Display Name Section -->
+      <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:12px;padding:16px;margin-bottom:16px">
+        <label class="flbl" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span>Display Name</span>
+          <span style="font-size:10px;color:var(--mu);text-transform:none;letter-spacing:normal">Change anytime</span>
+        </label>
+        <div style="display:flex;gap:8px">
+          <input class="fin" id="account-name-input" type="text" value="${esc(userName)}" placeholder="Enter your display name" maxlength="100" style="flex:1" onkeydown="if(event.key==='Enter')window.saveAccountNameFromModal()">
+          <button class="btn-save" id="account-name-save-btn" onclick="window.saveAccountNameFromModal()" style="padding:0 18px;white-space:nowrap;font-size:12px;display:flex;align-items:center;justify-content:center;height:38px">
+            Save
+          </button>
+        </div>
+        <div id="account-name-status" style="font-size:11px;margin-top:6px;display:none"></div>
       </div>
+
+      <!-- Additional Actions (Cloud Sign In if guest, or Session Revoke if logged in) -->
+      ${userEmail ? `
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:0.8px;padding-left:2px">Session Management</div>
+          <button onclick="window.handleLogoutCurrent()" style="padding:10px 14px;border-radius:8px;background:var(--surf2);border:1px solid var(--brd);color:var(--tx);font-weight:600;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+            <span>Log Out Current Session</span>
+            <span style="color:var(--mu)">→</span>
+          </button>
+          <button onclick="window.handleLogoutAllSessions()" style="padding:10px 14px;border-radius:8px;background:rgba(251,113,133,0.1);border:1px solid rgba(251,113,133,0.25);color:#fb7185;font-weight:600;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+            <span>Log Out All Devices</span>
+            <span style="color:#fb7185">✕</span>
+          </button>
+        </div>
+      ` : `
+        <div style="background:rgba(var(--ac-rgb),0.04);border:1px solid rgba(var(--ac-rgb),0.2);border-radius:12px;padding:16px;text-align:center">
+          <div style="font-size:13px;font-weight:700;color:var(--tx);margin-bottom:4px">Cloud Synchronization</div>
+          <div style="font-size:12px;color:var(--mu);line-height:1.5;margin-bottom:14px">
+            Sign in or create an account to back up your collection and access it anywhere.
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="closePanel();window.promptServerSignIn()" style="flex:1;height:34px;border-radius:6px;background:transparent;color:var(--ac);border:1px solid var(--ac);font-size:12px;font-weight:700;cursor:pointer">Sign In</button>
+            <button onclick="closePanel();window.promptServerSignUp()" style="flex:1;height:34px;border-radius:6px;background:var(--ac);color:#000;border:none;font-size:12px;font-weight:700;cursor:pointer">Create Account</button>
+          </div>
+        </div>
+      `}
     </div>
   `;
 
@@ -349,7 +546,7 @@ export function openAccountModal() {
   if (panelInner && rpanel) {
     panelInner.innerHTML = `
       <div class="ph">
-        <div class="ph-title">Account Settings</div>
+        <div class="ph-title">Account & Profile</div>
         <button class="ph-close" onclick="closePanel()">✕</button>
       </div>
       ${html}
@@ -357,8 +554,76 @@ export function openAccountModal() {
     rpanel.classList.add('open');
     if (poverlay) poverlay.classList.add('show');
     if (content) content.classList.add('pushed');
+    setTimeout(() => {
+      const input = document.getElementById('account-name-input');
+      if (input) input.focus();
+    }, 100);
   } else {
-    alert(`Account: ${user.name} (${user.email})`);
+    promptEditName();
+  }
+}
+
+export async function saveAccountNameFromModal() {
+  const input = document.getElementById('account-name-input');
+  const btn = document.getElementById('account-name-save-btn');
+  const statusEl = document.getElementById('account-name-status');
+  if (!input) return;
+
+  const val = input.value.trim();
+  if (!val) {
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.style.color = '#fb7185';
+      statusEl.textContent = 'Name cannot be empty';
+    }
+    input.focus();
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+  }
+
+  try {
+    const ok = await updateUserName(val);
+    if (ok) {
+      const modalNameEl = document.getElementById('account-modal-display-name');
+      if (modalNameEl) modalNameEl.textContent = val;
+      const avatarEl = document.getElementById('account-modal-avatar');
+      if (avatarEl) avatarEl.textContent = val.charAt(0).toUpperCase();
+
+      if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.style.color = '#4ade80';
+        statusEl.textContent = '✓ Name saved successfully!';
+        setTimeout(() => { if (statusEl) statusEl.style.display = 'none'; }, 3000);
+      }
+      if (btn) {
+        btn.textContent = 'Saved ✓';
+        setTimeout(() => {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Save';
+          }
+        }, 1200);
+      }
+    } else {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Save';
+      }
+    }
+  } catch (err) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Save';
+    }
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.style.color = '#fb7185';
+      statusEl.textContent = err.message || 'Failed to save name';
+    }
   }
 }
 
@@ -388,6 +653,9 @@ if (typeof window !== 'undefined') {
     submitServerSignIn,
     submitServerSignUp,
     openAccountModal,
+    promptEditName,
+    updateUserName,
+    saveAccountNameFromModal,
     handleLogoutCurrent,
     handleLogoutAllSessions,
     getCurrentUser,

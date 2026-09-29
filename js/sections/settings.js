@@ -189,7 +189,7 @@ function rebuildSidebar() {
 // ─── SETTINGS RENDER ───
 function renderSettings(c) {
   const tabs       = ['sections','sync','storage','security','share'];
-  const tabLabels  = ['Sections','Cloud DB','Storage','Security','Public Share'];
+  const tabLabels  = ['Sections','Account & Sync','Storage','Security','Public Share'];
 
   c.innerHTML = `
     <div style="font-family:var(--fd);font-size:20px;font-weight:700;margin-bottom:20px;color:var(--tx)">⚙ Settings</div>
@@ -405,21 +405,38 @@ function renderSettingsSync(el) {
   const malAction = malConnected ? 'disconnectMALAccount()' : 'connectMALAccount()';
 
   const currentUser = (typeof window.getCurrentUser === 'function') ? window.getCurrentUser() : null;
+  const currentEmail = (currentUser && currentUser.email) ? currentUser.email : '';
+  const currentName = (currentUser && currentUser.name) ? currentUser.name : (currentEmail ? currentEmail.split('@')[0] : '');
+  const initial = (currentName || currentEmail || 'U').charAt(0).toUpperCase();
 
   el.innerHTML = `
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:14px">
       <div style="padding:14px 16px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <div style="font-size:14px;font-weight:700;color:var(--tx)">User Account</div>
-          <div style="font-size:12px;color:var(--tx2);margin-top:2px">${currentUser ? `Signed in as <b>${esc(currentUser.email)}</b>` : 'Not signed in'}</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:38px;height:38px;border-radius:50%;border:1.5px solid var(--ac);background:var(--surf2);color:var(--ac);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;flex-shrink:0">
+            ${initial}
+          </div>
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--tx)">${esc(currentName || (currentEmail ? currentEmail.split('@')[0] : 'Guest User'))}</div>
+            <div style="font-size:12px;color:var(--tx2);margin-top:2px">${currentEmail ? `Signed in as <b>${esc(currentEmail)}</b>` : 'Local Profile · Offline / Guest'}</div>
+          </div>
         </div>
-        <span style="font-size:11px;font-weight:700;color:${currentUser ? '#4ade80' : '#fb7185'};background:${currentUser ? 'rgba(74,222,128,.12)' : 'rgba(251,113,133,.12)'};border:1px solid ${currentUser ? 'rgba(74,222,128,.3)' : 'rgba(251,113,133,.3)'};border-radius:4px;padding:3px 8px">${currentUser ? '✓ Logged In' : '✗ Not Logged In'}</span>
+        <span style="font-size:11px;font-weight:700;color:${currentEmail ? '#4ade80' : 'var(--ac)'};background:${currentEmail ? 'rgba(74,222,128,.12)' : 'rgba(var(--ac-rgb),.12)'};border:1px solid ${currentEmail ? 'rgba(74,222,128,.3)' : 'rgba(var(--ac-rgb),.3)'};border-radius:4px;padding:3px 8px">${currentEmail ? '✓ Logged In' : '○ Local Mode'}</span>
       </div>
-      <div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
-        <div style="font-size:12px;color:var(--mu)">
-          ${currentUser ? `User profile: ${esc(currentUser.name || currentUser.email)}` : 'Sign in to synchronize your data across devices'}
+      <div style="padding:14px 16px;background:rgba(255,255,255,0.015);border-bottom:1px solid var(--brd)">
+        <label style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--tx2);display:block;margin-bottom:6px">Change Display Name</label>
+        <div style="display:flex;gap:8px;max-width:440px">
+          <input class="fin" id="settings-display-name-inp" type="text" value="${esc(currentName)}" placeholder="Enter your display name" maxlength="100" style="height:36px;font-size:13px" onkeydown="if(event.key==='Enter')window.saveSettingsName()">
+          <button id="settings-name-save-btn" onclick="window.saveSettingsName()" class="btn-save" style="padding:0 16px;white-space:nowrap;font-size:12px;height:36px;display:flex;align-items:center;justify-content:center">
+            Save Name
+          </button>
         </div>
-        ${currentUser ? `
+      </div>
+      <div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:12px;color:var(--mu)">
+          ${currentEmail ? 'Profile name is synced to your cloud account.' : 'Your name is saved locally. Sign in to sync across devices.'}
+        </div>
+        ${currentEmail ? `
           <button onclick="if(window.handleLogoutCurrent)window.handleLogoutCurrent()" style="background:rgba(251,113,133,.1);color:#fb7185;border:1px solid rgba(251,113,133,.25);border-radius:5px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">Sign Out</button>
         ` : `
           <div style="display:flex;gap:8px">
@@ -1105,6 +1122,32 @@ function importFile() {
   inp.click();
 }
 
+export async function saveSettingsName() {
+  const inp = document.getElementById('settings-display-name-inp');
+  const btn = document.getElementById('settings-name-save-btn');
+  if (!inp) return;
+  const val = inp.value.trim();
+  if (!val) {
+    if (typeof toast === 'function') toast('Please enter a valid display name', '#fb7185');
+    inp.focus();
+    return;
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+  }
+  try {
+    if (typeof window.updateUserName === 'function') {
+      await window.updateUserName(val);
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Save Name';
+    }
+  }
+}
+
 // ── Register all functions as globals so inline onclick="" handlers work ──
 // ── Register all settings functions as globals ────────────────────────────
 Object.assign(window, {
@@ -1112,7 +1155,7 @@ Object.assign(window, {
   applySettings, rebuildSidebar,
   renderSettingsSections, ssDragStart, ssDragOver, ssDrop,
   toggleSection, saveSectionOrder,
-  renderSettingsSync, saveBackupDays,
+  renderSettingsSync, saveBackupDays, saveSettingsName,
   renderSettingsStorage, renderSettingsDesktop, installDesktopApp,
   renderSettingsAI, saveAIKeySetting, clearAIKey,
   setFontSize, setDensity,
