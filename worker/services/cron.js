@@ -39,10 +39,11 @@ export async function runUpcomingSyncCron(env) {
   ]);
 
   // Group user libraries and ignored titles in memory
-  const userLibraryMap = new Map(); // userId -> Set<malId>
+  const userLibraryMap = new Map(); // userId -> Set<malId> (all anime in library)
+  const userWatchedMap = new Map(); // userId -> Set<malId> (only watching or completed)
   const userIgnoredMap = new Map(); // userId -> Set<malId>
   const allUpcomingMalIds = new Set();
-  const allLibraryMalIds = new Set();
+  const allWatchedMalIds = new Set();
 
   for (const row of (allLibraryRows || [])) {
     if (!row.mal_id) continue;
@@ -51,7 +52,15 @@ export async function runUpcomingSyncCron(env) {
       userLibraryMap.set(row.user_id, new Set());
     }
     userLibraryMap.get(row.user_id).add(numId);
-    allLibraryMalIds.add(numId);
+
+    // Only anime the user is watching or has completed can trigger sequel discovery
+    if (row.status === 'watching' || row.status === 'completed') {
+      if (!userWatchedMap.has(row.user_id)) {
+        userWatchedMap.set(row.user_id, new Set());
+      }
+      userWatchedMap.get(row.user_id).add(numId);
+      allWatchedMalIds.add(numId);
+    }
   }
 
   for (const row of (upcomingRows || [])) {
@@ -109,7 +118,7 @@ export async function runUpcomingSyncCron(env) {
   const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
   const idsNeedingRelations = [];
-  for (const malId of allLibraryMalIds) {
+  for (const malId of allWatchedMalIds) {
     const cached = cachedRelationsMap.get(malId);
     if (!cached || (now - cached.fetchedAt) > CACHE_TTL_MS) {
       idsNeedingRelations.push(malId);
@@ -151,11 +160,14 @@ export async function runUpcomingSyncCron(env) {
   // ── Step 4: Sequel Matching per User ──
   const sequelNotifications = [];
   for (const [userId, userLibrary] of userLibraryMap.entries()) {
+    const userWatched = userWatchedMap.get(userId) || new Set();
     const userIgnored = userIgnoredMap.get(userId) || new Set();
     const candidates = findSequelCandidates({
+      userWatchedMalIds: userWatched,
       userLibraryMalIds: userLibrary,
       ignoredMalIds: userIgnored,
       relationsMap: fullRelationsMap,
+      todayStr,
     });
 
     for (const c of candidates) {
@@ -242,7 +254,6 @@ export async function runUpcomingSyncCron(env) {
     upcomingCount: (upcomingRows || []).length,
     libraryCount: (allLibraryRows || []).length,
     idsNeedingRelationsCount: idsNeedingRelations.length,
-    relationsIdsToFetchCount: relationsIdsToFetch.length,
     providerDatesMapSize: providerDatesMap.size,
     newRelationsMapSize: newRelationsMap.size,
     datesUpdated: dateUpdates.length,
