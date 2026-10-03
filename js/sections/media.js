@@ -658,8 +658,8 @@ function rowHtml(e, idx = 0) {
         <div class="m-card-title">${e.pinned ? '<span class="m-pin-badge">📌</span>' : ''}${esc(e.title)}</div>
         <div class="m-card-meta">
           ${_mstag(e.status)}
-          ${e.malId ? `<span class="m-badge-link" onclick="event.stopPropagation();window.open('https://myanimelist.net/anime/${e.malId}','_blank')">🔗</span>` : ''}
-          ${e.malId ? `<span class="m-badge-mal">MAL</span>` : ''}
+          ${e.malId ? `<span class="m-badge-link" onclick="event.stopPropagation();window.open('https://myanimelist.net/${(e.genreId || e.genre_id) === 'manga' ? 'manga' : 'anime'}/${e.malId}','_blank')">🔗</span>` : ''}
+          ${e.malId ? `<span class="m-badge-mal" style="cursor:pointer" title="Open on MyAnimeList in new tab" onclick="event.stopPropagation();window.open('https://myanimelist.net/${(e.genreId || e.genre_id) === 'manga' ? 'manga' : 'anime'}/${e.malId}','_blank')">MAL</span>` : ''}
           ${rewBadge}
           ${grpBadge}
           ${_airBadge(e)}
@@ -944,9 +944,27 @@ function renderDetailPanel(e) {
         ${e.endDate   ? `<span>Finished: <b style="color:var(--tx)">${fmtDate(e.endDate)}</b></span>` : ''}
       </div>` : ''}
       ${e.malId ? `<div style="padding:10px 20px;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:10px;background:linear-gradient(90deg, rgba(var(--ac-rgb),0.08), transparent)">
-        <span style="font-size:9px;font-weight:800;letter-spacing:.5px;background:rgba(var(--ac-rgb),.15);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3);border-radius:4px;padding:2px 6px;flex-shrink:0">MAL</span>
-        <span style="font-size:12px;color:var(--tx2);font-weight:600">ID #${esc(String(e.malId))}</span>
-        ${window.window.SETTINGS?.malRefreshToken
+        <a href="https://myanimelist.net/${(e.genreId || e.genre_id) === 'manga' ? 'manga' : 'anime'}/${e.malId}"
+           target="_blank"
+           rel="noopener noreferrer"
+           title="Open anime on MyAnimeList in new tab"
+           onclick="event.stopPropagation()"
+           style="font-size:9px;font-weight:800;letter-spacing:.5px;background:rgba(var(--ac-rgb),.15);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3);border-radius:4px;padding:2px 6px;flex-shrink:0;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:3px;transition:all 0.15s"
+           onmouseover="this.style.background='rgba(var(--ac-rgb),0.3)'"
+           onmouseout="this.style.background='rgba(var(--ac-rgb),0.15)'">
+          MAL ↗
+        </a>
+        <a href="https://myanimelist.net/${(e.genreId || e.genre_id) === 'manga' ? 'manga' : 'anime'}/${e.malId}"
+           target="_blank"
+           rel="noopener noreferrer"
+           title="Open anime on MyAnimeList in new tab"
+           onclick="event.stopPropagation()"
+           style="font-size:12px;color:var(--tx2);font-weight:600;text-decoration:none;cursor:pointer;transition:color 0.15s"
+           onmouseover="this.style.color='var(--ac)'"
+           onmouseout="this.style.color='var(--tx2)'">
+          ID #${esc(String(e.malId))}
+        </a>
+        ${window.SETTINGS?.malRefreshToken
           ? `<span style="font-size:10px;color:#4ade80;margin-left:2px;font-weight:600">● Connected</span>
              <button onclick="event.stopPropagation();_syncMALListEntry(DATA.find(x=>x.id==='${e.id}')).catch(()=>toast('MAL sync failed','#fb7185'))"
                style="margin-left:auto;font-size:11px;font-weight:600;color:var(--ac);background:rgba(var(--ac-rgb),.1);border:1px solid rgba(var(--ac-rgb),.25);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;transition:all 0.2s">↻ Sync Now</button>`
@@ -1343,6 +1361,34 @@ function renderFormPanel(e) {
         </div>
         <input type="hidden" id="f-malid"  value="${esc(e?.malId || '')}">
         <input type="hidden" id="f-malimg" value="${esc(e?.coverImage || '')}">
+        ${e?.malId ? `
+          <div style="margin-top:8px;padding:6px 12px;border-radius:6px;background:rgba(var(--ac-rgb),0.06);border:1px solid rgba(var(--ac-rgb),0.2);display:flex;align-items:center;gap:8px">
+            <a href="https://myanimelist.net/${(e.genreId || e.genre_id) === 'manga' ? 'manga' : 'anime'}/${e.malId}"
+               target="_blank"
+               rel="noopener noreferrer"
+               title="Open anime on MyAnimeList in new tab"
+               onclick="event.stopPropagation()"
+               style="font-size:9px;font-weight:800;letter-spacing:.5px;background:rgba(var(--ac-rgb),.15);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3);border-radius:4px;padding:2px 6px;flex-shrink:0;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:3px;transition:all 0.15s"
+               onmouseover="this.style.background='rgba(var(--ac-rgb),0.3)'"
+               onmouseout="this.style.background='rgba(var(--ac-rgb),0.15)'">
+              MAL ↗
+            </a>
+            <a href="https://myanimelist.net/${(e.genreId || e.genre_id) === 'manga' ? 'manga' : 'anime'}/${e.malId}"
+               target="_blank"
+               rel="noopener noreferrer"
+               title="Open anime on MyAnimeList in new tab"
+               onclick="event.stopPropagation()"
+               style="font-size:11px;color:var(--tx2);font-weight:600;text-decoration:none;cursor:pointer"
+               onmouseover="this.style.color='var(--ac)'"
+               onmouseout="this.style.color='var(--tx2)'">
+              ID #${esc(String(e.malId))}
+            </a>
+            ${window.SETTINGS?.malRefreshToken
+              ? `<span style="font-size:10px;color:#4ade80;font-weight:600;margin-left:auto">● Connected</span>`
+              : `<span style="font-size:10px;color:#fb7185;font-weight:600;margin-left:auto">● Not connected</span>`
+            }
+          </div>
+        ` : ''}
       </div>
       <!-- ── End MAL Search ── -->
       <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--mu);margin-bottom:9px;padding-bottom:5px;border-bottom:1px solid var(--brd)">Entry Details</div>
