@@ -3,6 +3,7 @@
 // ═══════════════════════════════
 
 import { toast, showConfirm, showAlert, closePanel } from '../shared/ui.js';
+import { esc } from '../shared/utils.js';
 import { mediaApi } from '../shared/api.js';
 import { isMediaAiring } from '../shared/airing_sync.js';
 import { parseReleaseDate, localDay, daysUntil, formatReleaseDate } from '../shared/date_utils.js';
@@ -1470,7 +1471,7 @@ function renderFormPanel(e) {
   const curGenre = e ? e.genreId : (GACTIVE || 'anime');
   const showMal = curGenre === 'anime' || curGenre === 'manga';
   const gOpts = GENRES.map(g => `<option value="${g.id}" ${curGenre===g.id?'selected':''}>${esc(g.name)}</option>`).join('');
-  const status = e ? e.status : 'not_started';
+  const status = e?.status || 'watching';
   const airingDays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const linkedGroupId    = e?.linkedGroupId    || pendingGroupId    || '';
   const linkedGroupOrder = e?.linkedGroupOrder ?? pendingGroupOrder ?? '';
@@ -3254,7 +3255,7 @@ function _malRenderDropdown(results = [], directMatch = null) {
 function _buildMalBadgeHtml(malId, genreId = 'anime') {
   if (!malId) return '';
   const type = (genreId === 'manga') ? 'manga' : 'anime';
-  const isConnected = !!window.SETTINGS?.malRefreshToken;
+  const isConnected = !!(typeof window !== 'undefined' && window.SETTINGS?.malRefreshToken);
   return `
     <div style="margin-top:8px;padding:6px 12px;border-radius:6px;background:rgba(var(--ac-rgb),0.06);border:1px solid rgba(var(--ac-rgb),0.2);display:flex;align-items:center;gap:8px">
       <a href="https://myanimelist.net/${type}/${malId}"
@@ -3406,24 +3407,21 @@ function _malSelect(rJson) {
     epDurEl.value = String(durationMin);
   }
 
-  // 3. Status & Airing updates
+  // 3. Status updates (Only 'upcoming' is auto-filled from MAL; otherwise keep existing/user status or default to 'watching')
   const statusEl = document.getElementById('f-status');
   const airingDayEl = document.getElementById('f-airingday');
   const airingTimeEl = document.getElementById('f-airingtime');
 
-  if (r.status === 'finished_airing') {
-    if (statusEl) statusEl.value = 'completed';
-    if (airingDayEl) airingDayEl.value = 'finished';
-    if (airingTimeEl) airingTimeEl.value = '';
-  } else if (statusEl && r.status) {
-    const map = {
-      currently_airing: 'watching',
-      finished_airing:  'completed',
-      not_yet_aired:    'upcoming',
-    };
-    if (map[r.status]) statusEl.value = map[r.status];
+  const isUpcoming = r.status === 'not_yet_aired' || r.status === 'upcoming';
+  if (statusEl) {
+    if (isUpcoming) {
+      statusEl.value = 'upcoming';
+    } else if (!statusEl.value || statusEl.value === 'not_started') {
+      statusEl.value = 'watching';
+    }
   }
 
+  // Airing updates
   if (r.status === 'currently_airing' && r.broadcast && r.broadcast.day_of_the_week && r.broadcast.start_time) {
     const dayMap = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
     let jstDay = dayMap[r.broadcast.day_of_the_week.toLowerCase()];
@@ -3451,8 +3449,11 @@ function _malSelect(rJson) {
       if (airingDayEl) airingDayEl.value = String(istDay);
       if (airingTimeEl) airingTimeEl.value = `${formattedHour}:${formattedMin}`;
     }
-  } else if (r.status !== 'currently_airing') {
+  } else if (r.status === 'finished_airing') {
     if (airingDayEl) airingDayEl.value = 'finished';
+    if (airingTimeEl) airingTimeEl.value = '';
+  } else if (isUpcoming) {
+    if (airingDayEl) airingDayEl.value = '';
     if (airingTimeEl) airingTimeEl.value = '';
   }
 
@@ -3468,7 +3469,7 @@ function _malSelect(rJson) {
   const curGenre = document.getElementById('f-genre')?.value || 'anime';
   _renderMalBadge(r.id, curGenre);
 
-  toast(`✓ Autofilled: ${displayTitle}`);
+  if (typeof toast === 'function') toast(`✓ Autofilled: ${displayTitle}`);
 }
 
 function quickLinkMal(id) {
@@ -3550,5 +3551,6 @@ export {
   fetchAnimeByMalId,
   malSearchInput,
   fetchMalFromInput,
+  _malSelect,
 };
 

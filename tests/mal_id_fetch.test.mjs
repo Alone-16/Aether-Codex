@@ -5,6 +5,7 @@ import {
   _normalizeWorkerAnime,
   _normalizeJikanAnime,
   fetchAnimeByMalId,
+  _malSelect,
 } from '../js/sections/media.js';
 
 test('_extractMalId: correctly extracts numeric IDs from various formats', () => {
@@ -154,3 +155,165 @@ test('fetchAnimeByMalId: throws user-friendly error for non-existent MAL ID', as
     }
   );
 });
+
+function createMockDoc(elements) {
+  return {
+    getElementById: (id) => elements[id] || null,
+    createElement: () => ({
+      appendChild: () => {},
+      setAttribute: () => {},
+      classList: { add: () => {}, remove: () => {} },
+      style: {},
+      remove: () => {},
+    }),
+    body: {
+      appendChild: () => {},
+      removeChild: () => {},
+    },
+  };
+}
+
+test('_malSelect: does not overwrite status to finish/completed for finished anime, keeps watching', () => {
+  const elements = {
+    'f-status': { value: 'watching' },
+    'f-airingday': { value: '' },
+    'f-airingtime': { value: '' },
+    'f-title': { value: '' },
+    'f-malid': { value: '' },
+    'f-malid-input': { value: '' },
+    'f-malimg': { value: '' },
+    'f-notes': { value: '' },
+    'f-eptot': { value: '' },
+    'f-epduration': { value: '' },
+    'f-releasedate': { value: '' },
+    'f-releasedate-source': { value: '' },
+    'f-genre': { value: 'anime' },
+    'mal-search-inp': { value: '' },
+    'mal-search-clear-btn': { style: {} },
+    'mal-dropdown': { style: {} },
+    'mal-badge-container': { innerHTML: '' },
+    'mal-cover-wrap': { style: {} },
+    'mal-cover-img': { src: '', style: {} },
+  };
+
+  const origDocument = globalThis.document;
+  globalThis.document = createMockDoc(elements);
+
+  try {
+    const finishedAnime = {
+      id: 16498,
+      title: 'Attack on Titan',
+      status: 'finished_airing',
+      episodes: 25,
+      duration_min: 24,
+    };
+
+    _malSelect(JSON.stringify(finishedAnime));
+
+    // Status MUST NOT be overwritten to completed!
+    assert.equal(elements['f-status'].value, 'watching');
+    // Airing day should be set to finished
+    assert.equal(elements['f-airingday'].value, 'finished');
+  } finally {
+    globalThis.document = origDocument;
+  }
+});
+
+test('_malSelect: autofills status to upcoming when anime is not yet aired', () => {
+  const elements = {
+    'f-status': { value: 'watching' },
+    'f-airingday': { value: '' },
+    'f-airingtime': { value: '' },
+    'f-title': { value: '' },
+    'f-malid': { value: '' },
+    'f-malid-input': { value: '' },
+    'f-malimg': { value: '' },
+    'f-notes': { value: '' },
+    'f-eptot': { value: '' },
+    'f-epduration': { value: '' },
+    'f-releasedate': { value: '2027-01-01' },
+    'f-releasedate-source': { value: '' },
+    'f-genre': { value: 'anime' },
+    'mal-search-inp': { value: '' },
+    'mal-search-clear-btn': { style: {} },
+    'mal-dropdown': { style: {} },
+    'mal-badge-container': { innerHTML: '' },
+    'mal-cover-wrap': { style: {} },
+    'mal-cover-img': { src: '', style: {} },
+  };
+
+  const origDocument = globalThis.document;
+  globalThis.document = createMockDoc(elements);
+
+  try {
+    const upcomingAnime = {
+      id: 99999,
+      title: 'Upcoming Adventure S2',
+      status: 'not_yet_aired',
+      episodes: 12,
+      duration_min: 24,
+      start_date: '2027-01-01',
+    };
+
+    _malSelect(JSON.stringify(upcomingAnime));
+
+    // Status MUST be autofilled to upcoming
+    assert.equal(elements['f-status'].value, 'upcoming');
+    // Airing day must NOT be set to finished
+    assert.equal(elements['f-airingday'].value, '');
+  } finally {
+    globalThis.document = origDocument;
+  }
+});
+
+test('_malSelect: preserves custom user status like plan-to-watch and defaults to watching if empty', () => {
+  const elements = {
+    'f-status': { value: 'plan' },
+    'f-airingday': { value: '' },
+    'f-airingtime': { value: '' },
+    'f-title': { value: '' },
+    'f-malid': { value: '' },
+    'f-malid-input': { value: '' },
+    'f-malimg': { value: '' },
+    'f-notes': { value: '' },
+    'f-eptot': { value: '' },
+    'f-epduration': { value: '' },
+    'f-releasedate': { value: '' },
+    'f-releasedate-source': { value: '' },
+    'f-genre': { value: 'anime' },
+    'mal-search-inp': { value: '' },
+    'mal-search-clear-btn': { style: {} },
+    'mal-dropdown': { style: {} },
+    'mal-badge-container': { innerHTML: '' },
+    'mal-cover-wrap': { style: {} },
+    'mal-cover-img': { src: '', style: {} },
+  };
+
+  const origDocument = globalThis.document;
+  globalThis.document = createMockDoc(elements);
+
+  try {
+    const finishedAnime = {
+      id: 52991,
+      title: 'Frieren',
+      status: 'finished_airing',
+    };
+
+    // 1. With existing 'plan' status
+    _malSelect(JSON.stringify(finishedAnime));
+    assert.equal(elements['f-status'].value, 'plan');
+
+    // 2. With empty status, defaults to watching
+    elements['f-status'].value = '';
+    _malSelect(JSON.stringify(finishedAnime));
+    assert.equal(elements['f-status'].value, 'watching');
+
+    // 3. With 'not_started' status, defaults to watching
+    elements['f-status'].value = 'not_started';
+    _malSelect(JSON.stringify(finishedAnime));
+    assert.equal(elements['f-status'].value, 'watching');
+  } finally {
+    globalThis.document = origDocument;
+  }
+});
+
