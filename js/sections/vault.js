@@ -204,6 +204,8 @@ let VDATA_PRIVATE  = [];                // decrypted private links (password req
 let VSEARCH        = '';
 let VAULT_IDLE_TIMER = null;
 let VEDIT_ID       = null;
+export function setVEDIT_ID(v) { VEDIT_ID = v; window.VEDIT_ID = v; }
+window.setVEDIT_ID = setVEDIT_ID;
 
 // ── Auto-lock private section when navigating away ──
 function lockVaultOnNav() {

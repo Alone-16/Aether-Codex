@@ -1861,6 +1861,7 @@ function askDel(id) {
 let _cardObserver = null;
 // Map of slot element -> { html, height } for re-hydration
 const _slotCache = new WeakMap();
+if (typeof window !== 'undefined') window._slotCache = _slotCache;
 
 function _observeCardVisibility(container) {
   if (_cardObserver) _cardObserver.disconnect();

@@ -72,13 +72,30 @@ export function closePanel() {
   setPANEL(null);
   setPEDIT(null);
   if (typeof window !== 'undefined') {
-    window.GPANEL = null; window.GPEDIT = null;
-    window.BPANEL = null; window.BPEDIT = null;
+    if (typeof window.setGPANEL === 'function') {
+      window.setGPANEL(null);
+      window.setGPEDIT(null);
+    } else {
+      window.GPANEL = null; window.GPEDIT = null;
+    }
+    if (typeof window.setBPANEL === 'function') {
+      window.setBPANEL(null);
+      window.setBPEDIT(null);
+    } else {
+      window.BPANEL = null; window.BPEDIT = null;
+    }
+    if (typeof window.setNPANEL === 'function') {
+      window.setNPANEL(null);
+      window.setNEDIT_ID(null);
+    }
+    if (typeof window.setVEDIT_ID === 'function') {
+      window.setVEDIT_ID(null);
+    }
   }
   document.getElementById('rpanel')?.classList.remove('open');
   document.getElementById('poverlay')?.classList.remove('show');
   document.getElementById('content')?.classList.remove('pushed');
-  document.querySelectorAll('.m-card-active, .note-card-active').forEach(c => {
-    c.classList.remove('m-card-active', 'note-card-active');
+  document.querySelectorAll('.m-card-active, .note-card-active, .active-row').forEach(c => {
+    c.classList.remove('m-card-active', 'note-card-active', 'active-row');
   });
 }

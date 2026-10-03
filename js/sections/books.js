@@ -19,6 +19,10 @@ let BSEARCH    = '';
 let BGENRE     = 'novel'; // sub-category: novel | audiobook
 let BPANEL     = null;
 let BPEDIT     = null;
+export function setBPANEL(v) { BPANEL = v; window.BPANEL = v; }
+export function setBPEDIT(v) { BPEDIT = v; window.BPEDIT = v; }
+window.setBPANEL = setBPANEL;
+window.setBPEDIT = setBPEDIT;
 let BFORM_TL   = [];
 let BCOLLAPSED = {};
 
@@ -170,8 +174,24 @@ function bookRowHtml(b) {
 
 function toggleBColl(s) { BCOLLAPSED['b_'+s] = !BCOLLAPSED['b_'+s]; renderBooksBody(); }
 
+function _patchBookCardFull(b) {
+  const card = document.getElementById('brow-' + b.id);
+  if (!card) return;
+  const newHtml = bookRowHtml(b);
+  const parent = card.parentElement;
+  if (parent) {
+    const temp = document.createElement('div');
+    temp.innerHTML = newHtml;
+    const newCard = temp.firstElementChild;
+    if (newCard) {
+      parent.replaceChild(newCard, card);
+    }
+  }
+}
+
 function quickBookPage(id, delta) {
   const b = BDATA.find(x=>x.id===id); if(!b) return;
+  const prevStatus = b.status;
   const vols = b.volumes||[];
   if (vols.length) {
     const av = vols.find(v=>v.status==='reading') || vols[vols.length-1];
@@ -184,16 +204,25 @@ function quickBookPage(id, delta) {
     b.currentPage = Math.max(0, parseInt(b.currentPage||0)+delta);
     if (b.totalPages && b.currentPage >= parseInt(b.totalPages) && b.status==='reading') { b.status='completed'; b.endDate=today(); }
   }
-  b.updatedAt = Date.now(); saveBooks(BDATA); renderBooksBody();
+  b.updatedAt = Date.now();
+  saveBooks(BDATA);
+  if (b.status !== prevStatus) {
+    renderBooksBody();
+  } else {
+    _patchBookCardFull(b);
+  }
   if (BPANEL==='detail' && BPEDIT===id) renderBookDetailPanel(BDATA.find(x=>x.id===id));
 }
 
 // ── DETAIL PANEL ──
 function openBookDetail(id) {
   BPANEL='detail'; BPEDIT=id;
-  document.getElementById('rpanel').classList.add('open');
-  document.getElementById('poverlay').classList.add('show');
-  document.getElementById('content').classList.add('pushed');
+  document.getElementById('rpanel')?.classList.add('open');
+  document.getElementById('poverlay')?.classList.add('show');
+  document.getElementById('content')?.classList.add('pushed');
+  document.querySelectorAll('.active-row').forEach(c => c.classList.remove('active-row'));
+  const card = document.getElementById('brow-' + id);
+  if (card) card.classList.add('active-row');
   const b = BDATA.find(x=>x.id===id); if(b) renderBookDetailPanel(b);
 }
 
@@ -245,9 +274,18 @@ function renderBookDetailPanel(b) {
     </div>`;
 }
 
-// ── FORM ──
-function openAddBook()    { BPANEL='add';  BPEDIT=null; openBookForm(null); }
-function openEditBook(id) { BPANEL='edit'; BPEDIT=id;   openBookForm(BDATA.find(x=>x.id===id)); }
+function openAddBook() {
+  BPANEL = 'add'; BPEDIT = null;
+  document.querySelectorAll('.active-row').forEach(c => c.classList.remove('active-row'));
+  openBookForm(null);
+}
+function openEditBook(id) {
+  BPANEL = 'edit'; BPEDIT = id;
+  document.querySelectorAll('.active-row').forEach(c => c.classList.remove('active-row'));
+  const card = document.getElementById('brow-' + id);
+  if (card) card.classList.add('active-row');
+  openBookForm(BDATA.find(x => x.id === id));
+}
 
 function openBookForm(b) {
   document.getElementById('rpanel').classList.add('open');
@@ -407,30 +445,42 @@ function saveBook(eid) {
     addedAt:     existing?existing.addedAt:Date.now(),
     updatedAt:   Date.now(),
   };
-  if (entry.status==='completed'&&!entry.endDate&&!vols.length) entry.endDate=today();
-  if (eid) { const i=BDATA.findIndex(x=>x.id===eid); BDATA[i]=entry; } else BDATA.unshift(entry);
-  addLog('books', eid?'Updated':'Added', entry.title, entry.status);
-  saveBooks(BDATA);
-  BPANEL=null; BPEDIT=null;
-  document.getElementById('rpanel').classList.remove('open');
-  document.getElementById('poverlay').classList.remove('show');
-  document.getElementById('content').classList.remove('pushed');
-  renderBooksBody(); toast('✓ Book saved');
+  if (eid) {
+    const i = BDATA.findIndex(x => x.id === eid);
+    const prev = BDATA[i];
+    BDATA[i] = entry;
+    addLog('books', 'Updated', entry.title, entry.status);
+    saveBooks(BDATA);
+    BPANEL = null; BPEDIT = null;
+    closePanel();
+    if (prev && prev.status === entry.status && BOOKS_PAGE === 'list') {
+      _patchBookCardFull(entry);
+    } else {
+      renderBooksBody();
+    }
+    toast('✓ Book saved');
+  } else {
+    BDATA.unshift(entry);
+    addLog('books', 'Added', entry.title, entry.status);
+    saveBooks(BDATA);
+    BPANEL = null; BPEDIT = null;
+    closePanel();
+    renderBooksBody();
+    toast('✓ Book saved');
+  }
 }
 
 function askDelBook(id) {
   showConfirm('This book will be permanently deleted.', () => {
-    const _bdel=BDATA.find(x=>x.id===id);
-    BDATA = BDATA.filter(x=>x.id!==id);
-    if(_bdel) addLog('books','Deleted',_bdel.title);
+    const _bdel = BDATA.find(x => x.id === id);
+    BDATA = BDATA.filter(x => x.id !== id);
+    if (_bdel) addLog('books', 'Deleted', _bdel.title);
     saveBooks(BDATA);
-    BPANEL=null; BPEDIT=null;
-    document.getElementById('rpanel').classList.remove('open');
-    document.getElementById('poverlay').classList.remove('show');
-    document.getElementById('content').classList.remove('pushed');
+    BPANEL = null; BPEDIT = null;
+    closePanel();
     renderBooksBody();
-    if(_bdel) toastWithUndo(_bdel.title,()=>{BDATA.push(_bdel);saveBooks(BDATA);renderBooksBody();});
-  }, {title:'Delete Book?',okLabel:'Delete'});
+    if (_bdel) toastWithUndo(_bdel.title, () => { BDATA.push(_bdel); saveBooks(BDATA); renderBooksBody(); });
+  }, { title: 'Delete Book?', okLabel: 'Delete' });
 }
 
 // ── DASHBOARD ──

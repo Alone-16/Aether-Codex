@@ -21,6 +21,10 @@ let GAMES_PAGE  = 'library';
 let GSEARCH     = '';
 let GPANEL      = null;
 let GPEDIT      = null;
+export function setGPANEL(v) { GPANEL = v; window.GPANEL = v; }
+export function setGPEDIT(v) { GPEDIT = v; window.GPEDIT = v; }
+window.setGPANEL = setGPANEL;
+window.setGPEDIT = setGPEDIT;
 let GFORM_TL    = [];
 let GCOLLAPSED  = {};
 let GAMES_UNLOCKED = false;
@@ -749,9 +753,12 @@ function startGamesIdleTimer() {
 // ── DETAIL PANEL ──
 function openGameDetail(id) {
   GPANEL = 'detail'; GPEDIT = id;
-  document.getElementById('rpanel').classList.add('open');
-  document.getElementById('poverlay').classList.add('show');
-  document.getElementById('content').classList.add('pushed');
+  document.getElementById('rpanel')?.classList.add('open');
+  document.getElementById('poverlay')?.classList.add('show');
+  document.getElementById('content')?.classList.add('pushed');
+  document.querySelectorAll('.active-row').forEach(c => c.classList.remove('active-row'));
+  const card = document.getElementById('grow-' + id);
+  if (card) card.classList.add('active-row');
   const g = GDATA.find(x => x.id === id); if(g) renderGameDetailPanel(g);
 }
 
@@ -994,8 +1001,18 @@ function renderGameDetailPanel(g) {
 }
 
 // ── FORM ──
-function openAddGame()    { GPANEL='add';  GPEDIT=null; openGameForm(null); }
-function openEditGame(id) { GPANEL='edit'; GPEDIT=id;   openGameForm(GDATA.find(x=>x.id===id)); }
+function openAddGame() {
+  GPANEL = 'add'; GPEDIT = null;
+  document.querySelectorAll('.active-row').forEach(c => c.classList.remove('active-row'));
+  openGameForm(null);
+}
+function openEditGame(id) {
+  GPANEL = 'edit'; GPEDIT = id;
+  document.querySelectorAll('.active-row').forEach(c => c.classList.remove('active-row'));
+  const card = document.getElementById('grow-' + id);
+  if (card) card.classList.add('active-row');
+  openGameForm(GDATA.find(x => x.id === id));
+}
 
 function openGameForm(g) {
   document.getElementById('rpanel').classList.add('open');
@@ -1288,32 +1305,76 @@ async function saveGame(eid) {
     }
   }
 
-  if (eid) { const i=GDATA.findIndex(x=>x.id===eid); GDATA[i]=entry; }
-  else GDATA.unshift(entry);
+function _patchGameCardFull(g) {
+  const card = document.getElementById('grow-' + g.id);
+  if (!card) {
+    const slot = document.getElementById('slot-' + g.id);
+    if (slot) {
+      const newHtml = gameRowHtml(g, 0);
+      if (window._slotCache) {
+        window._slotCache.set(slot, { html: newHtml, height: window._slotCache.get(slot)?.height ?? 62 });
+      }
+      if (slot.dataset.loaded === '1') {
+        slot.innerHTML = newHtml;
+        const newCard = slot.firstElementChild;
+        if (newCard) newCard.classList.add('m-card-visible');
+      }
+    }
+    return;
+  }
+  const wasVisible = card.classList.contains('m-card-visible');
+  const newHtml = gameRowHtml(g, 0);
+  const parent = card.parentElement;
+  if (parent) {
+    const temp = document.createElement('div');
+    temp.innerHTML = newHtml;
+    const newCard = temp.firstElementChild;
+    if (newCard) {
+      if (wasVisible) newCard.classList.add('m-card-visible');
+      parent.replaceChild(newCard, card);
+    }
+    if (window._slotCache && (parent.classList?.contains('m-card-slot') || parent.id?.startsWith('slot-'))) {
+      window._slotCache.set(parent, { html: newHtml, height: window._slotCache.get(parent)?.height ?? 62 });
+    }
+  }
+}
 
-  addLog('games', eid?'Updated':'Added', entry.title, entry.status);
-  saveGames(GDATA);
-  GPANEL=null; GPEDIT=null;
-  document.getElementById('rpanel').classList.remove('open');
-  document.getElementById('poverlay').classList.remove('show');
-  document.getElementById('content').classList.remove('pushed');
-  renderGamesBody();
-  toast('✓ Game saved');
+  if (eid) {
+    const i = GDATA.findIndex(x => x.id === eid);
+    const prevEntry = GDATA[i];
+    GDATA[i] = entry;
+    addLog('games', 'Updated', entry.title, entry.status);
+    saveGames(GDATA);
+    GPANEL = null; GPEDIT = null;
+    closePanel();
+    if (prevEntry && prevEntry.status === entry.status && prevEntry.adult18 === entry.adult18 && GAMES_PAGE === 'library') {
+      _patchGameCardFull(entry);
+    } else {
+      renderGamesBody();
+    }
+    toast('✓ Game saved');
+  } else {
+    GDATA.unshift(entry);
+    addLog('games', 'Added', entry.title, entry.status);
+    saveGames(GDATA);
+    GPANEL = null; GPEDIT = null;
+    closePanel();
+    renderGamesBody();
+    toast('✓ Game saved');
+  }
 }
 
 function askDelGame(id) {
-  showConfirm('This game will be permanently deleted.',()=>{
-  const _gdel=GDATA.find(x=>x.id===id);
-  GDATA = GDATA.filter(x=>x.id!==id);
-  if(_gdel) addLog('games','Deleted',_gdel.title);
-  saveGames(GDATA);
-  GPANEL=null; GPEDIT=null;
-  document.getElementById('rpanel').classList.remove('open');
-  document.getElementById('poverlay').classList.remove('show');
-  document.getElementById('content').classList.remove('pushed');
-  renderGamesBody();
-  if(_gdel) toastWithUndo(_gdel.title,()=>{GDATA.push(_gdel);saveGames(GDATA);renderGamesBody();});
-},{title:'Delete Game?',okLabel:'Delete'});
+  showConfirm('This game will be permanently deleted.', () => {
+    const _gdel = GDATA.find(x => x.id === id);
+    GDATA = GDATA.filter(x => x.id !== id);
+    if (_gdel) addLog('games', 'Deleted', _gdel.title);
+    saveGames(GDATA);
+    GPANEL = null; GPEDIT = null;
+    closePanel();
+    renderGamesBody();
+    if (_gdel) toastWithUndo(_gdel.title, () => { GDATA.push(_gdel); saveGames(GDATA); renderGamesBody(); });
+  }, { title: 'Delete Game?', okLabel: 'Delete' });
 }
 
 // ── SAVE FOLDER UPLOAD ──

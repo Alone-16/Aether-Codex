@@ -27,6 +27,10 @@ window.setNDATA = setNDATA;
 let NSEARCH        = '';
 let NPANEL         = null;
 let NEDIT_ID       = null;
+export function setNPANEL(v) { NPANEL = v; window.NPANEL = v; }
+export function setNEDIT_ID(v) { NEDIT_ID = v; window.NEDIT_ID = v; }
+window.setNPANEL = setNPANEL;
+window.setNEDIT_ID = setNEDIT_ID;
 let NOTES_UNLOCKED = false;
 let NDATA_PRIVATE  = [];
 let NDATA_ENC      = null;
@@ -205,7 +209,7 @@ function noteCardHtml(n) {
     ? new Date(n.updatedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short'})
     : '';
 
-  return `<div class="note-card${isActive?' note-card-active':''}"
+  return `<div class="note-card${isActive?' note-card-active':''}" id="note-${n.id}"
     style="background:${col.bg};border:1px solid ${col.brd}"
     onclick="openNoteDetail('${n.id}')">
     <div style="display:flex;align-items:center;gap:3px;margin-bottom:${n.title?'6':'2'}px;min-height:14px">
@@ -231,7 +235,9 @@ function openNoteDetail(id) {
   if (!note) return;
   NEDIT_ID = id; NPANEL = 'edit';
   _openNotePanel(note);
-  renderNotesBody();
+  document.querySelectorAll('.note-card-active').forEach(c => c.classList.remove('note-card-active'));
+  const card = document.getElementById('note-' + id);
+  if (card) card.classList.add('note-card-active');
 }
 
 function openNewNote(type='text') {
@@ -530,11 +536,12 @@ function closeNotePanel() {
   clearTimeout(_noteAutoSaveTimer);
   commitNoteAutoSave();
   NEDIT_ID = null; NPANEL = null;
-  document.getElementById('rpanel').classList.remove('open');
-  document.getElementById('poverlay').classList.remove('show');
-  document.getElementById('content').classList.remove('pushed');
+  document.getElementById('rpanel')?.classList.remove('open');
+  document.getElementById('poverlay')?.classList.remove('show');
+  document.getElementById('content')?.classList.remove('pushed');
   document.getElementById('poverlay').onclick = closePanel;
-  render();
+  document.querySelectorAll('.note-card-active').forEach(c => c.classList.remove('note-card-active'));
+  renderNotesBody();
 }
 
 
