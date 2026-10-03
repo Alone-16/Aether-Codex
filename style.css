@@ -2160,3 +2160,8 @@ textarea.fin{resize:vertical;min-height:70px}
   .mu-lyrics-body { max-height:250px; }
   .mu-lyrics-badge { font-size:8px; padding:1px 5px; }
 }
+
+@keyframes malSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

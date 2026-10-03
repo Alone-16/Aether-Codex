@@ -1348,47 +1348,58 @@ function renderFormPanel(e) {
     <div class="form-wrap">
       <!-- ── MAL Search (Anime / Manga only) ── -->
       <div id="mal-search-wrap" style="position:relative;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--brd);display:${showMal?'block':'none'};">
-        <label class="flbl" style="display:flex;align-items:center;gap:5px;margin-bottom:5px">
-          <span style="font-size:9px;background:rgba(var(--ac-rgb),.12);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.25);border-radius:3px;padding:1px 5px;font-weight:800;letter-spacing:.5px">MAL</span>
-          Search MyAnimeList to autofill
-        </label>
-        <input class="fin" id="mal-search-inp" placeholder="Search anime title…"
-          autocomplete="off" oninput="malSearchInput(this.value)">
-        <div id="mal-dropdown" style="display:none;position:absolute;left:0;right:0;top:calc(100% - 2px);background:var(--surf);border:1px solid var(--brd2);border-radius:0 0 7px 7px;z-index:900;max-height:260px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
-        <div id="mal-cover-wrap" style="display:none;margin-top:10px;display:flex;align-items:center;gap:10px">
-          <img id="mal-cover-img" style="width:48px;height:68px;object-fit:cover;border-radius:4px;border:1px solid var(--brd)" onerror="this.style.display='none'">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <label class="flbl" style="display:flex;align-items:center;gap:6px;margin-bottom:0">
+            <span style="font-size:9px;background:rgba(var(--ac-rgb),.12);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.25);border-radius:3px;padding:1px 5px;font-weight:800;letter-spacing:.5px">MAL</span>
+            Search MyAnimeList to autofill
+          </label>
+          <span style="font-size:10px;color:var(--mu)">Title or MAL ID (e.g. 16498)</span>
+        </div>
+        <div style="display:flex;gap:6px;position:relative">
+          <div style="position:relative;flex:1">
+            <input class="fin" id="mal-search-inp" placeholder="Search anime title or enter MAL ID (e.g. 16498)…"
+              autocomplete="off" oninput="malSearchInput(this.value)" onkeydown="malSearchKeydown(event)"
+              style="width:100%;padding-right:26px">
+            <button type="button" id="mal-search-clear-btn" onclick="clearMalSearchInput()"
+              style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--mu);cursor:pointer;font-size:12px;padding:2px"
+              title="Clear search">✕</button>
+          </div>
+          <button type="button" class="nb-btn ac" id="mal-fetch-btn" onclick="fetchMalFromInput()"
+            style="white-space:nowrap;padding:0 14px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:6px;flex-shrink:0;height:38px"
+            title="Fetch anime details using title or MAL ID">
+            <span id="mal-fetch-btn-spinner" style="display:none;animation:malSpin 1s linear infinite">⟳</span>
+            <span id="mal-fetch-btn-label">Fetch</span>
+          </button>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
+          <span style="font-size:10px;color:var(--mu)">Tip: Type title or numeric ID (e.g. 16498) and click Fetch or press Enter</span>
+          <button type="button" id="mal-toggle-manual-btn" onclick="toggleManualMalId()"
+            style="background:none;border:none;color:var(--ac);font-size:10px;font-weight:600;cursor:pointer;padding:0;text-decoration:underline">
+            Manual ID
+          </button>
+        </div>
+        <div id="mal-manual-id-wrap" style="display:none;margin-top:8px;padding:8px 10px;background:var(--surf2);border:1px solid var(--brd);border-radius:6px;align-items:center;gap:8px">
+          <span style="font-size:11px;font-weight:600;color:var(--tx2);white-space:nowrap">MAL ID #:</span>
+          <input class="fin" id="f-malid-input" type="text" placeholder="e.g. 16498"
+            value="${esc(e?.malId || '')}"
+            oninput="syncManualMalId(this.value)"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();fetchMalFromManualId();}"
+            style="flex:1;height:32px;font-size:12px">
+          <button type="button" class="nb-btn ac" onclick="fetchMalFromManualId()"
+            style="height:32px;padding:0 10px;font-size:11px;font-weight:700;white-space:nowrap">
+            Fetch & Fill
+          </button>
+        </div>
+        <div id="mal-dropdown" style="display:none;position:absolute;left:0;right:0;top:calc(100% - 2px);background:var(--surf);border:1px solid var(--brd2);border-radius:0 0 7px 7px;z-index:900;max-height:280px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
+        <div id="mal-cover-wrap" style="display:${e?.coverImage ? 'flex' : 'none'};margin-top:10px;align-items:center;gap:10px">
+          <img id="mal-cover-img" src="${esc(e?.coverImage || '')}" style="width:48px;height:68px;object-fit:cover;border-radius:4px;border:1px solid var(--brd)" onerror="this.style.display='none'">
           <div style="font-size:11px;color:var(--mu)">Cover from MAL — all fields below are editable</div>
         </div>
         <input type="hidden" id="f-malid"  value="${esc(e?.malId || '')}">
         <input type="hidden" id="f-malimg" value="${esc(e?.coverImage || '')}">
-        ${e?.malId ? `
-          <div style="margin-top:8px;padding:6px 12px;border-radius:6px;background:rgba(var(--ac-rgb),0.06);border:1px solid rgba(var(--ac-rgb),0.2);display:flex;align-items:center;gap:8px">
-            <a href="https://myanimelist.net/${(e.genreId || e.genre_id) === 'manga' ? 'manga' : 'anime'}/${e.malId}"
-               target="_blank"
-               rel="noopener noreferrer"
-               title="Open anime on MyAnimeList in new tab"
-               onclick="event.stopPropagation()"
-               style="font-size:9px;font-weight:800;letter-spacing:.5px;background:rgba(var(--ac-rgb),.15);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3);border-radius:4px;padding:2px 6px;flex-shrink:0;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:3px;transition:all 0.15s"
-               onmouseover="this.style.background='rgba(var(--ac-rgb),0.3)'"
-               onmouseout="this.style.background='rgba(var(--ac-rgb),0.15)'">
-              MAL ↗
-            </a>
-            <a href="https://myanimelist.net/${(e.genreId || e.genre_id) === 'manga' ? 'manga' : 'anime'}/${e.malId}"
-               target="_blank"
-               rel="noopener noreferrer"
-               title="Open anime on MyAnimeList in new tab"
-               onclick="event.stopPropagation()"
-               style="font-size:11px;color:var(--tx2);font-weight:600;text-decoration:none;cursor:pointer"
-               onmouseover="this.style.color='var(--ac)'"
-               onmouseout="this.style.color='var(--tx2)'">
-              ID #${esc(String(e.malId))}
-            </a>
-            ${window.SETTINGS?.malRefreshToken
-              ? `<span style="font-size:10px;color:#4ade80;font-weight:600;margin-left:auto">● Connected</span>`
-              : `<span style="font-size:10px;color:#fb7185;font-weight:600;margin-left:auto">● Not connected</span>`
-            }
-          </div>
-        ` : ''}
+        <div id="mal-badge-container">
+          ${_buildMalBadgeHtml(e?.malId, curGenre)}
+        </div>
       </div>
       <!-- ── End MAL Search ── -->
       <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--mu);margin-bottom:9px;padding-bottom:5px;border-bottom:1px solid var(--brd)">Entry Details</div>
@@ -2683,45 +2694,304 @@ function renderSectionStub(id, c) {
 
 let _malSearchTimer = null;
 
+function _extractMalId(str) {
+  if (!str) return null;
+  const s = String(str).trim();
+  // URL match: e.g. myanimelist.net/anime/16498 or /manga/16498
+  const urlMatch = s.match(/(?:myanimelist\.net\/(?:anime|manga)\/|^anime\/|^manga\/)(\d+)/i);
+  if (urlMatch) return urlMatch[1];
+  // Prefixed: id:123, mal:123, #123, id 123, mal 123
+  const prefixMatch = s.match(/^(?:id|mal|#)[:\s#]*(\d+)$/i);
+  if (prefixMatch) return prefixMatch[1];
+  // Pure digits: e.g. 12345
+  if (/^\d+$/.test(s)) return s;
+  return null;
+}
+
+function _normalizeWorkerAnime(d) {
+  if (!d) return null;
+  return {
+    id: d.id,
+    title: d.title || '',
+    title_en: d.alternative_titles?.en || d.title_english || null,
+    image: d.main_picture?.large || d.main_picture?.medium || null,
+    episodes: d.num_episodes || null,
+    duration_min: d.average_episode_duration ? Math.round(d.average_episode_duration / 60) : 24,
+    synopsis: d.synopsis || null,
+    score: d.mean || null,
+    status: d.status || null,
+    media_type: d.media_type || null,
+    start_date: d.start_date || null,
+    broadcast: d.broadcast || null,
+  };
+}
+
+function _normalizeJikanAnime(d, type = 'anime') {
+  if (!d) return null;
+  let dur = 24;
+  if (d.duration) {
+    const m = String(d.duration).match(/(\d+)\s*min/i);
+    if (m) dur = parseInt(m[1], 10);
+  }
+  let status = null;
+  if (d.status === 'Finished Airing' || d.status === 'Finished') status = 'finished_airing';
+  else if (d.status === 'Currently Airing' || d.status === 'Publishing') status = 'currently_airing';
+  else if (d.status === 'Not yet aired' || d.status === 'Not yet published') status = 'not_yet_aired';
+
+  let broadcast = null;
+  if (d.broadcast && d.broadcast.day && d.broadcast.time) {
+    broadcast = {
+      day_of_the_week: d.broadcast.day.replace(/s$/, '').toLowerCase(),
+      start_time: d.broadcast.time,
+    };
+  }
+
+  return {
+    id: d.mal_id,
+    title: d.title || '',
+    title_en: d.title_english || null,
+    image: d.images?.jpg?.large_image_url || d.images?.jpg?.image_url || null,
+    episodes: d.episodes || d.chapters || null,
+    duration_min: dur,
+    synopsis: d.synopsis || null,
+    score: d.score || null,
+    status: status,
+    media_type: d.type ? d.type.toLowerCase() : null,
+    start_date: d.aired?.from ? d.aired.from.split('T')[0] : (d.published?.from ? d.published.from.split('T')[0] : null),
+    broadcast: broadcast,
+  };
+}
+
+async function fetchAnimeByMalId(numericId, genre = 'anime') {
+  const id = String(numericId || '').trim().replace(/\D/g, '');
+  if (!id) throw new Error('Invalid MAL ID');
+
+  const isManga = genre === 'manga';
+
+  if (isManga) {
+    const jRes = await fetch(`https://api.jikan.moe/v4/manga/${id}`);
+    if (jRes.ok) {
+      const jJson = await jRes.json();
+      if (jJson.data) return _normalizeJikanAnime(jJson.data, 'manga');
+    }
+    throw new Error(`Manga with MAL ID #${id} not found on MyAnimeList`);
+  }
+
+  // 1. Try Primary Cloudflare Worker MAL v2 API Proxy
+  try {
+    const workerUrl = (typeof window !== 'undefined' && window._WORKER) || 'https://aether-codex.nadeempubgmobile2-0.workers.dev';
+    const res = await fetch(`${workerUrl}/mal/anime/${id}`);
+    if (res.ok) {
+      const json = await res.json();
+      const d = json.data || json;
+      if (d && (d.title || d.id)) {
+        return _normalizeWorkerAnime(d);
+      }
+    }
+  } catch (err) {
+    console.warn(`[MAL ID] Worker fetch failed for ID ${id}, trying Jikan fallback...`, err);
+  }
+
+  // 2. Try Jikan v4 API Fallback
+  try {
+    const jikanRes = await fetch(`https://api.jikan.moe/v4/anime/${id}`);
+    if (jikanRes.ok) {
+      const jikanJson = await jikanRes.json();
+      const d = jikanJson.data;
+      if (d && (d.title || d.mal_id)) {
+        return _normalizeJikanAnime(d, 'anime');
+      }
+    } else if (jikanRes.status === 404) {
+      throw new Error(`Anime with MAL ID #${id} not found on MyAnimeList`);
+    }
+  } catch (err) {
+    if (err.message && err.message.includes('not found')) throw err;
+    console.warn(`[MAL ID] Jikan fetch failed for ID ${id}:`, err);
+  }
+
+  throw new Error(`Could not find anime with MAL ID #${id} on MyAnimeList`);
+}
+
+async function _searchMalTitles(q) {
+  const workerUrl = (typeof window !== 'undefined' && window._WORKER) || 'https://aether-codex.nadeempubgmobile2-0.workers.dev';
+  const res = await fetch(`${workerUrl}/mal/search?q=${encodeURIComponent(q)}`);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => null);
+    throw new Error(errData?.error?.message || errData?.error || 'MAL search failed');
+  }
+  const json = await res.json();
+  const data = json.data || json;
+  if (json.error) throw new Error(json.error_description || json.error);
+  return data.results || [];
+}
+
 function malSearchInput(q) {
   clearTimeout(_malSearchTimer);
   const dd = document.getElementById('mal-dropdown');
-  if (!q || q.length < 2) { if (dd) dd.style.display = 'none'; return; }
+  const clr = document.getElementById('mal-search-clear-btn');
+  if (clr) clr.style.display = q ? 'block' : 'none';
+
+  const clean = (q || '').trim();
+  if (!clean) {
+    if (dd) dd.style.display = 'none';
+    return;
+  }
+
+  const malId = _extractMalId(clean);
+
   if (dd) {
-    dd.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--mu)">Searching…</div>';
+    if (malId) {
+      dd.innerHTML = `<div style="padding:10px 12px;font-size:12px;color:var(--mu);display:flex;align-items:center;gap:7px"><span style="animation:malSpin 1s linear infinite;display:inline-block">⟳</span> Looking up MAL ID #${esc(malId)}…</div>`;
+    } else {
+      dd.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--mu);display:flex;align-items:center;gap:7px"><span style="animation:malSpin 1s linear infinite;display:inline-block">⟳</span> Searching…</div>';
+    }
     dd.style.display = 'block';
   }
-  _malSearchTimer = setTimeout(() => _malDoSearch(q), 400);
+
+  _malSearchTimer = setTimeout(() => _malDoSearch(clean), 350);
+}
+
+function malSearchKeydown(ev) {
+  if (ev.key === 'Enter') {
+    ev.preventDefault();
+    fetchMalFromInput();
+  } else if (ev.key === 'Escape') {
+    const dd = document.getElementById('mal-dropdown');
+    if (dd) dd.style.display = 'none';
+  }
+}
+
+function clearMalSearchInput() {
+  const inp = document.getElementById('mal-search-inp');
+  if (inp) {
+    inp.value = '';
+    inp.focus();
+  }
+  const clr = document.getElementById('mal-search-clear-btn');
+  if (clr) clr.style.display = 'none';
+  const dd = document.getElementById('mal-dropdown');
+  if (dd) dd.style.display = 'none';
+}
+
+async function fetchMalFromInput() {
+  const inp = document.getElementById('mal-search-inp');
+  if (!inp) return;
+  const q = inp.value.trim();
+  if (!q) {
+    toast('Enter an anime title or MAL ID', '#fbbf24');
+    inp.focus();
+    return;
+  }
+
+  const malId = _extractMalId(q);
+  const curGenre = document.getElementById('f-genre')?.value || 'anime';
+  const fetchBtn = document.getElementById('mal-fetch-btn');
+  const spinner = document.getElementById('mal-fetch-btn-spinner');
+  const label = document.getElementById('mal-fetch-btn-label');
+
+  if (fetchBtn) fetchBtn.disabled = true;
+  if (spinner) spinner.style.display = 'inline-block';
+  if (label) label.textContent = 'Fetching…';
+
+  try {
+    if (malId) {
+      toast(`Fetching MAL ID #${malId}…`);
+      const anime = await fetchAnimeByMalId(malId, curGenre);
+      if (!anime) throw new Error(`Anime with MAL ID #${malId} not found`);
+      _malSelect(JSON.stringify(anime));
+      toast(`✓ Autofilled: ${anime.title_en || anime.title} (ID #${malId})`);
+    } else {
+      const dd = document.getElementById('mal-dropdown');
+      if (dd) {
+        dd.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--mu);display:flex;align-items:center;gap:7px"><span style="animation:malSpin 1s linear infinite;display:inline-block">⟳</span> Searching…</div>';
+        dd.style.display = 'block';
+      }
+      const results = await _searchMalTitles(q);
+      if (!results.length) {
+        if (dd) {
+          dd.innerHTML = `<div style="padding:10px 12px;font-size:12px;color:var(--mu)">No results found for "${esc(q)}"</div>`;
+          dd.style.display = 'block';
+        }
+        toast(`No anime found matching "${q}"`, '#fb7185');
+      } else if (results.length === 1) {
+        _malSelect(JSON.stringify(results[0]));
+      } else {
+        _malRenderDropdown(results, null);
+        toast(`Found ${results.length} matches — select one below`, '#38bdf8');
+      }
+    }
+  } catch (err) {
+    console.error('[fetchMalFromInput]', err);
+    toast(`⚠ ${err.message || 'Fetch failed'}`, '#fb7185');
+    const dd = document.getElementById('mal-dropdown');
+    if (dd) {
+      dd.innerHTML = `<div style="padding:10px 12px;font-size:12px;color:#fb7185">⚠ ${esc(err.message)}</div>`;
+      dd.style.display = 'block';
+    }
+  } finally {
+    if (fetchBtn) fetchBtn.disabled = false;
+    if (spinner) spinner.style.display = 'none';
+    if (label) label.textContent = 'Fetch';
+  }
 }
 
 async function _malDoSearch(q) {
   const dd = document.getElementById('mal-dropdown');
   if (!dd) return;
-  try {
-    const workerUrl = window._WORKER || 'https://aether-codex.nadeempubgmobile2-0.workers.dev';
-    const res  = await fetch(`${workerUrl}/mal/search?q=${encodeURIComponent(q)}`);
-    if (!res.ok) {
-      const errData = await res.json().catch(() => null);
-      throw new Error(errData?.error?.message || errData?.error || 'MAL search failed');
+
+  const malId = _extractMalId(q);
+  const curGenre = document.getElementById('f-genre')?.value || 'anime';
+
+  if (malId) {
+    try {
+      // If short digits (<= 4 digits), also search as title text in parallel (e.g. "86")
+      if (q.length <= 4 && /^\d+$/.test(q)) {
+        const [idRes, titleRes] = await Promise.allSettled([
+          fetchAnimeByMalId(malId, curGenre),
+          _searchMalTitles(q)
+        ]);
+        const directMatch = idRes.status === 'fulfilled' ? idRes.value : null;
+        const results = titleRes.status === 'fulfilled' ? titleRes.value : [];
+        if (!directMatch && !results.length) {
+          dd.innerHTML = `<div style="padding:10px 12px;font-size:12px;color:#fb7185">⚠ No anime found for MAL ID #${malId} or title "${esc(q)}"</div>`;
+          return;
+        }
+        _malRenderDropdown(results, directMatch);
+        return;
+      }
+
+      // Explicit ID or URL or > 4 digits
+      const directMatch = await fetchAnimeByMalId(malId, curGenre);
+      _malRenderDropdown([], directMatch);
+    } catch (e) {
+      dd.innerHTML = `<div style="padding:10px 12px;font-size:12px;color:#fb7185">⚠ ${esc(e.message || 'No anime found')}</div>`;
     }
-    const json = await res.json();
-    const data = json.data || json;
-    if (json.error) throw new Error(json.error_description || json.error);
-    _malRenderDropdown(data.results || []);
-  } catch(e) {
+    return;
+  }
+
+  // Standard text title search
+  try {
+    const results = await _searchMalTitles(q);
+    _malRenderDropdown(results, null);
+  } catch (e) {
     dd.innerHTML = `<div style="padding:10px 12px;font-size:12px;color:#fb7185">⚠ ${esc(e.message)}</div>`;
   }
 }
 
-function _malRenderDropdown(results) {
+function _malRenderDropdown(results = [], directMatch = null) {
   const dd = document.getElementById('mal-dropdown');
   if (!dd) return;
-  if (!results.length) {
+
+  if (!results.length && !directMatch) {
     dd.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--mu)">No results found</div>';
     dd.style.display = 'block';
     return;
   }
-  dd.innerHTML = results.map(r => {
+
+  let html = '';
+
+  if (directMatch) {
+    const r = directMatch;
     const displayTitle = r.title_en || r.title;
     const hasAltTitle  = r.title_en && r.title_en !== r.title;
     const eps    = r.episodes   ? `${r.episodes} ep`              : '';
@@ -2729,22 +2999,70 @@ function _malRenderDropdown(results) {
     const type   = r.media_type ? r.media_type.replace(/_/g, ' ') : '';
     const meta   = [type, eps, score].filter(Boolean).join(' · ');
     const thumb  = r.image
-      ? `<img src="${esc(r.image)}" style="width:32px;height:44px;object-fit:cover;border-radius:3px;flex-shrink:0" onerror="this.style.display='none'">`
-      : `<div style="width:32px;height:44px;background:var(--surf3);border-radius:3px;flex-shrink:0"></div>`;
+      ? `<img src="${esc(r.image)}" style="width:36px;height:50px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display='none'">`
+      : `<div style="width:36px;height:50px;background:var(--surf3);border-radius:4px;flex-shrink:0"></div>`;
     const payload = esc(JSON.stringify(r));
-    return `<div style="display:flex;align-items:center;gap:9px;padding:8px 11px;cursor:pointer;border-bottom:1px solid var(--brd);transition:background .1s"
-      onmouseenter="this.style.background='var(--surf3)'"
-      onmouseleave="this.style.background='transparent'"
-      data-payload="${payload}"
-      onclick="_malSelect(this.dataset.payload)">
-      ${thumb}
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(displayTitle)}</div>
-        ${hasAltTitle ? `<div style="font-size:10px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${esc(r.title)}</div>` : ''}
-        ${meta ? `<div style="font-size:10px;color:var(--mu);margin-top:2px">${esc(meta)}</div>` : ''}
+
+    html += `
+      <div style="padding:6px 11px 4px;font-size:10px;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;color:var(--ac);background:rgba(var(--ac-rgb),0.07);border-bottom:1px solid rgba(var(--ac-rgb),0.15);display:flex;align-items:center;justify-content:space-between">
+        <span>⚡ Exact MAL ID Match (#${r.id})</span>
+        <span style="font-size:9px;color:var(--mu);font-weight:600">Click or press Enter to autofill</span>
       </div>
-    </div>`;
-  }).join('');
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 11px;cursor:pointer;border-bottom:1px solid var(--brd);background:rgba(var(--ac-rgb),0.03);transition:background .15s"
+        onmouseenter="this.style.background='rgba(var(--ac-rgb),0.1)'"
+        onmouseleave="this.style.background='rgba(var(--ac-rgb),0.03)'"
+        data-payload="${payload}"
+        onclick="_malSelect(this.dataset.payload)">
+        ${thumb}
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:13px;font-weight:700;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(displayTitle)}</span>
+            <span style="font-size:9px;background:var(--ac);color:#000;font-weight:800;padding:1px 5px;border-radius:3px;flex-shrink:0">#${r.id}</span>
+          </div>
+          ${hasAltTitle ? `<div style="font-size:10px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${esc(r.title)}</div>` : ''}
+          ${meta ? `<div style="font-size:10px;color:var(--ac);font-weight:600;margin-top:2px">${esc(meta)}</div>` : ''}
+        </div>
+      </div>
+    `;
+
+    if (results.length) {
+      html += `
+        <div style="padding:6px 11px 4px;font-size:10px;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;color:var(--mu);background:var(--surf2);border-bottom:1px solid var(--brd)">
+          Related Search Results
+        </div>
+      `;
+    }
+  }
+
+  if (results.length) {
+    html += results.map(r => {
+      if (directMatch && String(r.id) === String(directMatch.id)) return '';
+      const displayTitle = r.title_en || r.title;
+      const hasAltTitle  = r.title_en && r.title_en !== r.title;
+      const eps    = r.episodes   ? `${r.episodes} ep`              : '';
+      const score  = r.score      ? `★ ${r.score}`                  : '';
+      const type   = r.media_type ? r.media_type.replace(/_/g, ' ') : '';
+      const meta   = [type, eps, score].filter(Boolean).join(' · ');
+      const thumb  = r.image
+        ? `<img src="${esc(r.image)}" style="width:32px;height:44px;object-fit:cover;border-radius:3px;flex-shrink:0" onerror="this.style.display='none'">`
+        : `<div style="width:32px;height:44px;background:var(--surf3);border-radius:3px;flex-shrink:0"></div>`;
+      const payload = esc(JSON.stringify(r));
+      return `<div style="display:flex;align-items:center;gap:9px;padding:8px 11px;cursor:pointer;border-bottom:1px solid var(--brd);transition:background .1s"
+        onmouseenter="this.style.background='var(--surf3)'"
+        onmouseleave="this.style.background='transparent'"
+        data-payload="${payload}"
+        onclick="_malSelect(this.dataset.payload)">
+        ${thumb}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(displayTitle)}</div>
+          ${hasAltTitle ? `<div style="font-size:10px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${esc(r.title)}</div>` : ''}
+          ${meta ? `<div style="font-size:10px;color:var(--mu);margin-top:2px">${esc(meta)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  dd.innerHTML = html;
   dd.style.display = 'block';
 
   setTimeout(() => {
@@ -2759,27 +3077,139 @@ function _malRenderDropdown(results) {
   }, 10);
 }
 
+function _buildMalBadgeHtml(malId, genreId = 'anime') {
+  if (!malId) return '';
+  const type = (genreId === 'manga') ? 'manga' : 'anime';
+  const isConnected = !!window.SETTINGS?.malRefreshToken;
+  return `
+    <div style="margin-top:8px;padding:6px 12px;border-radius:6px;background:rgba(var(--ac-rgb),0.06);border:1px solid rgba(var(--ac-rgb),0.2);display:flex;align-items:center;gap:8px">
+      <a href="https://myanimelist.net/${type}/${malId}"
+         target="_blank"
+         rel="noopener noreferrer"
+         title="Open on MyAnimeList in new tab"
+         onclick="event.stopPropagation()"
+         style="font-size:9px;font-weight:800;letter-spacing:.5px;background:rgba(var(--ac-rgb),.15);color:var(--ac);border:1px solid rgba(var(--ac-rgb),.3);border-radius:4px;padding:2px 6px;flex-shrink:0;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:3px;transition:all 0.15s"
+         onmouseover="this.style.background='rgba(var(--ac-rgb),0.3)'"
+         onmouseout="this.style.background='rgba(var(--ac-rgb),0.15)'">
+        MAL ↗
+      </a>
+      <a href="https://myanimelist.net/${type}/${malId}"
+         target="_blank"
+         rel="noopener noreferrer"
+         title="Open on MyAnimeList in new tab"
+         onclick="event.stopPropagation()"
+         style="font-size:11px;color:var(--tx2);font-weight:600;text-decoration:none;cursor:pointer"
+         onmouseover="this.style.color='var(--ac)'"
+         onmouseout="this.style.color='var(--tx2)'">
+        ID #${esc(String(malId))}
+      </a>
+      ${isConnected
+        ? `<span style="font-size:10px;color:#4ade80;font-weight:600;margin-left:auto">● Connected</span>`
+        : `<span style="font-size:10px;color:#fb7185;font-weight:600;margin-left:auto">● Not connected</span>`
+      }
+      <button type="button" onclick="unlinkMalId()" title="Remove MAL ID link"
+        style="background:none;border:none;color:#fb7185;font-size:10px;cursor:pointer;padding:2px 6px;border-radius:4px;transition:background 0.15s;display:inline-flex;align-items:center;gap:2px;margin-left:6px"
+        onmouseover="this.style.background='rgba(251,113,133,0.15)'"
+        onmouseout="this.style.background='none'">
+        ✕ Unlink
+      </button>
+    </div>
+  `;
+}
+
+function _renderMalBadge(malId, genreId) {
+  const container = document.getElementById('mal-badge-container');
+  if (container) {
+    container.innerHTML = _buildMalBadgeHtml(malId, genreId);
+  }
+}
+
+function unlinkMalId() {
+  const idEl = document.getElementById('f-malid');
+  if (idEl) idEl.value = '';
+  const manEl = document.getElementById('f-malid-input');
+  if (manEl) manEl.value = '';
+  _renderMalBadge('');
+  toast('MAL ID unlinked');
+}
+
+function toggleManualMalId() {
+  const wrap = document.getElementById('mal-manual-id-wrap');
+  const btn = document.getElementById('mal-toggle-manual-btn');
+  if (!wrap) return;
+  const isHidden = wrap.style.display === 'none' || !wrap.style.display;
+  wrap.style.display = isHidden ? 'flex' : 'none';
+  if (btn) btn.textContent = isHidden ? 'Hide Manual ID' : 'Manual ID';
+  if (isHidden) {
+    const inp = document.getElementById('f-malid-input');
+    if (inp) {
+      inp.value = document.getElementById('f-malid')?.value || '';
+      inp.focus();
+    }
+  }
+}
+
+function syncManualMalId(val) {
+  const cleanId = String(val || '').trim().replace(/\D/g, '');
+  const hiddenId = document.getElementById('f-malid');
+  if (hiddenId) hiddenId.value = cleanId;
+  const curGenre = document.getElementById('f-genre')?.value || 'anime';
+  _renderMalBadge(cleanId, curGenre);
+}
+
+async function fetchMalFromManualId() {
+  const inp = document.getElementById('f-malid-input');
+  const val = inp?.value?.trim();
+  const cleanId = String(val || '').replace(/\D/g, '');
+  if (!cleanId) {
+    toast('Please enter a numeric MAL ID', '#fbbf24');
+    if (inp) inp.focus();
+    return;
+  }
+  const curGenre = document.getElementById('f-genre')?.value || 'anime';
+  toast(`Fetching MAL ID #${cleanId}…`);
+  try {
+    const anime = await fetchAnimeByMalId(cleanId, curGenre);
+    if (!anime) throw new Error(`Anime with MAL ID #${cleanId} not found`);
+    _malSelect(JSON.stringify(anime));
+    toast(`✓ Autofilled: ${anime.title_en || anime.title} (ID #${cleanId})`);
+  } catch (e) {
+    toast(`⚠ ${e.message}`, '#fb7185');
+  }
+}
+
 function toggleMalSearchByGenre(genreId) {
   const wrap = document.getElementById('mal-search-wrap');
   if (wrap) {
     wrap.style.display = (genreId === 'anime' || genreId === 'manga') ? 'block' : 'none';
   }
+  const currentMalId = document.getElementById('f-malid')?.value;
+  if (currentMalId) {
+    _renderMalBadge(currentMalId, genreId);
+  }
 }
 
 function _malSelect(rJson) {
-  const r = JSON.parse(rJson);
+  const r = typeof rJson === 'string' ? JSON.parse(rJson) : rJson;
   const dd = document.getElementById('mal-dropdown');
   if (dd) dd.style.display = 'none';
 
   const displayTitle = r.title_en || r.title;
   const searchInp = document.getElementById('mal-search-inp');
-  if (searchInp) searchInp.value = displayTitle;
+  if (searchInp) {
+    searchInp.value = displayTitle;
+    const clr = document.getElementById('mal-search-clear-btn');
+    if (clr) clr.style.display = 'block';
+  }
 
   const titleEl = document.getElementById('f-title');
   if (titleEl) titleEl.value = displayTitle;
 
   const malIdEl = document.getElementById('f-malid');
   if (malIdEl) malIdEl.value = String(r.id || '');
+
+  const manualIdEl = document.getElementById('f-malid-input');
+  if (manualIdEl) manualIdEl.value = String(r.id || '');
 
   const imgEl = document.getElementById('f-malimg');
   if (imgEl) imgEl.value = r.image || '';
@@ -2860,6 +3290,10 @@ function _malSelect(rJson) {
     if (relDateSrcEl) relDateSrcEl.value = 'mal';
   }
 
+  // 5. Update MAL Linked Badge
+  const curGenre = document.getElementById('f-genre')?.value || 'anime';
+  _renderMalBadge(r.id, curGenre);
+
   toast(`✓ Autofilled: ${displayTitle}`);
 }
 
@@ -2880,13 +3314,18 @@ function _malUpdateCoverPreview(url) {
   const wrap = document.getElementById('mal-cover-wrap');
   const img  = document.getElementById('mal-cover-img');
   if (!wrap || !img) return;
-  if (url) { img.src = url; wrap.style.display = 'block'; }
-  else       wrap.style.display = 'none';
+  if (url) {
+    img.src = url;
+    wrap.style.display = 'flex';
+  } else {
+    wrap.style.display = 'none';
+  }
 }
 
 
 // ── Register all media functions as globals ───────────────────────────────
-Object.assign(window, {
+if (typeof window !== 'undefined') {
+  Object.assign(window, {
   // Core render
   renderMedia, renderMediaBody, renderSectionStub,
   setMediaPage, setMediaChip, toggleMediaSortDd, setMediaSort,
@@ -2917,12 +3356,25 @@ Object.assign(window, {
   startHold, cancelHold, showCtxMenu, hideCtxMenu, ctxPin, _HOLD_FIRED,
 
   // MAL
-  malBulkSyncAll, malSearchInput, _syncMALListEntry,
+  malBulkSyncAll, malSearchInput, malSearchKeydown, clearMalSearchInput,
+  fetchMalFromInput, fetchAnimeByMalId, _syncMALListEntry,
   runLinkedMigrationV3, _malSelect, toggleMalSearchByGenre,
+  toggleManualMalId, syncManualMalId, fetchMalFromManualId, unlinkMalId,
+  _buildMalBadgeHtml, _renderMalBadge,
 
   // Filter chips
   _renderFilterChips,
 
   // Performance: lazy visibility & throttled tilt
-  _throttledTilt, _observeCardVisibility, _cardSlot, _hydrateSlots,
-});
+  });
+}
+
+export {
+  _extractMalId,
+  _normalizeWorkerAnime,
+  _normalizeJikanAnime,
+  fetchAnimeByMalId,
+  malSearchInput,
+  fetchMalFromInput,
+};
+
