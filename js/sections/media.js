@@ -837,6 +837,9 @@ function _patchCardFull(e) {
       if (wasVisible) newCard.classList.add('m-card-visible');
       parent.replaceChild(newCard, card);
     }
+    if (parent.classList?.contains('m-card-slot') || parent.id?.startsWith('slot-')) {
+      _slotCache.set(parent, { html: newHtml, height: _slotCache.get(parent)?.height ?? 62 });
+    }
   }
 }
 
@@ -998,9 +1001,14 @@ function renderIncomplete(c) {
 ═══════════════════════════════ */
 function openPanel(mode, id) {
   PANEL = mode; PEDIT = id;
-  document.getElementById('rpanel').classList.add('open');
-  document.getElementById('poverlay').classList.add('show');
-  document.getElementById('content').classList.add('pushed');
+  document.getElementById('rpanel')?.classList.add('open');
+  document.getElementById('poverlay')?.classList.add('show');
+  document.getElementById('content')?.classList.add('pushed');
+  document.querySelectorAll('.m-card.m-card-active').forEach(c => c.classList.remove('m-card-active'));
+  if (id) {
+    const card = document.getElementById('row-' + id);
+    if (card) card.classList.add('m-card-active');
+  }
   if (mode === 'detail') { const e = DATA.find(x=>x.id===id); if (e) renderDetailPanel(e); }
   else if (mode === 'add')  renderFormPanel(null);
   else if (mode === 'edit') { const e = DATA.find(x=>x.id===id); if (e) renderFormPanel(e); }
@@ -1711,8 +1719,8 @@ function saveEntry(eid) {
     DATA[i] = entry;
     mediaApi.patch(eid, entry).catch(err => console.warn('[saveEntry Sync Fail]', err));
     saveData(DATA); closePanel();
-    // If the card's section didn't change, patch in place instead of full rebuild.
-    if (prevEntry && prevEntry.status === entry.status && MEDIA_PAGE === 'list') {
+    // If the card's section and genre didn't change, patch in place instead of full rebuild.
+    if (prevEntry && prevEntry.status === entry.status && prevEntry.genreId === entry.genreId && MEDIA_PAGE === 'list') {
       _patchCardFull(entry);
     } else {
       renderMediaBody();
@@ -1834,8 +1842,8 @@ function askDel(id) {
     const _del=DATA.find(x=>x.id===id);
     DATA=DATA.filter(x=>x.id!==id);
     if(_del) addLog('media','Deleted',_del.title);
-    saveData(DATA); closePanel(); render();
-    if(_del) toastWithUndo(_del.title,()=>{DATA.push(_del);saveData(DATA);render();});
+    saveData(DATA); closePanel(); renderMediaBody();
+    if(_del) toastWithUndo(_del.title,()=>{DATA.push(_del);saveData(DATA);renderMediaBody();});
   },{title:'Delete Entry?',okLabel:'Delete'});
 }
 

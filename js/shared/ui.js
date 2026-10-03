@@ -1,6 +1,6 @@
 'use strict';
 
-import { setPANEL, setPEDIT, render } from './utils.js';
+import { setPANEL, setPEDIT } from './utils.js';
 
 export function showConfirm(arg1, arg2, arg3) {
   let msg = '';
@@ -71,8 +71,14 @@ export function toast(msg, col) {
 export function closePanel() {
   setPANEL(null);
   setPEDIT(null);
-  document.getElementById('rpanel').classList.remove('open');
-  document.getElementById('poverlay').classList.remove('show');
-  document.getElementById('content').classList.remove('pushed');
-  render();
+  if (typeof window !== 'undefined') {
+    window.GPANEL = null; window.GPEDIT = null;
+    window.BPANEL = null; window.BPEDIT = null;
+  }
+  document.getElementById('rpanel')?.classList.remove('open');
+  document.getElementById('poverlay')?.classList.remove('show');
+  document.getElementById('content')?.classList.remove('pushed');
+  document.querySelectorAll('.m-card-active, .note-card-active').forEach(c => {
+    c.classList.remove('m-card-active', 'note-card-active');
+  });
 }
