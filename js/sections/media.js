@@ -634,7 +634,23 @@ function renderList(c) {
 function toggleColl(s) {
   const k = GACTIVE + '_' + s;
   COLLAPSED[k] = !COLLAPSED[k];
-  renderMediaBody();
+
+  // Targeted patch: just toggle the CSS classes on the existing section rows
+  // div and the arrow icon — no DOM rebuild needed.
+  const allSections = document.querySelectorAll('#media-body .m-section');
+  let patched = false;
+  allSections.forEach(sec => {
+    const head = sec.querySelector('.m-sec-head');
+    if (!head) return;
+    const onclick = head.getAttribute('onclick') || '';
+    if (!onclick.includes(`'${s}'`)) return;
+    const rows = sec.querySelector('.m-rows');
+    const arr  = sec.querySelector('.m-sec-arr');
+    if (rows) rows.classList.toggle('coll', !!COLLAPSED[k]);
+    if (arr)  arr.classList.toggle('coll',  !!COLLAPSED[k]);
+    patched = true;
+  });
+  if (!patched) renderMediaBody(); // fallback if section not in DOM
 }
 
 /** True if this linked franchise "part" is finished (status or full episode count). */
@@ -1250,7 +1266,8 @@ function linkedEpDelta(parentId, linkedId, delta) {
 
   const parent = DATA.find(x => x.id === parentId);
   if (parent) renderDetailPanel(parent);
-  renderMediaBody();
+  // Same targeted patch as quickEp — only the linked card's counters change
+  _patchCardInPlace(linked);
 }
 
 /* ── Link Picker ── */
@@ -1367,7 +1384,9 @@ function confirmLinkEntries(sourceId, targetId) {
   saveData(DATA);
 
   renderDetailPanel(source);
-  renderMediaBody();
+  // Only the 🔗 badge changes on the two affected cards — patch both in place.
+  _patchCardFull(source);
+  _patchCardFull(target);
   toast(`✓ Linked: "${source.title}" ↔ "${target.title}"`);
 }
 
@@ -1400,7 +1419,9 @@ function unlinkEntry(id) {
   // Re-render the currently open panel (which may be one of the remaining entries)
   const panelEntry = PEDIT ? DATA.find(x => x.id === PEDIT) : null;
   if (panelEntry) renderDetailPanel(panelEntry);
-  renderMediaBody();
+  // Only the 🔗 badge changes on the unlinked entry (and possibly one sibling)
+  _patchCardFull(entry);
+  if (remaining.length === 1) _patchCardFull(remaining[0]);
   toast('Unlinked');
 }
 
@@ -2794,7 +2815,32 @@ function ctxPin(id) {
   saveData(DATA);
   mediaApi.patch(id, { pinned: e.pinned ? 1 : 0 }).catch(err => console.warn('[Pin Sync Fail]', err));
   hideCtxMenu();
-  renderMediaBody();
+  // Patch the pin badge and pinned class on the single card.
+  // Pinning also reorders cards within the section (pinned float to top),
+  // so fall back to a section-level rebuild if needed.
+  const card = document.getElementById('row-' + id);
+  if (card) {
+    // Toggle pinned class
+    card.classList.toggle('m-card-pinned', !!e.pinned);
+    // Refresh the full card HTML so the 📌 badge appears/disappears
+    _patchCardFull(e);
+    // Move the card's slot to the top/bottom of its .m-rows container
+    const slot = card.closest('.m-card-slot') || card.parentElement;
+    const rows = slot?.closest('.m-rows');
+    if (rows && slot) {
+      if (e.pinned) {
+        rows.prepend(slot);
+      } else {
+        // Restore original sort order (title A→Z or by addedAt)
+        // Simplest correct approach: just rebuild this section only
+        renderMediaBody();
+        toast(e.pinned ? '📌 Pinned to top' : 'Unpinned');
+        return;
+      }
+    }
+  } else {
+    renderMediaBody();
+  }
   toast(e.pinned ? '📌 Pinned to top' : 'Unpinned');
 }
 
