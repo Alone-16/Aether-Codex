@@ -75,6 +75,11 @@ let _HOLD_TIMER   = null;
 let _CTX_ENTRY_ID = null;
 let _HOLD_FIRED   = false;
 
+/* ---------- particle background RAF guard ----------
+   A single module-level id prevents multiple loops from stacking
+   when renderMedia() is called more than once (e.g. after saveEntry). */
+let _bgRafId = null;
+
 function _mediaListStatusFilter() {
   if (_M_STATUS_CHIP === null || _M_STATUS_CHIP === undefined) {
     return document.getElementById('fstatus')?.value || '';
@@ -374,109 +379,124 @@ function renderMedia(c) {
   renderMediaBody();
 
   // Media Background Canvas (Cinematic Bokeh)
-  setTimeout(() => {
-    document.getElementById('media-interactive-bg')?.remove();
-    const cvs = document.createElement('canvas');
-    cvs.id = 'media-interactive-bg';
-    cvs.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:0; pointer-events:none; opacity:1;';
-    document.body.appendChild(cvs);
+  // Guard: if a loop is already running for this canvas, don't start another.
+  if (!document.getElementById('media-interactive-bg')) {
+    setTimeout(() => {
+      // Double-check after the timeout in case renderMedia was called again
+      if (document.getElementById('media-interactive-bg')) return;
 
-    const ctx = cvs.getContext('2d');
-    let w = window.innerWidth, h = window.innerHeight;
-    cvs.width = w; cvs.height = h;
+      const cvs = document.createElement('canvas');
+      cvs.id = 'media-interactive-bg';
+      cvs.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:0; pointer-events:none; opacity:1;';
+      document.body.appendChild(cvs);
 
-    let style = getComputedStyle(document.documentElement);
-    let acRgb = style.getPropertyValue('--ac-rgb').trim() || '125,211,252';
+      const ctx = cvs.getContext('2d');
+      let w = window.innerWidth, h = window.innerHeight;
+      cvs.width = w; cvs.height = h;
 
-    // Cinematic bokeh orbs — varying sizes, gentle upward drift, pulsing glow
-    let num = w < 768 ? 25 : 50;
-    let orbs = [];
-    for (let i = 0; i < num; i++) {
-      orbs.push({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        r: Math.random() * 5 + 2,          // radius 2–7px
-        vy: -(Math.random() * 0.2 + 0.08),  // slow upward drift
-        vx: (Math.random() - 0.5) * 0.15,   // very gentle horizontal drift
-        swayAmp: Math.random() * 0.3 + 0.1,
-        swaySpeed: Math.random() * 0.008 + 0.003,
-        phase: Math.random() * Math.PI * 2,
-        pulsePhase: Math.random() * Math.PI * 2,
-        pulseSpeed: Math.random() * 0.015 + 0.008,
-        baseAlpha: Math.random() * 0.2 + 0.08, // 0.08–0.28 opacity
-      });
-    }
+      let style = getComputedStyle(document.documentElement);
+      let acRgb = style.getPropertyValue('--ac-rgb').trim() || '125,211,252';
 
-    let mx = -999, my = -999;
-    if (window._mediaBgListener) window.removeEventListener('mousemove', window._mediaBgListener);
-    window._mediaBgListener = e => { mx = e.clientX; my = e.clientY; };
-    window.addEventListener('mousemove', window._mediaBgListener);
-
-    if (window._mediaBgResize) window.removeEventListener('resize', window._mediaBgResize);
-    window._mediaBgResize = () => { if (cvs) { w = cvs.width = window.innerWidth; h = cvs.height = window.innerHeight; } };
-    window.addEventListener('resize', window._mediaBgResize);
-
-    function draw() {
-      if (document.documentElement.getAttribute('data-section') !== 'media') {
-        window.removeEventListener('mousemove', window._mediaBgListener);
-        window.removeEventListener('resize', window._mediaBgResize);
-        cvs.remove();
-        return;
-      }
-      ctx.clearRect(0, 0, w, h);
-
-      for (let i = 0; i < orbs.length; i++) {
-        let o = orbs[i];
-        o.phase += o.swaySpeed;
-        o.pulsePhase += o.pulseSpeed;
-
-        // Gentle sway + drift
-        o.x += o.vx + Math.sin(o.phase) * o.swayAmp;
-        o.y += o.vy;
-
-        // Wrap: respawn at bottom when an orb drifts above top
-        if (o.y < -o.r * 4) {
-          o.y = h + o.r * 4;
-          o.x = Math.random() * w;
-        }
-        // Horizontal wrap
-        if (o.x < -30) o.x = w + 30;
-        if (o.x > w + 30) o.x = -30;
-
-        // Mouse attraction — gentle pull toward cursor
-        let dx = mx - o.x, dy = my - o.y;
-        let dist = dx * dx + dy * dy;
-        if (dist < 40000 && dist > 1) {
-          let pull = 0.3 / Math.sqrt(dist);
-          o.x += dx * pull;
-          o.y += dy * pull;
-        }
-
-        // Pulsing opacity
-        let pulse = (Math.sin(o.pulsePhase) + 1) * 0.5; // 0–1
-        let alpha = o.baseAlpha + pulse * 0.15;
-
-        // Draw soft bokeh circle with radial gradient
-        let grad = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r * 2);
-        grad.addColorStop(0, `rgba(${acRgb}, ${alpha})`);
-        grad.addColorStop(0.5, `rgba(${acRgb}, ${alpha * 0.4})`);
-        grad.addColorStop(1, `rgba(${acRgb}, 0)`);
-        ctx.beginPath();
-        ctx.arc(o.x, o.y, o.r * 2, 0, Math.PI * 2);
-        ctx.fillStyle = grad;
-        ctx.fill();
-
-        // Bright inner core
-        ctx.beginPath();
-        ctx.arc(o.x, o.y, o.r * 0.5, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${acRgb}, ${alpha * 1.2})`;
-        ctx.fill();
+      // Cinematic bokeh orbs — varying sizes, gentle upward drift, pulsing glow
+      let num = w < 768 ? 25 : 50;
+      let orbs = [];
+      for (let i = 0; i < num; i++) {
+        orbs.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          r: Math.random() * 5 + 2,          // radius 2–7px
+          vy: -(Math.random() * 0.2 + 0.08),  // slow upward drift
+          vx: (Math.random() - 0.5) * 0.15,   // very gentle horizontal drift
+          swayAmp: Math.random() * 0.3 + 0.1,
+          swaySpeed: Math.random() * 0.008 + 0.003,
+          phase: Math.random() * Math.PI * 2,
+          pulsePhase: Math.random() * Math.PI * 2,
+          pulseSpeed: Math.random() * 0.015 + 0.008,
+          baseAlpha: Math.random() * 0.2 + 0.08, // 0.08–0.28 opacity
+        });
       }
 
-      requestAnimationFrame(draw);
-    }
-    draw();
-  }, 50);
+      let mx = -999, my = -999;
+      if (window._mediaBgListener) window.removeEventListener('mousemove', window._mediaBgListener);
+      window._mediaBgListener = e => { mx = e.clientX; my = e.clientY; };
+      window.addEventListener('mousemove', window._mediaBgListener);
+
+      if (window._mediaBgResize) window.removeEventListener('resize', window._mediaBgResize);
+      window._mediaBgResize = () => {
+        // Only resize the backing buffer on actual resize, not every frame
+        if (cvs && cvs.isConnected) { w = cvs.width = window.innerWidth; h = cvs.height = window.innerHeight; }
+      };
+      window.addEventListener('resize', window._mediaBgResize);
+
+      function draw() {
+        // Stop loop if: left the media section, canvas removed, or tab hidden
+        if (document.documentElement.getAttribute('data-section') !== 'media' || !cvs.isConnected) {
+          window.removeEventListener('mousemove', window._mediaBgListener);
+          window.removeEventListener('resize', window._mediaBgResize);
+          cvs.remove();
+          _bgRafId = null;
+          return;
+        }
+        // Pause when tab is hidden to save GPU
+        if (document.hidden) {
+          _bgRafId = requestAnimationFrame(draw);
+          return;
+        }
+        ctx.clearRect(0, 0, w, h);
+
+        for (let i = 0; i < orbs.length; i++) {
+          let o = orbs[i];
+          o.phase += o.swaySpeed;
+          o.pulsePhase += o.pulseSpeed;
+
+          // Gentle sway + drift
+          o.x += o.vx + Math.sin(o.phase) * o.swayAmp;
+          o.y += o.vy;
+
+          // Wrap: respawn at bottom when an orb drifts above top
+          if (o.y < -o.r * 4) {
+            o.y = h + o.r * 4;
+            o.x = Math.random() * w;
+          }
+          // Horizontal wrap
+          if (o.x < -30) o.x = w + 30;
+          if (o.x > w + 30) o.x = -30;
+
+          // Mouse attraction — gentle pull toward cursor
+          let dx = mx - o.x, dy = my - o.y;
+          let dist = dx * dx + dy * dy;
+          if (dist < 40000 && dist > 1) {
+            let pull = 0.3 / Math.sqrt(dist);
+            o.x += dx * pull;
+            o.y += dy * pull;
+          }
+
+          // Pulsing opacity
+          let pulse = (Math.sin(o.pulsePhase) + 1) * 0.5; // 0–1
+          let alpha = o.baseAlpha + pulse * 0.15;
+
+          // Draw soft bokeh circle with radial gradient
+          let grad = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r * 2);
+          grad.addColorStop(0, `rgba(${acRgb}, ${alpha})`);
+          grad.addColorStop(0.5, `rgba(${acRgb}, ${alpha * 0.4})`);
+          grad.addColorStop(1, `rgba(${acRgb}, 0)`);
+          ctx.beginPath();
+          ctx.arc(o.x, o.y, o.r * 2, 0, Math.PI * 2);
+          ctx.fillStyle = grad;
+          ctx.fill();
+
+          // Bright inner core
+          ctx.beginPath();
+          ctx.arc(o.x, o.y, o.r * 0.5, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${acRgb}, ${alpha * 1.2})`;
+          ctx.fill();
+        }
+
+        _bgRafId = requestAnimationFrame(draw);
+      }
+      _bgRafId = requestAnimationFrame(draw);
+    }, 50);
+  }
 }
 
 function setMediaPage(p) {
@@ -691,6 +711,7 @@ function rowHtml(e, idx = 0) {
 /* ── Quick ep controls ── */
 function quickEp(id, delta) {
   const e = DATA.find(x => x.id === id); if (!e) return;
+  const prevStatus = e.status;
   e.epCur = Math.max(0, (parseInt(e.epCur) || 0) + delta);
   if (e.epTot && e.epCur >= parseInt(e.epTot) && e.status !== 'dropped' && e.status !== 'upcoming') {
     if (['watching', 'plan', 'not_started', 'on_hold'].includes(e.status)) {
@@ -704,7 +725,18 @@ function quickEp(id, delta) {
     e.airingDay = null;
     e.airingTime = null;
   }
-  e.updatedAt = Date.now(); saveData(DATA); renderMediaBody();
+  e.updatedAt = Date.now();
+  saveData(DATA);
+
+  // ── Targeted DOM patch: avoid rebuilding the entire list ──
+  // If status changed the card moves to a different section → full rebuild.
+  // Otherwise patch only the affected card's text and progress bar in place.
+  if (e.status !== prevStatus) {
+    renderMediaBody();
+  } else {
+    _patchCardInPlace(e);
+  }
+
   mediaApi.patch(id, { ep_cur: e.epCur, epCur: e.epCur, status: e.status, airing_day: e.airingDay, airingDay: e.airingDay, airing_time: e.airingTime, airingTime: e.airingTime }).catch(err => console.warn('[quickEp Sync Fail]', err));
   if (PANEL === 'detail' && PEDIT === id) renderDetailPanel(DATA.find(x => x.id === id));
   _malSyncQuiet(e);
@@ -712,6 +744,85 @@ function quickEp(id, delta) {
 
 // Keep for backward compat (called from old timeline row HTML that no longer renders)
 function quickTlEp(eid, idx, delta) { quickEp(eid, delta); }
+
+/**
+ * _patchCardInPlace(e)
+ * Surgically updates only the parts of card #row-{e.id} that quickEp changes:
+ * episode counter text, progress bar width, and status colour / class.
+ * Never touches any other card. Never triggers a staggered CSS re-animation.
+ */
+function _patchCardInPlace(e) {
+  const card = document.getElementById('row-' + e.id);
+  if (!card) return; // card is in an unloaded slot — slot will render fresh when scrolled into view
+
+  const rCur = parseInt(e.epCur || 0);
+  const rTot = parseInt(e.epTot || 0);
+  const rPct = rTot ? Math.round(rCur / rTot * 100) : (rCur > 0 ? 100 : 0);
+  const col  = _mediaStatusBar(e.status);
+
+  // Update episode counter span inside .m-ep-ctrl
+  const epNum = card.querySelector('.m-ep-num');
+  if (epNum) epNum.textContent = rCur;
+
+  // Update progress bar fill width
+  const fill = card.querySelector('.m-prog-fill');
+  if (fill) { fill.style.width = rPct + '%'; fill.style.background = col; }
+
+  // Update progress text (e.g. "12/24")
+  const txt = card.querySelector('.m-prog-txt');
+  if (txt) txt.textContent = rCur + (rTot ? '/' + rTot : '');
+
+  // Update status CSS custom props & glow
+  card.style.setProperty('--card-glow', col);
+  card.style.setProperty('--status-col', col);
+  const strip = card.querySelector('.m-card-strip');
+  if (strip) strip.style.setProperty('--strip-col', col);
+
+  // Update status tag text/class
+  const stag = card.querySelector('.m-stag');
+  if (stag) stag.outerHTML = _mstag(e.status);
+}
+
+/**
+ * _patchCardFull(e)
+ * Replaces a single card's DOM with freshly rendered rowHtml for e.
+ * Used by saveEntry when only metadata changed (same status, same section).
+ * Preserves m-card-visible so the entrance animation does NOT replay.
+ * Falls back to renderMediaBody() if the card element isn't in the DOM
+ * (i.e. it is inside an unloaded virtual-scroll slot).
+ */
+function _patchCardFull(e) {
+  const card = document.getElementById('row-' + e.id);
+  if (!card) {
+    // Card is in an offscreen slot — the slot holds stale HTML; update the cache.
+    const slot = document.getElementById('slot-' + e.id);
+    if (slot) {
+      const newHtml = rowHtml(e, 0);
+      _slotCache.set(slot, { html: newHtml, height: _slotCache.get(slot)?.height ?? 62 });
+      if (slot.dataset.loaded === '1') {
+        // Slot is currently visible — repopulate it
+        slot.innerHTML = newHtml;
+        const newCard = slot.firstElementChild;
+        if (newCard) newCard.classList.add('m-card-visible');
+      }
+    }
+    return;
+  }
+  // Preserve the animated-in state: card is already visible, keep it that way.
+  const wasVisible = card.classList.contains('m-card-visible');
+  const newHtml = rowHtml(e, 0);
+  // Replace the card element itself within its parent slot/container
+  const parent = card.parentElement;
+  if (parent) {
+    const temp = document.createElement('div');
+    temp.innerHTML = newHtml;
+    const newCard = temp.firstElementChild;
+    if (newCard) {
+      if (wasVisible) newCard.classList.add('m-card-visible');
+      parent.replaceChild(newCard, card);
+    }
+  }
+}
 
 /* ═══════════════════════════════
    DASHBOARD
@@ -1575,13 +1686,22 @@ function saveEntry(eid) {
   }
   if (eid) {
     const i = DATA.findIndex(x => x.id === eid);
+    const prevEntry = DATA[i];
     DATA[i] = entry;
     mediaApi.patch(eid, entry).catch(err => console.warn('[saveEntry Sync Fail]', err));
+    saveData(DATA); closePanel();
+    // If the card's section didn't change, patch in place instead of full rebuild.
+    if (prevEntry && prevEntry.status === entry.status && MEDIA_PAGE === 'list') {
+      _patchCardFull(entry);
+    } else {
+      renderMediaBody();
+    }
+    toast('✓ Saved');
   } else {
     DATA.unshift(entry);
     mediaApi.create(entry).catch(err => console.warn('[createEntry Sync Fail]', err));
+    saveData(DATA); closePanel(); renderMediaBody(); toast('✓ Saved');
   }
-  saveData(DATA); closePanel(); render(); toast('✓ Saved');
   if (entry.malId) {
     if (!window.window.SETTINGS?.malRefreshToken) {
       toast('Entry saved — MAL not connected (Settings → Security)', '#fbbf24');
