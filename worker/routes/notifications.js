@@ -72,11 +72,23 @@ export async function handleNotificationsRoutes(request, env, ctx, requestId, pa
     return successResponse({ success: true }, requestId);
   }
 
+  // ── POST /v1/notifications/clear-read (or DELETE /v1/notifications/read) — Delete/clear read notifications ──
+  if ((method === 'POST' && pathname === '/v1/notifications/clear-read') ||
+      (method === 'DELETE' && pathname === '/v1/notifications/read')) {
+    const res = await env.DB.prepare(`
+      UPDATE notifications
+      SET dismissed_at = datetime('now')
+      WHERE user_id = ? AND read_at IS NOT NULL AND dismissed_at IS NULL;
+    `).bind(userId).run();
+
+    return successResponse({ success: true, count: res?.meta?.changes || 0 }, requestId);
+  }
+
   // ── Actions on specific notification /v1/notifications/:id/... ──
   if (pathname.startsWith('/v1/notifications/')) {
     const parts = pathname.split('/');
     const notifId = parts[3];
-    const action = parts[4]; // 'read', 'dismiss', 'ignore', 'add'
+    const action = parts[4]; // 'read', 'dismiss', 'delete', 'ignore', 'add'
 
     if (!notifId) {
       return errorResponse('INVALID_INPUT', 'Notification ID is required', requestId, 400);
@@ -96,8 +108,8 @@ export async function handleNotificationsRoutes(request, env, ctx, requestId, pa
       return successResponse({ success: true }, requestId);
     }
 
-    // ── POST /v1/notifications/:id/dismiss ──
-    if (method === 'POST' && action === 'dismiss') {
+    // ── POST /v1/notifications/:id/dismiss (or DELETE /v1/notifications/:id) ──
+    if ((method === 'POST' && (action === 'dismiss' || action === 'delete')) || (method === 'DELETE' && !action)) {
       const res = await env.DB.prepare(`
         UPDATE notifications
         SET dismissed_at = datetime('now')

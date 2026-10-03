@@ -64,6 +64,17 @@ function createMockDb() {
                 }
                 return { meta: { changes: count } };
               }
+              if (normSql.includes('UPDATE notifications SET dismissed_at = datetime(\'now\') WHERE user_id = ? AND read_at IS NOT NULL')) {
+                const [userId] = params;
+                let count = 0;
+                for (const n of notifications.values()) {
+                  if (n.user_id === userId && n.read_at && !n.dismissed_at) {
+                    n.dismissed_at = '2026-10-03T10:00:00Z';
+                    count++;
+                  }
+                }
+                return { meta: { changes: count } };
+              }
               if (normSql.includes('UPDATE notifications SET dismissed_at = datetime(\'now\') WHERE id = ? AND user_id = ?')) {
                 const [id, userId] = params;
                 const n = notifications.get(id);
@@ -185,5 +196,22 @@ test('notifications_api: POST /v1/notifications/:id/add idempotently creates med
   assert.ok(json.data.mediaId);
   assert.equal(json.data.title, 'Attack on Titan Sequel');
   assert.equal(json.data.success, true);
+});
+
+test('notifications_api: POST /v1/notifications/clear-read deletes read notifications', async () => {
+  const db = createMockDb();
+  db.notifications.set('n1', { id: 'n1', user_id: 'user1', read_at: '2026-10-03', dismissed_at: null });
+  db.notifications.set('n2', { id: 'n2', user_id: 'user1', read_at: null, dismissed_at: null });
+  db.notifications.set('n3', { id: 'n3', user_id: 'user2', read_at: '2026-10-03', dismissed_at: null });
+
+  const req = new Request('http://localhost/v1/notifications/clear-read', { method: 'POST' });
+  const res = await handleNotificationsRoutes(req, { DB: db }, {}, 'req6', '/v1/notifications/clear-read', { sub: 'user1' });
+
+  assert.equal(res.status, 200);
+  const json = await res.json();
+  assert.equal(json.data.count, 1);
+  assert.ok(db.notifications.get('n1').dismissed_at);
+  assert.equal(db.notifications.get('n2').dismissed_at, null);
+  assert.equal(db.notifications.get('n3').dismissed_at, null);
 });
 

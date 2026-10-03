@@ -246,6 +246,45 @@ export async function markAllRead(e) {
   }
 }
 
+export async function deleteReadNotifs(e) {
+  if (e) e.stopPropagation();
+  const readCount = _notifications.filter(n => n.isRead).length;
+  if (readCount === 0) return;
+
+  _notifications = _notifications.filter(n => !n.isRead);
+  renderNotifDropdown();
+  toast(`✓ Deleted ${readCount} read notification${readCount > 1 ? 's' : ''}`);
+
+  const token = getAccessToken();
+  if (token) {
+    fetch(`${_getApiBase()}/v1/notifications/clear-read`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+    }).catch(err => console.warn('[Notifications] Clear read error:', err));
+  }
+}
+
+export async function deleteSingleNotif(notifId, e) {
+  if (e) e.stopPropagation();
+  const notif = _notifications.find(n => n.id === notifId);
+  if (!notif) return;
+
+  _notifications = _notifications.filter(n => n.id !== notifId);
+  if (!notif.isRead) {
+    _unreadCount = Math.max(0, _unreadCount - 1);
+    _updateBadge(_unreadCount);
+  }
+  renderNotifDropdown();
+
+  const token = getAccessToken();
+  if (token) {
+    fetch(`${_getApiBase()}/v1/notifications/${notifId}/dismiss`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+    }).catch(err => console.warn('[Notifications] Delete error:', err));
+  }
+}
+
 export async function syncUpcomingNow(e) {
   if (e) e.stopPropagation();
   if (_isSyncing) return;
@@ -299,6 +338,7 @@ export function renderNotifDropdown() {
   }
 
   const items = _filterUnreadOnly ? _notifications.filter(n => !n.isRead) : _notifications;
+  const hasRead = _notifications.some(n => n.isRead);
 
   const headerHtml = `
     <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.02)">
@@ -309,6 +349,11 @@ export function renderNotifDropdown() {
       <div style="display:flex;align-items:center;gap:6px">
         ${_unreadCount > 0 ? `
           <button onclick="markAllRead(event)" style="background:none;border:none;color:var(--ac);font-size:11px;font-weight:600;cursor:pointer;padding:3px 6px">Mark all read</button>
+        ` : ''}
+        ${hasRead ? `
+          <button onclick="deleteReadNotifs(event)" style="background:none;border:none;color:var(--mu);font-size:11px;font-weight:600;cursor:pointer;padding:3px 6px;transition:color .15s" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='var(--mu)'" title="Delete all read notifications">
+            Delete read
+          </button>
         ` : ''}
         ${isMobile ? `<button onclick="closeNotifDropdown()" style="background:none;border:none;color:var(--mu);font-size:16px;cursor:pointer;padding:0 4px">✕</button>` : ''}
       </div>
@@ -356,6 +401,7 @@ export function renderNotifDropdown() {
                   </a>
                 ` : ''}
                 <span style="font-size:9px;color:var(--mu)">${_formatNotifTime(n.createdAt)}</span>
+                <button onclick="deleteSingleNotif('${n.id}', event)" title="Delete notification" style="background:none;border:none;color:var(--mu);font-size:12px;cursor:pointer;padding:0 2px;line-height:1;opacity:0.5;transition:all .15s" onmouseover="this.style.opacity='1';this.style.color='#f87171'" onmouseout="this.style.opacity='0.5';this.style.color='var(--mu)'">✕</button>
               </div>
             </div>
             <div class="notif-rel" style="font-size:11px;color:var(--tx2);margin-top:2px;line-height:1.35">${esc(n.message || '')}</div>
@@ -457,6 +503,8 @@ Object.assign(window, {
   addSequelToLibrary,
   ignoreSequel,
   dismissNotif,
+  deleteSingleNotif,
+  deleteReadNotifs,
   markNotifRead,
   markAllRead,
   syncUpcomingNow,

@@ -148,6 +148,27 @@ async function run() {
   });
   console.log('Dropdown still open after clicking All tab:', isStillOpen2);
 
+  // Test Delete read button:
+  const deleteReadBtn = await page.$('#notif-dropdown button:has-text("Delete read")');
+  console.log('Delete read button found:', !!deleteReadBtn);
+  if (deleteReadBtn) {
+    const cardsBefore = (await page.$$('.notif-card')).length;
+    console.log('Cards before Delete read:', cardsBefore);
+    await page.click('#notif-dropdown button:has-text("Delete read")');
+    await page.waitForTimeout(1000);
+    const cardsAfter = (await page.$$('.notif-card')).length;
+    console.log('Cards after Delete read:', cardsAfter);
+  }
+
+  // Test individual delete button ✕ on a notification card
+  const singleDeleteBtn = await page.$('.notif-card button[title="Delete notification"]');
+  console.log('Single card delete button found:', !!singleDeleteBtn);
+  if (singleDeleteBtn) {
+    await page.click('.notif-card button[title="Delete notification"]');
+    await page.waitForTimeout(1000);
+    console.log('Single card delete clicked successfully');
+  }
+
   // Close dropdown
   await page.evaluate(() => window.closeNotifDropdown && window.closeNotifDropdown());
   await page.waitForTimeout(300);
