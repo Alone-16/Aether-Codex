@@ -25,6 +25,7 @@ import {
   initGIS,
 } from './shared/drive.js';
 import { initAiringSync, checkAiringAnime, isMediaAiring } from './shared/airing_sync.js';
+import { initNotifications, fetchNotifications } from './shared/notifications.js';
 
 // ── Expose globals IMMEDIATELY so inline onclick="" handlers work ──
 Object.assign(window, {
@@ -257,6 +258,9 @@ async function boot() {
 
   // 6. Initialize Automatic Airing Anime Sync & Midnight Scheduler
   initAiringSync();
+
+  // 7. Initialize In-App Notifications & Upcoming Radar
+  initNotifications();
 }
 
 window.bootApp = boot;

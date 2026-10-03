@@ -46,6 +46,15 @@ CREATE TABLE IF NOT EXISTS media (
     linked_group_order INTEGER,
     pinned INTEGER DEFAULT 0,
     notes TEXT,
+    start_date TEXT,
+    end_date TEXT,
+    airing_day INTEGER,
+    airing_time TEXT,
+    release_date TEXT,
+    release_date_source TEXT,
+    release_date_updated_at TEXT,
+    cover_image TEXT,
+    watch_url TEXT,
     created_at INTEGER DEFAULT (unixepoch()),
     updated_at INTEGER DEFAULT (unixepoch()),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -247,4 +256,42 @@ CREATE TABLE IF NOT EXISTS public_shares (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_publicshares_user ON public_shares(user_id);
+
+-- 18. Notifications System
+CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    type TEXT NOT NULL,            -- 'sequel_discovery' | 'date_change'
+    mal_id INTEGER,
+    media_id TEXT,                 -- set once added to library
+    title TEXT NOT NULL,
+    message TEXT,
+    data_json TEXT,                -- JSON: {match:{method:'relation'}, old_date, new_date, kept_manual, poster, format, parent_media_id, parent_title, status_hint}
+    dedupe_key TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    read_at TEXT,
+    dismissed_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE (user_id, dedupe_key)
+);
+CREATE INDEX IF NOT EXISTS idx_notif_user_unread ON notifications(user_id, read_at, dismissed_at);
+
+-- 19. Ignored Titles (Never re-notify unless added)
+CREATE TABLE IF NOT EXISTS ignored_titles (
+    user_id TEXT NOT NULL,
+    mal_id INTEGER NOT NULL,
+    ignored_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, mal_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- 20. Global Relation Cache (Cross-User)
+CREATE TABLE IF NOT EXISTS relation_cache (
+    mal_id INTEGER NOT NULL,
+    provider TEXT NOT NULL,
+    fetched_at TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    PRIMARY KEY (mal_id, provider)
+);
+
 

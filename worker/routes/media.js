@@ -44,6 +44,10 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
       endDate: m.end_date,
       airingDay: m.airing_day,
       airingTime: m.airing_time,
+      releaseDate: m.release_date,
+      releaseDateSource: m.release_date_source,
+      releaseDateUpdatedAt: m.release_date_updated_at,
+      upcomingDate: m.release_date,
       coverImage: m.cover_image,
       watchUrl: m.watch_url,
       pinned: Boolean(m.pinned),
@@ -119,18 +123,21 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
     const endDate = body.end_date || body.endDate || null;
     const airingDay = body.airing_day !== undefined ? body.airing_day : (body.airingDay !== undefined ? body.airingDay : null);
     const airingTime = body.airing_time || body.airingTime || null;
+    const releaseDate = body.release_date || body.releaseDate || body.upcoming_date || body.upcomingDate || null;
+    const releaseDateSource = body.release_date_source || body.releaseDateSource || (releaseDate ? 'manual' : null);
+    const releaseDateUpdatedAt = releaseDate ? new Date().toISOString() : null;
     const coverImage = body.cover_image || body.coverImage || null;
     const watchUrl = body.watch_url || body.watchUrl || null;
 
     await env.DB.prepare(`
-      INSERT INTO media (id, user_id, genre_id, title, title_en, title_jp, status, score, ep_cur, ep_tot, ep_duration, start_date, end_date, airing_day, airing_time, cover_image, watch_url, mal_id, linked_group_id, linked_group_order, notes, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch());
+      INSERT INTO media (id, user_id, genre_id, title, title_en, title_jp, status, score, ep_cur, ep_tot, ep_duration, start_date, end_date, airing_day, airing_time, release_date, release_date_source, release_date_updated_at, cover_image, watch_url, mal_id, linked_group_id, linked_group_order, notes, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch());
     `).bind(
       id, userId, genreId, title,
       sanitizeString(body.title_en || body.titleEn, 300) || null,
       sanitizeString(body.title_jp || body.titleJp, 300) || null,
       status, score, epCur, epTot, epDuration,
-      startDate, endDate, airingDay, airingTime, coverImage, watchUrl,
+      startDate, endDate, airingDay, airingTime, releaseDate, releaseDateSource, releaseDateUpdatedAt, coverImage, watchUrl,
       malId,
       body.linked_group_id || body.linkedGroupId || null,
       body.linked_group_order || body.linkedGroupOrder || null,
@@ -164,6 +171,19 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
     if (body.end_date !== undefined || body.endDate !== undefined) { updates.push('end_date = ?'); params.push(body.end_date ?? body.endDate ?? null); }
     if (body.airing_day !== undefined || body.airingDay !== undefined) { updates.push('airing_day = ?'); params.push(body.airing_day ?? body.airingDay ?? null); }
     if (body.airing_time !== undefined || body.airingTime !== undefined) { updates.push('airing_time = ?'); params.push(body.airing_time ?? body.airingTime ?? null); }
+    if (body.release_date !== undefined || body.releaseDate !== undefined || body.upcoming_date !== undefined || body.upcomingDate !== undefined) {
+      const val = body.release_date ?? body.releaseDate ?? body.upcoming_date ?? body.upcomingDate ?? null;
+      updates.push('release_date = ?');
+      params.push(val);
+      const src = body.release_date_source ?? body.releaseDateSource ?? (val ? 'manual' : null);
+      updates.push('release_date_source = ?');
+      params.push(src);
+      updates.push('release_date_updated_at = ?');
+      params.push(new Date().toISOString());
+    } else if (body.release_date_source !== undefined || body.releaseDateSource !== undefined) {
+      updates.push('release_date_source = ?');
+      params.push(body.release_date_source ?? body.releaseDateSource ?? null);
+    }
     if (body.cover_image !== undefined || body.coverImage !== undefined) { updates.push('cover_image = ?'); params.push(body.cover_image ?? body.coverImage ?? null); }
     if (body.watch_url !== undefined || body.watchUrl !== undefined) { updates.push('watch_url = ?'); params.push(body.watch_url ?? body.watchUrl ?? null); }
     if (body.mal_id !== undefined || body.malId !== undefined) { updates.push('mal_id = ?'); params.push(body.mal_id ? parseInt(body.mal_id) : (body.malId ? parseInt(body.malId) : null)); }

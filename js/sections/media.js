@@ -5,6 +5,7 @@
 import { toast, showConfirm, showAlert, closePanel } from '../shared/ui.js';
 import { mediaApi } from '../shared/api.js';
 import { isMediaAiring } from '../shared/airing_sync.js';
+import { parseReleaseDate, localDay, daysUntil, formatReleaseDate } from '../shared/date_utils.js';
 
 /* ---------- visual helpers ---------- */
 function _mediaStatusBar(s) {
@@ -27,6 +28,30 @@ function _airBadge(e) {
   const lbl  = diff === 0 ? 'Airs Today!' : diff === 1 ? 'Tomorrow' : `in ${diff}d`;
   const col  = diff === 0 ? '#4ade80'     : diff === 1 ? '#fbbf24'  : 'rgba(255,255,255,.3)';
   return `<span class="m-air-badge" style="color:${col}">📺 ${lbl}</span>`;
+}
+
+function _releaseBadge(e) {
+  if (e.status !== 'upcoming') return '';
+  const rel = e.releaseDate || e.release_date;
+  const parsed = parseReleaseDate(rel);
+  const todayStr = localDay(new Date());
+
+  if (parsed.precision === 'day') {
+    const diff = daysUntil(parsed.str, todayStr);
+    if (diff === 0) {
+      return `<span class="m-air-badge" style="color:#fb923c;font-weight:700">★ Premieres Today!</span>`;
+    } else if (diff < 0) {
+      return `<span class="m-air-badge" style="color:#fbbf24;font-weight:600">★ Released (${formatReleaseDate(parsed.str)})</span>`;
+    } else {
+      const col = diff <= 3 ? '#fbbf24' : 'rgba(255,255,255,.45)';
+      return `<span class="m-air-badge" style="color:${col}">🗓 ${formatReleaseDate(parsed.str)} (in ${diff}d)</span>`;
+    }
+  } else if (parsed.precision === 'month') {
+    return `<span class="m-air-badge" style="color:rgba(255,255,255,.45)">🗓 ${formatReleaseDate(parsed.str)}</span>`;
+  } else if (parsed.precision === 'year') {
+    return `<span class="m-air-badge" style="color:rgba(255,255,255,.35)">🗓 ${parsed.str}</span>`;
+  }
+  return `<span class="m-air-badge" style="color:rgba(255,255,255,.25)">🗓 Date TBA</span>`;
 }
 
 function _mstag(s) {
@@ -638,6 +663,8 @@ function rowHtml(e, idx = 0) {
           ${rewBadge}
           ${grpBadge}
           ${_airBadge(e)}
+          ${_releaseBadge(e)}
+          ${(e.genreId === 'anime' && !e.malId) ? `<span class="m-badge-unlinked" title="Anime not linked to MAL/AniList — click to link" onclick="event.stopPropagation();quickLinkMal('${e.id}')" style="font-size:9px;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:3px;padding:1px 4px;cursor:pointer">⚠️ Unlinked</span>` : ''}
         </div>
       </div>
       <div class="m-card-r">
@@ -925,6 +952,10 @@ function renderDetailPanel(e) {
                style="margin-left:auto;font-size:11px;font-weight:600;color:var(--ac);background:rgba(var(--ac-rgb),.1);border:1px solid rgba(var(--ac-rgb),.25);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;transition:all 0.2s">↻ Sync Now</button>`
           : `<span style="margin-left:auto;font-size:11px;color:#fb7185;font-weight:600">● Not connected</span>`
         }
+      </div>` : (!e.malId && e.genreId === 'anime') ? `<div style="padding:10px 20px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(239,68,68,0.06)">
+        <span style="font-size:12px;color:#f87171">⚠️ Not linked to MyAnimeList / AniList</span>
+        <button onclick="event.stopPropagation();quickLinkMal('${e.id}')"
+          style="font-size:11px;font-weight:600;color:var(--ac);background:rgba(var(--ac-rgb),.1);border:1px solid rgba(var(--ac-rgb),.25);border-radius:6px;padding:4px 10px;cursor:pointer">Link MAL</button>
       </div>` : ''}
       <div style="padding:16px 20px;border-bottom:1px solid var(--brd)">
         <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;color:var(--mu);margin-bottom:12px">Details</div>
@@ -947,6 +978,10 @@ function renderDetailPanel(e) {
           </div>` : e.airingDay === 'finished' ? `<div class="m-detail-box" style="grid-column:span 2">
             <div class="m-detail-lbl">AIRING</div>
             <div class="m-detail-val" style="color:var(--mu)">📺 Finished Airing</div>
+          </div>` : ''}
+          ${(e.releaseDate || e.release_date) ? `<div class="m-detail-box" style="grid-column:span 2">
+            <div class="m-detail-lbl">RELEASE DATE</div>
+            <div class="m-detail-val" style="color:#fbbf24">🗓 ${formatReleaseDate(e.releaseDate || e.release_date)}${e.releaseDateSource ? ` <span style="font-size:10px;color:var(--mu);font-weight:400">(${e.releaseDateSource})</span>` : ''}</div>
           </div>` : ''}
         </div>
       </div>
@@ -1341,6 +1376,12 @@ function renderFormPanel(e) {
           <input class="fin" type="time" id="f-airingtime" value="${e&&e.airingTime?e.airingTime:''}">
         </div>
       </div>
+      <div class="fg" id="fg-releasedate">
+        <label class="flbl">Release Date (Premiere)</label>
+        <input class="fin" type="text" id="f-releasedate" placeholder="YYYY, YYYY-MM, or YYYY-MM-DD" value="${esc(e?.releaseDate || e?.release_date || '')}">
+        <input type="hidden" id="f-releasedate-source" value="${esc(e?.releaseDateSource || e?.release_date_source || '')}">
+        <div style="font-size:10px;color:var(--mu);margin-top:3px">Format: YYYY-MM-DD, YYYY-MM, or YYYY (leave blank for TBA)</div>
+      </div>
       <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--mu);margin:14px 0 9px;padding:5px 0 5px;border-top:1px solid var(--brd);border-bottom:1px solid var(--brd)">Progress</div>
       <div class="fg-row">
         <div class="fg"><label class="flbl">Episodes Watched</label>
@@ -1423,6 +1464,14 @@ function saveEntry(eid) {
   const selectedGenre = g('f-genre');
   const isAnimeOrManga = selectedGenre === 'anime' || selectedGenre === 'manga';
 
+  const inputRelDate = document.getElementById('f-releasedate')?.value?.trim() || null;
+  const initialRelDate = existing?.releaseDate || existing?.release_date || null;
+  let relDateSource = document.getElementById('f-releasedate-source')?.value || existing?.releaseDateSource || existing?.release_date_source || null;
+
+  if (inputRelDate !== initialRelDate) {
+    relDateSource = inputRelDate ? (relDateSource === 'mal' || relDateSource === 'anilist' ? relDateSource : 'manual') : null;
+  }
+
   const entry = {
     id:eid||uid(), title,
     genreId: selectedGenre, status:g('f-status'),
@@ -1438,7 +1487,10 @@ function saveEntry(eid) {
     endDate:   g('f-enddate'),
     rating: ratingVal ? parseFloat(ratingVal) : null,
     epDuration: epDurVal ? parseInt(epDurVal) : null,
-    upcomingDate:existing?.upcomingDate||null, upcomingTime:existing?.upcomingTime||null,
+    releaseDate: inputRelDate,
+    releaseDateSource: relDateSource,
+    releaseDateUpdatedAt: inputRelDate ? new Date().toISOString() : null,
+    upcomingDate: inputRelDate,
     notes:g('f-notes'),
     watchUrl:document.getElementById('f-url')?.value?.trim()||null,
     malId: isAnimeOrManga ? (document.getElementById('f-malid')?.value || existing?.malId || null) : null,
@@ -2754,7 +2806,28 @@ function _malSelect(rJson) {
     if (airingTimeEl) airingTimeEl.value = '';
   }
 
+  // 4. Auto-fill release date if present in MAL search result
+  if (r.start_date) {
+    const relDateEl = document.getElementById('f-releasedate');
+    const relDateSrcEl = document.getElementById('f-releasedate-source');
+    if (relDateEl) relDateEl.value = r.start_date;
+    if (relDateSrcEl) relDateSrcEl.value = 'mal';
+  }
+
   toast(`✓ Autofilled: ${displayTitle}`);
+}
+
+function quickLinkMal(id) {
+  openEdit(id);
+  setTimeout(() => {
+    const inp = document.getElementById('mal-search-inp');
+    const e = DATA.find(x => x.id === id);
+    if (inp && e) {
+      inp.value = e.title;
+      malSearchInput(e.title);
+      inp.focus();
+    }
+  }, 100);
 }
 
 function _malUpdateCoverPreview(url) {
@@ -2771,6 +2844,7 @@ Object.assign(window, {
   // Core render
   renderMedia, renderMediaBody, renderSectionStub,
   setMediaPage, setMediaChip, toggleMediaSortDd, setMediaSort,
+  quickLinkMal,
 
   // List / grid
   renderList, expandRows, filteredData,

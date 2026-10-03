@@ -1,4 +1,5 @@
 import { isMediaAiring, checkAiringAnime } from '../shared/airing_sync.js';
+import { parseReleaseDate, localDay, daysUntil, formatReleaseDate } from '../shared/date_utils.js';
 
 function renderHome(c){
   // Show/hide drive hint based on state
@@ -224,42 +225,125 @@ function renderHome(c){
 
 let AIRING_DAY = new Date().getDay(); // defaults to today
 
-function renderAiringWidget(){
-  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const todayN = new Date().getDay();
-  const airingEntries = DATA.filter(isMediaAiring);
+/**
+ * Returns watching shows airing on dayIndex and upcoming anime premiering on that calendar date.
+ */
+function getCalendarShowsForDay(dayIndex) {
+  const now = new Date();
+  const todayN = now.getDay();
+  const todayStr = localDay(now);
 
-  // Build day pills
-  const pills = days.map((d,i)=>{
-    const hasShows = airingEntries.some(e=>parseInt(e.airingDay, 10)===i);
-    const isToday  = i===todayN;
-    const isSel    = i===AIRING_DAY;
+  // Target date for dayIndex in the current displayed week
+  const diffDays = dayIndex - todayN;
+  const targetDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffDays);
+  const targetDateStr = localDay(targetDateObj);
+
+  // 1. Weekly recurring watching shows
+  const watchingShows = DATA.filter(e => isMediaAiring(e) && parseInt(e.airingDay, 10) === dayIndex).map(e => {
+    const diff = (dayIndex - todayN + 7) % 7;
+    const dayLbl = diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow' : `in ${diff}d`;
+    const lblCol = diff === 0 ? '#4ade80' : diff === 1 ? '#fbbf24' : 'var(--mu)';
+    return { ...e, isUpcomingPremiere: false, dayLbl, lblCol };
+  });
+
+  // 2. Upcoming anime with confirmed day-precision release date falling on this exact calendar day
+  const upcomingPremieres = DATA.filter(e => {
+    if (e.status !== 'upcoming') return false;
+    const rel = e.releaseDate || e.release_date;
+    const parsed = parseReleaseDate(rel);
+    return parsed.precision === 'day' && parsed.str === targetDateStr;
+  }).map(e => {
+    const isToday = targetDateStr === todayStr;
+    const dayLbl = isToday ? '★ Premieres Today' : `★ Premiere (${formatReleaseDate(targetDateStr)})`;
+    const lblCol = isToday ? '#fb923c' : '#fbbf24';
+    return { ...e, isUpcomingPremiere: true, dayLbl, lblCol };
+  });
+
+  return [...watchingShows, ...upcomingPremieres];
+}
+
+/**
+ * Returns upcoming titles whose release date has already passed while still in upcoming status.
+ */
+function getReleasedNotStartedShows() {
+  const todayStr = localDay(new Date());
+  return DATA.filter(e => {
+    if (e.status !== 'upcoming') return false;
+    const rel = e.releaseDate || e.release_date;
+    const parsed = parseReleaseDate(rel);
+    return parsed.precision === 'day' && parsed.str < todayStr;
+  });
+}
+
+function renderAiringWidget(){
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const todayN = new Date().getDay();
+
+  // Build day pills (checks if either watching or upcoming premiere is scheduled)
+  const pills = days.map((d, i) => {
+    const shows = getCalendarShowsForDay(i);
+    const hasShows = shows.length > 0;
+    const hasPremiere = shows.some(x => x.isUpcomingPremiere);
+    const isToday  = i === todayN;
+    const isSel    = i === AIRING_DAY;
+    const borderColor = isSel ? 'var(--ac)' : hasPremiere ? '#fb923c' : hasShows ? 'rgba(var(--ac-rgb),.25)' : 'var(--brd)';
+    const bgColor = isSel ? 'var(--ac)' : hasPremiere ? 'rgba(251,146,60,.12)' : hasShows ? 'rgba(var(--ac-rgb),.08)' : 'transparent';
+    const textColor = isSel ? '#000' : hasPremiere ? '#fb923c' : hasShows ? 'var(--ac)' : 'var(--mu)';
+
     return `<button onclick="selectAiringDay(${i})"
-      style="padding:7px 4px;border-radius:20px;font-size:12px;font-weight:${isSel?'700':'500'};cursor:pointer;white-space:nowrap;border:1px solid ${isSel?'var(--ac)':hasShows?'rgba(var(--ac-rgb),.25)':'var(--brd)'};background:${isSel?'var(--ac)':hasShows?'rgba(var(--ac-rgb),.08)':'transparent'};color:${isSel?'#000':hasShows?'var(--ac)':'var(--mu)'};position:relative;transition:all .15s;text-align:center;width:100%">
+      style="padding:7px 4px;border-radius:20px;font-size:12px;font-weight:${isSel?'700':'500'};cursor:pointer;white-space:nowrap;border:1px solid ${borderColor};background:${bgColor};color:${textColor};position:relative;transition:all .15s;text-align:center;width:100%">
       ${isToday?`<span style="position:absolute;top:2px;right:2px;width:4px;height:4px;border-radius:50%;background:${isSel?'#000':'var(--ac)'}"></span>`:''}
       ${d}
     </button>`;
   }).join('');
 
   // Shows for selected day
-  const sel = airingEntries.filter(e=>parseInt(e.airingDay, 10)===AIRING_DAY);
-  const diff = (AIRING_DAY - todayN + 7) % 7;
-  const dayLbl = diff===0?'Today':diff===1?'Tomorrow':`in ${diff}d`;
-  const lblCol = diff===0?'#4ade80':diff===1?'#fbbf24':'var(--mu)';
+  const sel = getCalendarShowsForDay(AIRING_DAY);
 
   const showList = sel.length
-    ? sel.map(e=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer" onclick="nav('media')">
-          <div style="width:6px;height:6px;border-radius:50%;background:var(--ac);flex-shrink:0"></div>
+    ? sel.map(e => `
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer" onclick="openDetail('${e.id}')">
+          <div style="width:6px;height:6px;border-radius:50%;background:${e.isUpcomingPremiere ? '#fb923c' : 'var(--ac)'};flex-shrink:0"></div>
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;color:var(--tx)">${esc(e.title)}</div>
-            ${e.airingTime?`<div style="font-size:11px;color:var(--mu);margin-top:1px">${e.airingTime}</div>`:''}
+            <div style="font-size:11px;color:var(--mu);margin-top:1px">
+              ${e.isUpcomingPremiere ? `<span style="color:#fb923c;font-weight:600">Upcoming Release</span>` : (e.airingTime || 'Weekly')}
+            </div>
           </div>
-          <span style="font-size:11px;font-weight:700;color:${lblCol};white-space:nowrap">${dayLbl}</span>
+          <span style="font-size:11px;font-weight:700;color:${e.lblCol};white-space:nowrap">${e.dayLbl}</span>
         </div>`).join('')
     : `<div style="font-size:13px;color:var(--mu);text-align:center;padding:16px 0">Nothing airing</div>`;
 
-  return`<div style="background:linear-gradient(to bottom right, var(--surf2), var(--surf)); border-radius:12px; border:1px solid rgba(255,255,255,0.06); box-shadow:0 4px 15px rgba(0,0,0,0.1); overflow:hidden">
+  // "Released, not started" section
+  const releasedNotStarted = getReleasedNotStartedShows();
+  let releasedHtml = '';
+  if (releasedNotStarted.length > 0) {
+    const itemsHtml = releasedNotStarted.slice(0, 3).map(e => `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</div>
+          <div style="font-size:10px;color:var(--mu);margin-top:1px">Released ${formatReleaseDate(e.releaseDate || e.release_date)}</div>
+        </div>
+        <button type="button" onclick="startWatchingEntry('${e.id}')"
+          style="padding:4px 9px;border-radius:5px;background:rgba(var(--ac-rgb),0.12);border:1px solid rgba(var(--ac-rgb),0.3);color:var(--ac);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s"
+          onmouseover="this.style.background='var(--ac)';this.style.color='#000'"
+          onmouseout="this.style.background='rgba(var(--ac-rgb),0.12)';this.style.color='var(--ac)'">
+          ▶ Start watching
+        </button>
+      </div>
+    `).join('');
+
+    releasedHtml = `
+      <div style="margin-top:12px;padding-top:12px;border-top:1px dashed rgba(255,255,255,0.08)">
+        <div style="font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#fbbf24;margin-bottom:6px">
+          ★ Released — Ready to Watch (${releasedNotStarted.length})
+        </div>
+        ${itemsHtml}
+      </div>
+    `;
+  }
+
+  return `<div style="background:linear-gradient(to bottom right, var(--surf2), var(--surf)); border-radius:12px; border:1px solid rgba(255,255,255,0.06); box-shadow:0 4px 15px rgba(0,0,0,0.1); overflow:hidden">
     <div style="padding:14px 18px 12px; border-bottom:1px solid rgba(255,255,255,0.04); display:flex; justify-content:space-between; align-items:center">
       <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:var(--tx)">📺 Airing This Week</div>
       <div style="display:flex;align-items:center;gap:6px">
@@ -272,26 +356,31 @@ function renderAiringWidget(){
     </div>
     <div style="padding:4px 18px 14px" id="airing-shows">
       ${showList}
+      ${releasedHtml}
     </div>
   </div>`;
 }
 
 function selectAiringDay(d) {
   AIRING_DAY = d;
-  // Re-render just the widget
-  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const todayN = new Date().getDay();
-  const airingEntries = DATA.filter(isMediaAiring);
 
   // Update pills
   const pillsEl = document.getElementById('airing-pills');
   if (pillsEl) {
-    pillsEl.innerHTML = days.map((day,i)=>{
-      const hasShows = airingEntries.some(e=>parseInt(e.airingDay, 10)===i);
-      const isToday  = i===todayN;
-      const isSel    = i===d;
+    pillsEl.innerHTML = days.map((day, i) => {
+      const shows = getCalendarShowsForDay(i);
+      const hasShows = shows.length > 0;
+      const hasPremiere = shows.some(x => x.isUpcomingPremiere);
+      const isToday  = i === todayN;
+      const isSel    = i === d;
+      const borderColor = isSel ? 'var(--ac)' : hasPremiere ? '#fb923c' : hasShows ? 'rgba(var(--ac-rgb),.25)' : 'var(--brd)';
+      const bgColor = isSel ? 'var(--ac)' : hasPremiere ? 'rgba(251,146,60,.12)' : hasShows ? 'rgba(var(--ac-rgb),.08)' : 'transparent';
+      const textColor = isSel ? '#000' : hasPremiere ? '#fb923c' : hasShows ? 'var(--ac)' : 'var(--mu)';
+
       return `<button onclick="selectAiringDay(${i})"
-        style="padding:7px 4px;border-radius:20px;font-size:12px;font-weight:${isSel?'700':'500'};cursor:pointer;white-space:nowrap;border:1px solid ${isSel?'var(--ac)':hasShows?'rgba(var(--ac-rgb),.25)':'var(--brd)'};background:${isSel?'var(--ac)':hasShows?'rgba(var(--ac-rgb),.08)':'transparent'};color:${isSel?'#000':hasShows?'var(--ac)':'var(--mu)'};position:relative;transition:all .15s;text-align:center;width:100%">
+        style="padding:7px 4px;border-radius:20px;font-size:12px;font-weight:${isSel?'700':'500'};cursor:pointer;white-space:nowrap;border:1px solid ${borderColor};background:${bgColor};color:${textColor};position:relative;transition:all .15s;text-align:center;width:100%">
         ${isToday?`<span style="position:absolute;top:2px;right:2px;width:4px;height:4px;border-radius:50%;background:${isSel?'#000':'var(--ac)'}"></span>`:''}
         ${day}
       </button>`;
@@ -299,66 +388,153 @@ function selectAiringDay(d) {
   }
 
   // Update show list
-  const sel = airingEntries.filter(e=>parseInt(e.airingDay, 10)===d);
-  const diff = (d - todayN + 7) % 7;
-  const dayLbl = diff===0?'Today':diff===1?'Tomorrow':`in ${diff}d`;
-  const lblCol = diff===0?'#4ade80':diff===1?'#fbbf24':'var(--mu)';
+  const sel = getCalendarShowsForDay(d);
   const showsEl = document.getElementById('airing-shows');
   if (showsEl) {
-    showsEl.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+    showsEl.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
     showsEl.style.opacity = '0';
-    showsEl.style.transform = 'translateY(5px)';
-    
+    showsEl.style.transform = 'translateY(4px)';
+
     setTimeout(() => {
-      showsEl.innerHTML = sel.length
-        ? sel.map(e=>`
-            <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer" onclick="nav('media')">
-              <div style="width:6px;height:6px;border-radius:50%;background:var(--ac);flex-shrink:0"></div>
+      const showList = sel.length
+        ? sel.map(e => `
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer" onclick="openDetail('${e.id}')">
+              <div style="width:6px;height:6px;border-radius:50%;background:${e.isUpcomingPremiere ? '#fb923c' : 'var(--ac)'};flex-shrink:0"></div>
               <div style="flex:1;min-width:0">
                 <div style="font-size:13px;font-weight:600;color:var(--tx)">${esc(e.title)}</div>
-                ${e.airingTime?`<div style="font-size:11px;color:var(--mu);margin-top:1px">${e.airingTime}</div>`:''}
+                <div style="font-size:11px;color:var(--mu);margin-top:1px">
+                  ${e.isUpcomingPremiere ? `<span style="color:#fb923c;font-weight:600">Upcoming Release</span>` : (e.airingTime || 'Weekly')}
+                </div>
               </div>
-              <span style="font-size:11px;font-weight:700;color:${lblCol};white-space:nowrap">${dayLbl}</span>
+              <span style="font-size:11px;font-weight:700;color:${e.lblCol};white-space:nowrap">${e.dayLbl}</span>
             </div>`).join('')
         : `<div style="font-size:13px;color:var(--mu);text-align:center;padding:16px 0">Nothing airing</div>`;
-      
-      void showsEl.offsetWidth; // flush css layout to ensure transition works
+
+      const releasedNotStarted = getReleasedNotStartedShows();
+      let releasedHtml = '';
+      if (releasedNotStarted.length > 0) {
+        const itemsHtml = releasedNotStarted.slice(0, 3).map(e => `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03)">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</div>
+              <div style="font-size:10px;color:var(--mu);margin-top:1px">Released ${formatReleaseDate(e.releaseDate || e.release_date)}</div>
+            </div>
+            <button type="button" onclick="startWatchingEntry('${e.id}')"
+              style="padding:4px 9px;border-radius:5px;background:rgba(var(--ac-rgb),0.12);border:1px solid rgba(var(--ac-rgb),0.3);color:var(--ac);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s"
+              onmouseover="this.style.background='var(--ac)';this.style.color='#000'"
+              onmouseout="this.style.background='rgba(var(--ac-rgb),0.12)';this.style.color='var(--ac)'">
+              ▶ Start watching
+            </button>
+          </div>
+        `).join('');
+
+        releasedHtml = `
+          <div style="margin-top:12px;padding-top:12px;border-top:1px dashed rgba(255,255,255,0.08)">
+            <div style="font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#fbbf24;margin-bottom:6px">
+              ★ Released — Ready to Watch (${releasedNotStarted.length})
+            </div>
+            ${itemsHtml}
+          </div>
+        `;
+      }
+
+      showsEl.innerHTML = showList + releasedHtml;
+      void showsEl.offsetWidth;
       showsEl.style.opacity = '1';
       showsEl.style.transform = 'translateY(0)';
-    }, 200);
+    }, 150);
+  }
+}
+
+/**
+ * Transitions an upcoming entry to watching status when user clicks "Start watching".
+ * For TV anime with a day-precision release date, pre-fills airingDay from the release date's weekday.
+ */
+export async function startWatchingEntry(id) {
+  const e = DATA.find(x => x.id === id);
+  if (!e) return;
+
+  const rel = e.releaseDate || e.release_date;
+  const parsed = parseReleaseDate(rel);
+  let airingDay = null;
+
+  // TV format check: if episodes > 1 or title does not say Movie
+  const isMovie = /movie|film|gekijouban/i.test(e.title) || (e.epTot && String(e.epTot) === '1');
+  if (!isMovie && parsed.precision === 'day') {
+    // Derive weekday from UTC to prevent local TZ skew
+    const utcDate = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
+    airingDay = utcDate.getUTCDay();
+  }
+
+  e.status = 'watching';
+  if (airingDay !== null) {
+    e.airingDay = airingDay;
+  }
+  e.updatedAt = Date.now();
+  saveData(DATA);
+
+  mediaApi.patch(e.id, {
+    status: 'watching',
+    airing_day: airingDay,
+    airingDay: airingDay,
+  }).catch(() => {});
+
+  toast(`✓ "${e.title}" moved to Watching!`, '#38bdf8');
+
+  // Re-render UI
+  const c = document.getElementById('content');
+  if (c && typeof renderHome === 'function') {
+    renderHome(c);
   }
 }
 
 function renderUpcomingWidget(){
-  const now=new Date(); now.setHours(0,0,0,0);
-  const items=[];
-  DATA.forEach(e=>{
-    if(e.upcomingDate && e.status === 'upcoming')items.push({title:e.title,date:e.upcomingDate,label:'New Release'});
-    (e.timeline||[]).forEach(it=>{if(it.upcomingDate && it.status === 'upcoming')items.push({title:e.title,date:it.upcomingDate,label:it.name||'New Season'})});
+  const todayStr = localDay(new Date());
+  const items = [];
+
+  DATA.forEach(e => {
+    if (e.status !== 'upcoming') return;
+    const rel = e.releaseDate || e.release_date || e.upcomingDate;
+    const parsed = parseReleaseDate(rel);
+
+    if (parsed.precision === 'day') {
+      const diff = daysUntil(parsed.str, todayStr);
+      let cls = 'up-far', lbl = `${diff}d`;
+      if (diff <= 0) { cls = 'up-past'; lbl = 'Released'; }
+      else if (diff <= 3) { cls = 'up-soon'; lbl = `${diff}d left`; }
+      else if (diff <= 14) { cls = 'up-near'; lbl = `${diff}d`; }
+      items.push({ id: e.id, title: e.title, sortVal: parsed.str, dateText: formatReleaseDate(parsed.str), label: 'New Release', cls, lbl, precision: 'day' });
+    } else if (parsed.precision === 'month') {
+      items.push({ id: e.id, title: e.title, sortVal: parsed.str + '-99', dateText: formatReleaseDate(parsed.str), label: 'New Season', cls: 'up-far', lbl: formatReleaseDate(parsed.str), precision: 'month' });
+    } else if (parsed.precision === 'year') {
+      items.push({ id: e.id, title: e.title, sortVal: parsed.str + '-99-99', dateText: parsed.str, label: 'New Season', cls: 'up-far', lbl: parsed.str, precision: 'year' });
+    } else {
+      items.push({ id: e.id, title: e.title, sortVal: '9999-99-99', dateText: 'TBA', label: 'Announced', cls: 'up-far', lbl: 'Date TBA', precision: 'none' });
+    }
   });
-  items.sort((a,b)=>new Date(a.date)-new Date(b.date));
-  const rows=items.slice(0,5).map(it=>{
-    const d=new Date(it.date+'T00:00:00');
-    const diff=Math.ceil((d-now)/86400000);
-    const mon=d.toLocaleString('default',{month:'short'}).toUpperCase();
-    let cls='up-far',lbl=`${diff}d`;
-    if(diff<=0){cls='up-past';lbl='Released';}
-    else if(diff<=3){cls='up-soon';lbl=`${diff}d left`;}
-    else if(diff<=14){cls='up-near';lbl=`${diff}d`;}
-    return`<div class="up-card" style="padding:8px 11px">
-      <div class="up-date-box"><div class="up-mon">${mon}</div><div class="up-day">${d.getDate()}</div></div>
+
+  items.sort((a, b) => a.sortVal.localeCompare(b.sortVal));
+
+  const rows = items.slice(0, 5).map(it => {
+    const mon = it.precision === 'day' ? it.dateText.slice(0, 3).toUpperCase() : it.precision === 'month' ? it.dateText.slice(0, 3).toUpperCase() : 'TBA';
+    const dayNum = it.precision === 'day' ? it.dateText.split(' ')[1]?.replace(',', '') || '—' : '—';
+
+    return `<div class="up-card" style="padding:8px 11px;cursor:pointer" onclick="openDetail('${it.id}')">
+      <div class="up-date-box"><div class="up-mon">${mon}</div><div class="up-day">${dayNum}</div></div>
       <div class="up-info">
         <div class="up-title" style="font-size:12px">${esc(it.title)}</div>
-        <div class="up-sub" style="font-size:10px">${esc(it.label)}</div>
+        <div class="up-sub" style="font-size:10px">${esc(it.label)} · ${it.dateText}</div>
       </div>
-      <div class="up-pill ${cls}">${lbl}</div>
+      <div class="up-pill ${it.cls}">${it.lbl}</div>
     </div>`;
   }).join('');
-  return`<div style="background:linear-gradient(to bottom right, var(--surf2), var(--surf)); border-radius:12px; border:1px solid rgba(255,255,255,0.06); box-shadow:0 4px 15px rgba(0,0,0,0.1); overflow:hidden">
-    <div style="padding:14px 18px 12px; border-bottom:1px solid rgba(255,255,255,0.04)">
+
+  return `<div style="background:linear-gradient(to bottom right, var(--surf2), var(--surf)); border-radius:12px; border:1px solid rgba(255,255,255,0.06); box-shadow:0 4px 15px rgba(0,0,0,0.1); overflow:hidden">
+    <div style="padding:14px 18px 12px; border-bottom:1px solid rgba(255,255,255,0.04); display:flex; justify-content:space-between; align-items:center">
       <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:var(--tx)">🗓 Upcoming</div>
+      <div style="font-size:11px;color:var(--mu)">${items.length} titles</div>
     </div>
-    <div style="padding:12px 18px 14px">${rows||`<div style="color:var(--mu);font-size:13px;text-align:center;padding:14px">No upcoming items</div>`}</div>
+    <div style="padding:12px 18px 14px">${rows || `<div style="color:var(--mu);font-size:13px;text-align:center;padding:14px">No upcoming items</div>`}</div>
   </div>`;
 }
 
@@ -374,4 +550,5 @@ Object.assign(window, {
   renderAiringWidget,
   selectAiringDay,
   renderUpcomingWidget,
+  startWatchingEntry,
 });

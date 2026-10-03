@@ -17,6 +17,8 @@ import { handleSearchRoutes } from './routes/search.js';
 import { handleFilesRoutes } from './routes/files.js';
 import { handleHealthRoute } from './routes/health.js';
 import { handlePublicShareRoutes } from './routes/public_share.js';
+import { handleNotificationsRoutes } from './routes/notifications.js';
+import { runUpcomingSyncCron } from './services/cron.js';
 import { upsertUser } from './services/d1.js';
 import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
 import manifestJSON from '__STATIC_CONTENT_MANIFEST';
@@ -96,7 +98,7 @@ export default {
 
       if (action === 'mal_authorize_url' || pathname === '/mal/auth') {
         let body = {};
-        try { body = await request.json(); } catch (e) {}
+        try { body = await request.json(); } catch (e) { }
         const redirectUri = body.redirect_uri || `${url.origin}/auth/callback`;
         const codeChallenge = body.code_challenge || '';
         const state = body.state || '';
@@ -106,7 +108,7 @@ export default {
 
       if (action === 'mal_exchange_code' || pathname === '/mal/token') {
         let body = {};
-        try { body = await request.json(); } catch (e) {}
+        try { body = await request.json(); } catch (e) { }
         const formParams = new URLSearchParams({
           client_id: malClientId,
           code: body.code || '',
@@ -128,7 +130,7 @@ export default {
 
       if (action === 'mal_refresh_token' || pathname === '/mal/refresh') {
         let body = {};
-        try { body = await request.json(); } catch (e) {}
+        try { body = await request.json(); } catch (e) { }
         const formParams = new URLSearchParams({
           client_id: malClientId,
           refresh_token: body.refresh_token || '',
@@ -191,7 +193,7 @@ export default {
         if (!malId || isNaN(Number(malId))) return errorResponse('INVALID_ID', 'Provide numeric MAL ID', requestId, 400);
 
         let body = {};
-        try { body = await request.json(); } catch (e) {}
+        try { body = await request.json(); } catch (e) { }
 
         let accessToken = body.access_token || '';
         let refreshToken = body.refresh_token || '';
@@ -299,7 +301,7 @@ export default {
       if (request.method === 'POST' && (pathname === '/ai/generate' || pathname === '/gemini_ai')) {
         if (!env.GEMINI_API_KEY) return errorResponse('NO_KEY', 'Gemini API key not configured on Worker', requestId, 500);
         let body = {};
-        try { body = await request.json(); } catch (e) {}
+        try { body = await request.json(); } catch (e) { }
         const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${env.GEMINI_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -352,10 +354,23 @@ export default {
       const filesRes = await handleFilesRoutes(request, env, ctx, requestId, pathname, claims);
       if (filesRes) return filesRes;
 
+      const notifRes = await handleNotificationsRoutes(request, env, ctx, requestId, pathname, claims);
+      if (notifRes) return notifRes;
+
+      if (request.method === 'POST' && pathname === '/v1/notifications/sync') {
+        const cronResult = await runUpcomingSyncCron(env);
+        return successResponse(cronResult, requestId);
+      }
+
       return errorResponse('NOT_FOUND', `Route ${pathname} not found on server`, requestId, 404);
     } catch (err) {
       console.error('[Worker Fatal Error]', err);
       return errorResponse('INTERNAL_ERROR', err.message || 'Server error', requestId, 500);
     }
   },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runUpcomingSyncCron(env));
+  },
 };
+
