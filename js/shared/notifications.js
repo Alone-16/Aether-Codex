@@ -300,6 +300,35 @@ export async function syncUpcomingNow(e) {
     });
     if (res.ok) {
       toast('✓ Synced with AniList & MAL');
+      // Refresh media rows so updated release dates update on cards immediately
+      try {
+        const mediaRes = await fetch(`${_getApiBase()}/v1/media`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
+        if (mediaRes.ok) {
+          const freshData = await mediaRes.json();
+          const items = freshData.data?.media || freshData.data || [];
+          if (Array.isArray(items) && items.length && typeof DATA !== 'undefined') {
+            for (const fresh of items) {
+              const local = DATA.find(x => x.id === fresh.id);
+              if (local) {
+                if (fresh.release_date !== undefined) {
+                  local.releaseDate = fresh.release_date;
+                  local.release_date = fresh.release_date;
+                }
+                if (fresh.release_date_source !== undefined) {
+                  local.releaseDateSource = fresh.release_date_source;
+                  local.release_date_source = fresh.release_date_source;
+                }
+              }
+            }
+            if (typeof saveData === 'function') saveData(DATA);
+            if (typeof renderMediaBody === 'function') renderMediaBody();
+          }
+        }
+      } catch (err) {
+        console.warn('[Notifications] Refresh media after sync failed:', err);
+      }
     }
   } catch (e) {
     console.warn('[Notifications] Manual sync failed:', e);
@@ -308,6 +337,33 @@ export async function syncUpcomingNow(e) {
     await fetchNotifications();
     renderNotifDropdown();
   }
+}
+
+export function startWatchingFromNotif(notifId, mediaId, event) {
+  if (event) event.stopPropagation();
+  markNotifRead(notifId, event);
+  closeNotifDropdown();
+
+  if (typeof DATA === 'undefined') return;
+  const entry = DATA.find(x => x.id === mediaId);
+  if (!entry) return;
+
+  entry.status = 'watching';
+  if (!entry.epCur || parseInt(entry.epCur) === 0) {
+    entry.epCur = 1;
+  }
+  entry.updatedAt = Date.now();
+  if (typeof saveData === 'function') saveData(DATA);
+
+  if (typeof mediaApi?.patch === 'function') {
+    mediaApi.patch(entry.id, { status: 'watching', epCur: entry.epCur, ep_cur: entry.epCur })
+      .catch(err => console.warn('[Start Watching Sync Fail]', err));
+  }
+
+  if (typeof nav === 'function') nav('media');
+  if (typeof renderMediaBody === 'function') renderMediaBody();
+  if (typeof openDetail === 'function') openDetail(entry.id);
+  toast(`✓ Started watching "${entry.title}"! Ep 1 marked.`, '#38bdf8');
 }
 
 export function renderNotifDropdown() {
@@ -383,6 +439,7 @@ export function renderNotifDropdown() {
       const data = n.data || {};
       const isSequel = n.type === 'sequel_discovery';
       const isDateChange = n.type === 'date_change';
+      const isEpisodeRelease = n.type === 'episode_release' || Boolean(data.is_released);
       const relDateStr = data.release_date || data.new_date;
       const formattedDate = relDateStr ? formatReleaseDate(relDateStr) : null;
       const alreadyAdded = Boolean(n.mediaId);
@@ -407,14 +464,21 @@ export function renderNotifDropdown() {
             <div class="notif-rel" style="font-size:11px;color:var(--tx2);margin-top:2px;line-height:1.35">${esc(n.message || '')}</div>
             
             ${formattedDate ? `
-              <div style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:1px 6px;border-radius:4px;background:rgba(251,191,36,0.1);color:#fbbf24;font-size:10px;font-weight:600">
-                🗓 ${formattedDate}
+              <div style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;padding:1px 6px;border-radius:4px;background:${isEpisodeRelease ? 'rgba(74,222,128,0.12)' : 'rgba(251,191,36,0.1)'};color:${isEpisodeRelease ? '#4ade80' : '#fbbf24'};font-size:10px;font-weight:600">
+                ${isEpisodeRelease ? '★ Premiered ' + formattedDate : '🗓 ' + formattedDate}
               </div>
             ` : ''}
 
             <!-- Action buttons -->
             <div style="margin-top:6px;display:flex;align-items:center;gap:6px" onclick="event.stopPropagation()">
-              ${isSequel ? (
+              ${isEpisodeRelease && n.mediaId ? `
+                <button onclick="startWatchingFromNotif('${n.id}', '${n.mediaId}', event)" style="padding:3px 9px;border-radius:5px;background:var(--ac);border:none;color:#000;font-size:10px;font-weight:800;cursor:pointer;transition:transform .15s" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='none'">
+                  Start Watching ▶
+                </button>
+                <button onclick="dismissNotif('${n.id}', event)" style="padding:2px 7px;border-radius:4px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:var(--mu);font-size:10px;cursor:pointer">
+                  Dismiss
+                </button>
+              ` : isSequel ? (
                 alreadyAdded ? `
                   <span style="font-size:10px;color:#4ade80;font-weight:600">✓ In Library</span>
                   <button onclick="nav('media');openDetail('${n.mediaId}');closeNotifDropdown()" style="padding:2px 8px;border-radius:4px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:var(--tx);font-size:10px;cursor:pointer">View →</button>
@@ -426,8 +490,7 @@ export function renderNotifDropdown() {
                     Ignore
                   </button>
                 `
-              ) : ''}
-              ${isDateChange ? `
+              ) : isDateChange ? `
                 <button onclick="dismissNotif('${n.id}', event)" style="padding:2px 7px;border-radius:4px;background:transparent;border:1px solid rgba(255,255,255,0.08);color:var(--mu);font-size:10px;cursor:pointer">
                   Dismiss
                 </button>
@@ -507,6 +570,7 @@ Object.assign(window, {
   deleteReadNotifs,
   markNotifRead,
   markAllRead,
+  startWatchingFromNotif,
   syncUpcomingNow,
   fetchNotifications,
 });

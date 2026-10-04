@@ -27,7 +27,8 @@ export async function runUpcomingSyncCron(env) {
     env.DB.prepare(`
       SELECT id, user_id, mal_id, title, release_date, release_date_source, release_date_updated_at
       FROM media
-      WHERE genre_id = 'anime' AND status = 'upcoming' AND mal_id IS NOT NULL;
+      WHERE genre_id = 'anime' AND status = 'upcoming' AND mal_id IS NOT NULL
+      ORDER BY CASE WHEN release_date IS NULL THEN 0 ELSE 1 END, release_date_updated_at ASC;
     `).all(),
     env.DB.prepare(`
       SELECT id, user_id, mal_id, title, status
@@ -96,7 +97,7 @@ export async function runUpcomingSyncCron(env) {
 
   if (upcomingIdArray.length > 0 && subrequestCount < maxSubrequests) {
     for (const provider of providers) {
-      const budget = Math.min(Math.max(1, maxSubrequests - subrequestCount - 4), 5);
+      const budget = Math.min(Math.max(1, maxSubrequests - subrequestCount - 2), 10);
       const dates = await provider.fetchDates(upcomingIdArray, budget);
       if (dates && dates.size > 0) {
         providerDatesMap = dates;

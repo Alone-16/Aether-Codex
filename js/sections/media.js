@@ -1102,9 +1102,11 @@ function renderDetailPanel(e) {
         </a>
         ${window.SETTINGS?.malRefreshToken
           ? `<span style="font-size:10px;color:#4ade80;margin-left:2px;font-weight:600">● Connected</span>
-             <button onclick="event.stopPropagation();_syncMALListEntry(DATA.find(x=>x.id==='${e.id}')).catch(()=>toast('MAL sync failed','#fb7185'))"
+             <button onclick="event.stopPropagation();syncMediaEntryFromMal('${e.id}')"
                style="margin-left:auto;font-size:11px;font-weight:600;color:var(--ac);background:rgba(var(--ac-rgb),.1);border:1px solid rgba(var(--ac-rgb),.25);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;transition:all 0.2s">↻ Sync Now</button>`
-          : `<span style="margin-left:auto;font-size:11px;color:#fb7185;font-weight:600">● Not connected</span>`
+          : `<span style="margin-left:auto;font-size:11px;color:#fb7185;font-weight:600">● Not connected</span>
+             <button onclick="event.stopPropagation();syncMediaEntryFromMal('${e.id}')"
+               style="margin-left:8px;font-size:11px;font-weight:600;color:var(--ac);background:rgba(var(--ac-rgb),.1);border:1px solid rgba(var(--ac-rgb),.25);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;transition:all 0.2s">↻ Sync Info</button>`
         }
       </div>` : (!e.malId && e.genreId === 'anime') ? `<div style="padding:10px 20px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(239,68,68,0.06)">
         <span style="font-size:12px;color:#f87171">⚠️ Not linked to MyAnimeList / AniList</span>
@@ -1836,6 +1838,65 @@ async function malBulkSyncAll(onProgress) {
   }
   ls.setStr('ac_mal_last_sync', String(Date.now()));
   return { total: entries.length, success, failed };
+}
+
+async function syncMediaEntryFromMal(id) {
+  const e = DATA.find(x => x.id === id);
+  if (!e || !e.malId) return;
+
+  toast(`Syncing "${e.title}" from MyAnimeList...`, '#38bdf8');
+  try {
+    if (window.SETTINGS?.malRefreshToken) {
+      await _syncMALListEntry(e, true).catch(() => {});
+    }
+
+    const data = await fetchAnimeByMalId(e.malId, e.genreId || 'anime');
+    if (data) {
+      let changed = false;
+      const cleanStartDate = data.start_date ? String(data.start_date).trim() : null;
+      if (cleanStartDate && cleanStartDate !== (e.releaseDate || e.release_date)) {
+        e.releaseDate = cleanStartDate;
+        e.release_date = cleanStartDate;
+        e.releaseDateSource = 'mal';
+        e.release_date_source = 'mal';
+        changed = true;
+      }
+      if (data.episodes && (!e.epTot || e.epTot === 0)) {
+        e.epTot = data.episodes;
+        changed = true;
+      }
+      if (data.duration_min && (!e.epDuration || e.epDuration === 24)) {
+        e.epDuration = data.duration_min;
+        changed = true;
+      }
+      if (data.image && !e.coverImage) {
+        e.coverImage = data.image;
+        changed = true;
+      }
+
+      if (changed) {
+        e.updatedAt = Date.now();
+        saveData(DATA);
+        mediaApi.patch(e.id, {
+          release_date: e.releaseDate,
+          releaseDate: e.releaseDate,
+          release_date_source: 'mal',
+          releaseDateSource: 'mal',
+          ep_tot: e.epTot,
+          epTot: e.epTot,
+          ep_duration: e.epDuration,
+          epDuration: e.epDuration,
+        }).catch(err => console.warn('[syncMediaEntryFromMal sync fail]', err));
+      }
+
+      renderDetailPanel(e);
+      _patchCardFull(e);
+      toast(`✓ Synced from MAL: ${cleanStartDate ? 'Premiered ' + cleanStartDate : 'Updated'}`);
+    }
+  } catch (err) {
+    console.warn('[syncMediaEntryFromMal]', err);
+    toast(`Sync failed: ${err.message}`, '#fb7185');
+  }
 }
 
 function askDel(id) {
@@ -3533,7 +3594,7 @@ if (typeof window !== 'undefined') {
 
   // MAL
   malBulkSyncAll, malSearchInput, malSearchKeydown, clearMalSearchInput,
-  fetchMalFromInput, fetchAnimeByMalId, _syncMALListEntry,
+  fetchMalFromInput, fetchAnimeByMalId, _syncMALListEntry, syncMediaEntryFromMal,
   runLinkedMigrationV3, _malSelect, toggleMalSearchByGenre,
   toggleManualMalId, syncManualMalId, fetchMalFromManualId, unlinkMalId,
   _buildMalBadgeHtml, _renderMalBadge,
@@ -3552,6 +3613,7 @@ export {
   fetchAnimeByMalId,
   malSearchInput,
   fetchMalFromInput,
+  syncMediaEntryFromMal,
   _malSelect,
 };
 

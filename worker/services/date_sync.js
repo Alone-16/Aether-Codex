@@ -32,27 +32,34 @@ export function computeDateUpdates({
   };
 
   for (const item of trackedUpcomingItems) {
-    if (!item.malId) continue;
-    const prov = getProviderInfo(item.malId);
+    const malId = Number(item.mal_id || item.malId);
+    if (!malId || Number.isNaN(malId)) continue;
+    const userId = item.user_id || item.userId;
+    const prov = getProviderInfo(malId);
     if (!prov) continue;
 
-    const oldDate = item.releaseDate || item.release_date || null;
+    const oldDate = item.release_date || item.releaseDate || null;
     const newDate = prov.releaseDate || null;
     const providerName = prov.provider || 'anilist';
-    const itemSource = item.releaseDateSource || item.release_date_source || null;
+    const itemSource = item.release_date_source || item.releaseDateSource || null;
+    const provStatus = String(prov.status || '').toUpperCase().trim();
+
+    // Check if the anime has started airing / premiered Episode 1
+    // (e.g. status is RELEASING or CURRENTLY_AIRING, or date is confirmed and today >= newDate)
+    const isAiringOrReleased = provStatus === 'RELEASING' || provStatus === 'CURRENTLY_AIRING' || (Boolean(newDate && todayStr && newDate <= todayStr));
 
     // Rule 1: User set a manual date
     if (itemSource === 'manual') {
       if (newDate && newDate !== oldDate) {
         // Do not overwrite manual date. Emit a "date kept" notification once.
         notifications.push({
-          userId: item.userId || item.user_id,
-          malId: Number(item.malId),
+          userId,
+          malId,
           mediaId: item.id,
           type: 'date_change',
           title: item.title,
           message: `Official release date announced: ${newDate}. Kept your manual date (${oldDate}).`,
-          dedupeKey: `date_kept:${item.malId}:${newDate}`,
+          dedupeKey: `date_kept:${malId}:${newDate}`,
           data: {
             kept_manual: true,
             manual_date: oldDate,
@@ -65,26 +72,52 @@ export function computeDateUpdates({
     }
 
     // Rule 2: Automatic provider date sync
-    if (newDate !== oldDate) {
+    const dateChanged = newDate !== oldDate;
+    if (dateChanged) {
       // Baseline migration rule: If item had an old provider or no provider source,
       // and oldDate had day precision (YYYY-MM-DD) while provider only has month/year (YYYY-MM or YYYY),
-      // do not downgrade day precision silently.
+      // do not downgrade day precision silently unless provider is currently airing.
       const oldIsDay = oldDate && oldDate.length === 10;
       const newIsDay = newDate && newDate.length === 10;
-      if (oldIsDay && !newIsDay && itemSource && itemSource !== providerName) {
+      if (oldIsDay && !newIsDay && itemSource && itemSource !== providerName && !isAiringOrReleased) {
         // Keep higher precision
         continue;
       }
 
       dbUpdates.push({
         id: item.id,
-        userId: item.userId || item.user_id,
+        userId,
         releaseDate: newDate,
         releaseDateSource: providerName,
         releaseDateUpdatedAt: new Date().toISOString(),
       });
+    }
 
-      // Format notification message
+    // Rule 3: Notifications
+    // Scenario 3A: Episode 1 released / Season premiered!
+    if (isAiringOrReleased) {
+      notifications.push({
+        userId,
+        malId,
+        mediaId: item.id,
+        type: 'episode_release',
+        title: item.title,
+        message: newDate
+          ? `Episode 1 released! Season premiere aired on ${newDate}.`
+          : `Episode 1 is now available! The anime has begun airing.`,
+        dedupeKey: `premiere:${malId}`,
+        data: {
+          old_date: oldDate,
+          new_date: newDate,
+          provider: providerName,
+          is_released: true,
+          media_id: item.id,
+          poster: prov.coverImage || null,
+        },
+      });
+    }
+    // Scenario 3B: Upcoming premiere date announced or moved (future date)
+    else if (dateChanged) {
       let msg = '';
       if (!oldDate && newDate) {
         msg = `Premiere date confirmed for ${newDate}`;
@@ -98,17 +131,19 @@ export function computeDateUpdates({
       const dateDedupeTag = newDate || 'tba';
 
       notifications.push({
-        userId: item.userId || item.user_id,
-        malId: Number(item.malId),
+        userId,
+        malId,
         mediaId: item.id,
         type: 'date_change',
         title: item.title,
         message: msg,
-        dedupeKey: `date_change:${item.malId}:${dateDedupeTag}:${utcDayKey}`,
+        dedupeKey: `date_change:${malId}:${dateDedupeTag}:${utcDayKey}`,
         data: {
           old_date: oldDate,
           new_date: newDate,
           provider: providerName,
+          media_id: item.id,
+          poster: prov.coverImage || null,
         },
       });
     }
