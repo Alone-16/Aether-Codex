@@ -88,16 +88,36 @@ export async function runUpcomingSyncCron(env) {
   }
 
   let subrequestCount = 0;
-  const maxSubrequests = 10; // Free tier safe ceiling
+  const maxSubrequests = 35; // Cloudflare Workers free tier limit is 50
 
   // ── Step 2 (Priority A): Release Date Sync for Upcoming Anime ──
-  const upcomingIdArray = Array.from(allUpcomingMalIds);
+  // Sort upcoming rows to prioritize shows premiering near today (-3d to +14d) or unconfirmed
+  const sortedUpcomingRows = [...(upcomingRows || [])].sort((a, b) => {
+    const isNearToday = (d) => {
+      if (!d || d.length < 10) return false;
+      const diff = (new Date(d).getTime() - new Date(todayStr).getTime()) / 86400000;
+      return diff >= -3 && diff <= 14;
+    };
+    const aNear = isNearToday(a.release_date) ? 0 : 1;
+    const bNear = isNearToday(b.release_date) ? 0 : 1;
+    if (aNear !== bNear) return aNear - bNear;
+
+    const aNull = a.release_date == null ? 0 : 1;
+    const bNull = b.release_date == null ? 0 : 1;
+    if (aNull !== bNull) return aNull - bNull;
+
+    const aUp = a.release_date_updated_at || '';
+    const bUp = b.release_date_updated_at || '';
+    return aUp.localeCompare(bUp);
+  });
+
+  const upcomingIdArray = Array.from(new Set(sortedUpcomingRows.map(r => Number(r.mal_id)).filter(Boolean)));
   let providerDatesMap = new Map();
   let activeDatesProvider = null;
 
   if (upcomingIdArray.length > 0 && subrequestCount < maxSubrequests) {
     for (const provider of providers) {
-      const budget = Math.min(Math.max(1, maxSubrequests - subrequestCount - 2), 10);
+      const budget = Math.min(Math.max(1, maxSubrequests - subrequestCount - 2), 25);
       const dates = await provider.fetchDates(upcomingIdArray, budget);
       if (dates && dates.size > 0) {
         providerDatesMap = dates;

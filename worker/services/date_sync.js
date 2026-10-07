@@ -36,17 +36,42 @@ export function computeDateUpdates({
     if (!malId || Number.isNaN(malId)) continue;
     const userId = item.user_id || item.userId;
     const prov = getProviderInfo(malId);
-    if (!prov) continue;
-
     const oldDate = item.release_date || item.releaseDate || null;
+    const itemSource = item.release_date_source || item.releaseDateSource || null;
+
+    if (!prov) {
+      // Even if provider data wasn't in this batch (e.g. subrequest budget / rate limit),
+      // if the item already has a confirmed date that has arrived, emit premiere notification!
+      if (oldDate && oldDate.length === 10 && todayStr && oldDate <= todayStr) {
+        notifications.push({
+          userId,
+          malId,
+          mediaId: item.id,
+          type: 'episode_release',
+          title: item.title,
+          message: `Episode 1 released! Season premiere aired on ${oldDate}.`,
+          dedupeKey: `premiere:${malId}`,
+          data: {
+            old_date: oldDate,
+            new_date: oldDate,
+            provider: itemSource || 'stored',
+            is_released: true,
+            media_id: item.id,
+            poster: item.cover_image || item.coverImage || null,
+          },
+        });
+      }
+      continue;
+    }
+
     const newDate = prov.releaseDate || null;
     const providerName = prov.provider || 'anilist';
-    const itemSource = item.release_date_source || item.releaseDateSource || null;
     const provStatus = String(prov.status || '').toUpperCase().trim();
 
     // Check if the anime has started airing / premiered Episode 1
-    // (e.g. status is RELEASING or CURRENTLY_AIRING, or date is confirmed and today >= newDate)
-    const isAiringOrReleased = provStatus === 'RELEASING' || provStatus === 'CURRENTLY_AIRING' || (Boolean(newDate && todayStr && newDate <= todayStr));
+    // (e.g. status is RELEASING or CURRENTLY_AIRING, or date is confirmed and today >= effectiveDate)
+    const effectiveDate = newDate || oldDate;
+    const isAiringOrReleased = provStatus === 'RELEASING' || provStatus === 'CURRENTLY_AIRING' || (Boolean(effectiveDate && todayStr && effectiveDate <= todayStr));
 
     // Rule 1: User set a manual date
     if (itemSource === 'manual') {

@@ -1,5 +1,6 @@
 import { isMediaAiring, checkAiringAnime } from '../shared/airing_sync.js';
 import { parseReleaseDate, localDay, daysUntil, formatReleaseDate } from '../shared/date_utils.js';
+import { syncUpcomingNow } from '../shared/notifications.js';
 
 function renderHome(c){
   // Show/hide drive hint based on state
@@ -233,9 +234,10 @@ function getCalendarShowsForDay(dayIndex) {
   const todayN = now.getDay();
   const todayStr = localDay(now);
 
-  // Target date for dayIndex in the current displayed week
+  // Target date for dayIndex in the current displayed week (using noon local time avoids midnight/DST skew)
   const diffDays = dayIndex - todayN;
-  const targetDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffDays);
+  const targetDateObj = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+  targetDateObj.setDate(targetDateObj.getDate() + diffDays);
   const targetDateStr = localDay(targetDateObj);
 
   // 1. Weekly recurring watching shows
@@ -256,14 +258,14 @@ function getCalendarShowsForDay(dayIndex) {
     const isToday = targetDateStr === todayStr;
     const dayLbl = isToday ? '★ Premieres Today' : `★ Premiere (${formatReleaseDate(targetDateStr)})`;
     const lblCol = isToday ? '#fb923c' : '#fbbf24';
-    return { ...e, isUpcomingPremiere: true, dayLbl, lblCol };
+    return { ...e, isUpcomingPremiere: true, targetDateStr, dayLbl, lblCol };
   });
 
   return [...watchingShows, ...upcomingPremieres];
 }
 
 /**
- * Returns upcoming titles whose release date has already passed while still in upcoming status.
+ * Returns upcoming titles whose release date has arrived (today or past) while still in upcoming status.
  */
 function getReleasedNotStartedShows() {
   const todayStr = localDay(new Date());
@@ -271,13 +273,24 @@ function getReleasedNotStartedShows() {
     if (e.status !== 'upcoming') return false;
     const rel = e.releaseDate || e.release_date;
     const parsed = parseReleaseDate(rel);
-    return parsed.precision === 'day' && parsed.str < todayStr;
+    return parsed.precision === 'day' && parsed.str <= todayStr;
   });
+}
+
+export async function checkAllAiringAndUpcoming(force = true) {
+  toast('Checking airing & upcoming anime...', '#38bdf8');
+  await checkAiringAnime(force);
+  if (typeof syncUpcomingNow === 'function') {
+    await syncUpcomingNow();
+  } else if (typeof window.syncUpcomingNow === 'function') {
+    await window.syncUpcomingNow();
+  }
 }
 
 function renderAiringWidget(){
   const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const todayN = new Date().getDay();
+  const todayStr = localDay(new Date());
 
   // Build day pills (checks if either watching or upcoming premiere is scheduled)
   const pills = days.map((d, i) => {
@@ -307,10 +320,24 @@ function renderAiringWidget(){
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;color:var(--tx)">${esc(e.title)}</div>
             <div style="font-size:11px;color:var(--mu);margin-top:1px">
-              ${e.isUpcomingPremiere ? `<span style="color:#fb923c;font-weight:600">Upcoming Release</span>` : (e.airingTime || 'Weekly')}
+              ${e.isUpcomingPremiere ? `<span style="color:#fb923c;font-weight:600">Season Premiere</span>` : (e.airingTime || 'Weekly')}
             </div>
           </div>
-          <span style="font-size:11px;font-weight:700;color:${e.lblCol};white-space:nowrap">${e.dayLbl}</span>
+          ${e.isUpcomingPremiere ? `
+            <div style="display:flex;align-items:center;gap:8px" onclick="event.stopPropagation()">
+              <span style="font-size:11px;font-weight:700;color:${e.lblCol};white-space:nowrap">${e.dayLbl}</span>
+              ${(e.targetDateStr || todayStr) <= todayStr ? `
+                <button type="button" onclick="startWatchingEntry('${e.id}')"
+                  style="padding:3px 8px;border-radius:5px;background:rgba(var(--ac-rgb),0.15);border:1px solid rgba(var(--ac-rgb),0.3);color:var(--ac);font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s"
+                  onmouseover="this.style.background='var(--ac)';this.style.color='#000'"
+                  onmouseout="this.style.background='rgba(var(--ac-rgb),0.15)';this.style.color='var(--ac)'">
+                  ▶ Start watching
+                </button>
+              ` : ''}
+            </div>
+          ` : `
+            <span style="font-size:11px;font-weight:700;color:${e.lblCol};white-space:nowrap">${e.dayLbl}</span>
+          `}
         </div>`).join('')
     : `<div style="font-size:13px;color:var(--mu);text-align:center;padding:16px 0">Nothing airing</div>`;
 
@@ -347,7 +374,7 @@ function renderAiringWidget(){
     <div style="padding:14px 18px 12px; border-bottom:1px solid rgba(255,255,255,0.04); display:flex; justify-content:space-between; align-items:center">
       <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:var(--tx)">📺 Airing This Week</div>
       <div style="display:flex;align-items:center;gap:6px">
-        <button type="button" onclick="checkAiringAnime(true)" title="Check MyAnimeList for airing updates" style="padding:4px 8px;background:rgba(var(--ac-rgb),0.1);border-radius:6px;transition:all 0.2s;color:var(--ac);font-size:11px;font-weight:600;border:none;cursor:pointer" onmouseover="this.style.background='rgba(var(--ac-rgb),0.2)'" onmouseout="this.style.background='rgba(var(--ac-rgb),0.1)'">🔄 Check</button>
+        <button type="button" onclick="checkAllAiringAndUpcoming(true)" title="Check airing and upcoming anime updates" style="padding:4px 8px;background:rgba(var(--ac-rgb),0.1);border-radius:6px;transition:all 0.2s;color:var(--ac);font-size:11px;font-weight:600;border:none;cursor:pointer" onmouseover="this.style.background='rgba(var(--ac-rgb),0.2)'" onmouseout="this.style.background='rgba(var(--ac-rgb),0.1)'">🔄 Check</button>
         <div style="font-size:11px;color:var(--ac);cursor:pointer;padding:4px 8px;background:rgba(var(--ac-rgb),0.1);border-radius:6px;transition:all 0.2s;font-weight:600" onmouseover="this.style.background='rgba(var(--ac-rgb),0.2)'" onmouseout="this.style.background='rgba(var(--ac-rgb),0.1)'" onclick="nav('media')">Manage →</div>
       </div>
     </div>
@@ -396,6 +423,7 @@ function selectAiringDay(d) {
     showsEl.style.transform = 'translateY(4px)';
 
     setTimeout(() => {
+      const todayStr = localDay(new Date());
       const showList = sel.length
         ? sel.map(e => `
             <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer" onclick="openDetail('${e.id}')">
@@ -403,10 +431,24 @@ function selectAiringDay(d) {
               <div style="flex:1;min-width:0">
                 <div style="font-size:13px;font-weight:600;color:var(--tx)">${esc(e.title)}</div>
                 <div style="font-size:11px;color:var(--mu);margin-top:1px">
-                  ${e.isUpcomingPremiere ? `<span style="color:#fb923c;font-weight:600">Upcoming Release</span>` : (e.airingTime || 'Weekly')}
+                  ${e.isUpcomingPremiere ? `<span style="color:#fb923c;font-weight:600">Season Premiere</span>` : (e.airingTime || 'Weekly')}
                 </div>
               </div>
-              <span style="font-size:11px;font-weight:700;color:${e.lblCol};white-space:nowrap">${e.dayLbl}</span>
+              ${e.isUpcomingPremiere ? `
+                <div style="display:flex;align-items:center;gap:8px" onclick="event.stopPropagation()">
+                  <span style="font-size:11px;font-weight:700;color:${e.lblCol};white-space:nowrap">${e.dayLbl}</span>
+                  ${(e.targetDateStr || todayStr) <= todayStr ? `
+                    <button type="button" onclick="startWatchingEntry('${e.id}')"
+                      style="padding:3px 8px;border-radius:5px;background:rgba(var(--ac-rgb),0.15);border:1px solid rgba(var(--ac-rgb),0.3);color:var(--ac);font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s"
+                      onmouseover="this.style.background='var(--ac)';this.style.color='#000'"
+                      onmouseout="this.style.background='rgba(var(--ac-rgb),0.15)';this.style.color='var(--ac)'">
+                      ▶ Start watching
+                    </button>
+                  ` : ''}
+                </div>
+              ` : `
+                <span style="font-size:11px;font-weight:700;color:${e.lblCol};white-space:nowrap">${e.dayLbl}</span>
+              `}
             </div>`).join('')
         : `<div style="font-size:13px;color:var(--mu);text-align:center;padding:16px 0">Nothing airing</div>`;
 
@@ -551,4 +593,5 @@ Object.assign(window, {
   selectAiringDay,
   renderUpcomingWidget,
   startWatchingEntry,
+  checkAllAiringAndUpcoming,
 });

@@ -66,10 +66,11 @@ export function parseReleaseDate(s) {
  * @param {string} [tz='UTC'] - IANA timezone identifier (e.g. 'Asia/Kolkata', 'America/Los_Angeles')
  * @returns {string} 'YYYY-MM-DD'
  */
-export function localDay(now = new Date(), tz = 'UTC') {
+export function localDay(now = new Date(), tz = undefined) {
   const d = now instanceof Date ? now : new Date(now);
+  const userTz = tz || (typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC');
   const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz,
+    timeZone: userTz,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'

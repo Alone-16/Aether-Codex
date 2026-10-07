@@ -158,3 +158,29 @@ test('date_sync: does nothing if future date is identical and not airing', () =>
   assert.equal(dbUpdates.length, 0);
   assert.equal(notifications.length, 0);
 });
+
+test('date_sync: emits episode_release notification when stored date has arrived even if provider slice is missing', () => {
+  const tracked = [
+    {
+      id: 'm-tanmoshi',
+      user_id: 'u1',
+      mal_id: 52480,
+      title: 'The Detective Is Already Dead Season 2',
+      release_date: '2026-10-07',
+      release_date_source: 'anilist',
+    },
+  ];
+
+  const emptyProviderMap = new Map();
+
+  const { dbUpdates, notifications } = computeDateUpdates({
+    trackedUpcomingItems: tracked,
+    providerDatesMap: emptyProviderMap,
+    todayStr: '2026-10-07',
+  });
+
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0].type, 'episode_release');
+  assert.equal(notifications[0].dedupeKey, 'premiere:52480');
+  assert.match(notifications[0].message, /Episode 1 released! Season premiere aired on 2026-10-07/);
+});

@@ -17,7 +17,7 @@ export { AniListProvider, MalProvider };
  * @returns {Array<AniListProvider|MalProvider>}
  */
 export function getRelationProviders(env = {}) {
-  const providerConfig = env.RELATION_PROVIDERS || 'anilist,mal';
+  const providerConfig = env.RELATION_PROVIDERS || 'mal,anilist';
   const names = providerConfig.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
   const providers = [];
