@@ -2172,3 +2172,19 @@ textarea.fin{resize:vertical;min-height:70px}
   contain: layout style;
 }
 
+
+/* Music toolbar & right-aligned sort dropdown */
+.mu-toolbar {
+  position: relative;
+  z-index: 60;
+}
+#mu-sort-dd {
+  position: relative;
+  z-index: 100;
+}
+#mu-sort-dd .m-dd-menu {
+  right: 0 !important;
+  left: auto !important;
+  min-width: 195px !important;
+  z-index: 99999 !important;
+}

@@ -82,18 +82,22 @@ export function getSortLabel() {
 }
 
 export function toggleMusicSortDd(e) {
-  if (e) e.stopPropagation();
-  const dd = document.getElementById('mu-sort-dd');
-  const menu = dd?.querySelector('.m-dd-menu');
-  const btn = dd?.querySelector('.m-dd-btn');
-  const isOpen = menu?.classList.contains('open');
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  const btn = e?.currentTarget || document.querySelector('#mu-sort-dd .m-dd-btn');
+  const dd = btn?.closest('.m-sort-dd') || document.getElementById('mu-sort-dd');
+  const menu = dd?.querySelector('.m-dd-menu') || document.getElementById('mu-sort-menu');
+  if (!menu) return;
+  const isOpen = menu.classList.contains('open');
 
   document.querySelectorAll('.m-dd-menu.open').forEach(m => m.classList.remove('open'));
   document.querySelectorAll('.m-dd-btn[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
 
-  if (!isOpen && menu && btn) {
+  if (!isOpen) {
     menu.classList.add('open');
-    btn.setAttribute('aria-expanded', 'true');
+    if (btn) btn.setAttribute('aria-expanded', 'true');
   }
 }
 
@@ -126,8 +130,8 @@ function renderSortDropdown(target = 'music') {
       </button>
       <div class="m-dd-menu" id="mu-sort-menu" role="listbox">
         <button type="button" class="m-dd-opt${MUSIC_SORT === 'added' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'added' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('added')">Time added (Newest)</button>
-        <button type="button" class="m-dd-opt${MUSIC_SORT === 'title' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'title' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('title')">A → Z</button>
-        <button type="button" class="m-dd-opt${MUSIC_SORT === 'title-desc' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'title-desc' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('title-desc')">Z → A</button>
+        <button type="button" class="m-dd-opt${MUSIC_SORT === 'title' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'title' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('title')">A &rarr; Z</button>
+        <button type="button" class="m-dd-opt${MUSIC_SORT === 'title-desc' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'title-desc' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('title-desc')">Z &rarr; A</button>
         <button type="button" class="m-dd-opt${MUSIC_SORT === 'oldest' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'oldest' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('oldest')">Time added (Oldest)</button>
       </div>
     </div>`;
@@ -136,7 +140,7 @@ function renderSortDropdown(target = 'music') {
 // Global click closer for sort dropdown
 if (typeof window !== 'undefined') {
   window.addEventListener('click', (e) => {
-    if (e.target.closest('#mu-sort-dd')) return;
+    if (e.target.closest('#mu-sort-dd') || e.target.closest('.m-sort-dd')) return;
     const menu = document.getElementById('mu-sort-menu');
     const btn = document.querySelector('#mu-sort-dd .m-dd-btn');
     if (menu && menu.classList.contains('open')) {
@@ -313,7 +317,19 @@ function renderMusic(c) {
         border-color: rgba(var(--ac-rgb), 0.3) !important;
       }
       .mu-toolbar {
+        position: relative;
+        z-index: 60;
         animation: mu-cardEnter 0.3s cubic-bezier(0.16,1,0.3,1) both;
+      }
+      #mu-sort-dd {
+        position: relative;
+        z-index: 100;
+      }
+      #mu-sort-dd .m-dd-menu {
+        right: 0 !important;
+        left: auto !important;
+        min-width: 195px !important;
+        z-index: 99999 !important;
       }
     </style>
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
@@ -410,22 +426,33 @@ function renderMusicLibrary(c) {
     });
   }
 
+  const rawSongIndex = new Map();
+  rawSongs.forEach((s, idx) => rawSongIndex.set(s.id || s, idx));
+
   if (MUSIC_SORT === 'title') {
-    songs.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' }));
+    songs.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base', numeric: true }));
   } else if (MUSIC_SORT === 'title-desc') {
-    songs.sort((a, b) => (b.title || '').localeCompare(a.title || '', undefined, { sensitivity: 'base' }));
+    songs.sort((a, b) => (b.title || '').localeCompare(a.title || '', undefined, { sensitivity: 'base', numeric: true }));
   } else if (MUSIC_SORT === 'oldest') {
     songs.sort((a, b) => {
       const ta = getSongAddedTime(a);
       const tb = getSongAddedTime(b);
-      return ta !== tb ? ta - tb : (a.title || '').localeCompare(b.title || '');
+      if (ta !== tb) return ta - tb;
+      const ra = a.rowid ?? rawSongIndex.get(a.id || a) ?? 0;
+      const rb = b.rowid ?? rawSongIndex.get(b.id || b) ?? 0;
+      if (ra !== rb) return ra - rb;
+      return (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base', numeric: true });
     });
   } else {
     // 'added' (Newest time added first)
     songs.sort((a, b) => {
       const ta = getSongAddedTime(a);
       const tb = getSongAddedTime(b);
-      return tb !== ta ? tb - ta : (a.title || '').localeCompare(b.title || '');
+      if (tb !== ta) return tb - ta;
+      const ra = a.rowid ?? (1000000 - (rawSongIndex.get(a.id || a) ?? 0));
+      const rb = b.rowid ?? (1000000 - (rawSongIndex.get(b.id || b) ?? 0));
+      if (rb !== ra) return rb - ra;
+      return (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base', numeric: true });
     });
   }
 
@@ -608,22 +635,33 @@ function renderMusicPlaylists(c) {
       })
     : [...rawPlaylists];
 
+  const rawPlIndex = new Map();
+  rawPlaylists.forEach((p, idx) => rawPlIndex.set(p.id || p, idx));
+
   if (MUSIC_SORT === 'title') {
-    filtered.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' }));
+    filtered.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base', numeric: true }));
   } else if (MUSIC_SORT === 'title-desc') {
-    filtered.sort((a, b) => (b.title || '').localeCompare(a.title || '', undefined, { sensitivity: 'base' }));
+    filtered.sort((a, b) => (b.title || '').localeCompare(a.title || '', undefined, { sensitivity: 'base', numeric: true }));
   } else if (MUSIC_SORT === 'oldest') {
     filtered.sort((a, b) => {
       const ta = getPlaylistAddedTime(a);
       const tb = getPlaylistAddedTime(b);
-      return ta !== tb ? ta - tb : (a.title || '').localeCompare(b.title || '');
+      if (ta !== tb) return ta - tb;
+      const ra = a.rowid ?? rawPlIndex.get(a.id || a) ?? 0;
+      const rb = b.rowid ?? rawPlIndex.get(b.id || b) ?? 0;
+      if (ra !== rb) return ra - rb;
+      return (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base', numeric: true });
     });
   } else {
     // 'added' (Newest / recent sync first)
     filtered.sort((a, b) => {
       const ta = getPlaylistAddedTime(a);
       const tb = getPlaylistAddedTime(b);
-      return tb !== ta ? tb - ta : (a.title || '').localeCompare(b.title || '');
+      if (tb !== ta) return tb - ta;
+      const ra = a.rowid ?? (1000000 - (rawPlIndex.get(a.id || a) ?? 0));
+      const rb = b.rowid ?? (1000000 - (rawPlIndex.get(b.id || b) ?? 0));
+      if (rb !== ra) return rb - ra;
+      return (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base', numeric: true });
     });
   }
 

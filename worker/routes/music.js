@@ -12,15 +12,11 @@ export async function handleMusicRoutes(request, env, ctx, requestId, pathname, 
   // ── GET /v1/music ── Fetch tracks & playlists ──
   if (method === 'GET' && pathname === '/v1/music') {
     try {
-      const { results: tracks } = await env.DB.prepare('SELECT * FROM music WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
+      const { results: tracks } = await env.DB.prepare('SELECT rowid, * FROM music WHERE user_id = ? ORDER BY updated_at DESC, rowid DESC;').bind(userId).all();
       const { results: playlists } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
       const mappedTracks = (tracks || []).map(t => ({
         ...t,
-        durationSec: t.duration_sec,
-        youtubeId: t.youtube_id,
-        playlistId: t.playlist_id,
-        addedAt: t.created_at,
-        updatedAt: t.updated_at,
+        durationSec: t.duration_sec, youtubeId: t.youtube_id, playlistId: t.playlist_id, addedAt: t.created_at, updatedAt: t.updated_at, rowid: t.rowid,
       }));
       return successResponse({ tracks: mappedTracks, playlists: playlists || [] }, requestId);
     } catch (err) {
@@ -186,16 +182,12 @@ export async function handleMusicRoutes(request, env, ctx, requestId, pathname, 
         await env.DB.batch(statements.slice(i, i + 100));
       }
 
-      const { results: tracks } = await env.DB.prepare('SELECT * FROM music WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
+      const { results: tracks } = await env.DB.prepare('SELECT rowid, * FROM music WHERE user_id = ? ORDER BY updated_at DESC, rowid DESC;').bind(userId).all();
       const { results: playlists } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
 
       const mappedTracks = (tracks || []).map(t => ({
         ...t,
-        durationSec: t.duration_sec,
-        youtubeId: t.youtube_id,
-        playlistId: t.playlist_id,
-        addedAt: t.created_at,
-        updatedAt: t.updated_at,
+        durationSec: t.duration_sec, youtubeId: t.youtube_id, playlistId: t.playlist_id, addedAt: t.created_at, updatedAt: t.updated_at, rowid: t.rowid,
       }));
 
       return successResponse({
@@ -269,16 +261,12 @@ export async function handleMusicRoutes(request, env, ctx, requestId, pathname, 
         }
       }
 
-      const { results: tracks } = await env.DB.prepare('SELECT * FROM music WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
+      const { results: tracks } = await env.DB.prepare('SELECT rowid, * FROM music WHERE user_id = ? ORDER BY updated_at DESC, rowid DESC;').bind(userId).all();
       const { results: playlists } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
 
       const mappedTracks = (tracks || []).map(t => ({
         ...t,
-        durationSec: t.duration_sec,
-        youtubeId: t.youtube_id,
-        playlistId: t.playlist_id,
-        addedAt: t.created_at,
-        updatedAt: t.updated_at,
+        durationSec: t.duration_sec, youtubeId: t.youtube_id, playlistId: t.playlist_id, addedAt: t.created_at, updatedAt: t.updated_at, rowid: t.rowid,
       }));
 
       return successResponse({ syncedCount, tracks: mappedTracks, playlists: playlists || [] }, requestId);
