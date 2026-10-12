@@ -1,6 +1,6 @@
-// ═══════════════════════════════════════════════════════════════════
-//  worker/routes/music.js — RESTful Music & Playlists Controller
-// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════════════
+//  worker/routes/music.js ── RESTful Music & Playlists Controller
+// ═══════════════════════════════════════════════════════════════════════════════════════
 
 import { successResponse, errorResponse } from '../utils/response.js';
 import { sanitizeString, validateInt } from '../utils/validation.js';
@@ -9,22 +9,27 @@ export async function handleMusicRoutes(request, env, ctx, requestId, pathname, 
   const method = request.method;
   const userId = claims.sub;
 
-  // ── GET /v1/music — Fetch tracks & playlists ──
+  // ── GET /v1/music ── Fetch tracks & playlists ──
   if (method === 'GET' && pathname === '/v1/music') {
-    const { results: tracks } = await env.DB.prepare('SELECT * FROM music WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
-    const { results: playlists } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
-    const mappedTracks = (tracks || []).map(t => ({
-      ...t,
-      durationSec: t.duration_sec,
-      youtubeId: t.youtube_id,
-      playlistId: t.playlist_id,
-      addedAt: t.created_at,
-      updatedAt: t.updated_at,
-    }));
-    return successResponse({ tracks: mappedTracks, playlists: playlists || [] }, requestId);
+    try {
+      const { results: tracks } = await env.DB.prepare('SELECT * FROM music WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
+      const { results: playlists } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
+      const mappedTracks = (tracks || []).map(t => ({
+        ...t,
+        durationSec: t.duration_sec,
+        youtubeId: t.youtube_id,
+        playlistId: t.playlist_id,
+        addedAt: t.created_at,
+        updatedAt: t.updated_at,
+      }));
+      return successResponse({ tracks: mappedTracks, playlists: playlists || [] }, requestId);
+    } catch (err) {
+      console.error('[Music GET Error]', err);
+      return errorResponse('MUSIC_FETCH_FAILED', err.message || 'Failed to fetch music library', requestId, 500);
+    }
   }
 
-  // ── POST /v1/music — Create music track ──
+  // ── POST /v1/music ── Create music track ──
   if (method === 'POST' && pathname === '/v1/music') {
     let body = {};
     try { body = await request.json(); } catch (e) {}
@@ -38,16 +43,21 @@ export async function handleMusicRoutes(request, env, ctx, requestId, pathname, 
     const ytId = sanitizeString(body.youtube_id || body.youtubeId, 100);
     const playlistId = sanitizeString(body.playlist_id || body.playlistId, 100);
 
-    await env.DB.prepare(`
-      INSERT INTO music (id, user_id, title, artist, album, duration_sec, youtube_id, playlist_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch());
-    `).bind(id, userId, title, artist || null, album || null, duration, ytId || null, playlistId || null).run();
+    try {
+      await env.DB.prepare(`
+        INSERT INTO music (id, user_id, title, artist, album, duration_sec, youtube_id, playlist_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch());
+      `).bind(id, userId, title, artist || null, album || null, duration, ytId || null, playlistId || null).run();
 
-    const item = await env.DB.prepare('SELECT * FROM music WHERE id = ? AND user_id = ?;').bind(id, userId).first();
-    return successResponse(item, requestId, 201);
+      const item = await env.DB.prepare('SELECT * FROM music WHERE id = ? AND user_id = ?;').bind(id, userId).first();
+      return successResponse(item, requestId, 201);
+    } catch (err) {
+      console.error('[Music Create Error]', err);
+      return errorResponse('MUSIC_CREATE_FAILED', err.message || 'Failed to save track', requestId, 500);
+    }
   }
 
-  // ── PATCH /v1/music/:id — Update track ──
+  // ── PATCH /v1/music/:id ── Update track ──
   if (method === 'PATCH' && pathname.startsWith('/v1/music/')) {
     const id = pathname.split('/')[3];
     if (!id) return errorResponse('INVALID_INPUT', 'Track ID required', requestId, 400);
@@ -67,29 +77,39 @@ export async function handleMusicRoutes(request, env, ctx, requestId, pathname, 
     updates.push('updated_at = unixepoch()');
     params.push(id, userId);
 
-    const res = await env.DB.prepare(`UPDATE music SET ${updates.join(', ')} WHERE id = ? AND user_id = ?;`).bind(...params).run();
-    if (res.meta.changes === 0) return errorResponse('NOT_FOUND', 'Track not found', requestId, 404);
+    try {
+      const res = await env.DB.prepare(`UPDATE music SET ${updates.join(', ')} WHERE id = ? AND user_id = ?;`).bind(...params).run();
+      if (res.meta.changes === 0) return errorResponse('NOT_FOUND', 'Track not found', requestId, 404);
 
-    const updated = await env.DB.prepare('SELECT * FROM music WHERE id = ? AND user_id = ?;').bind(id, userId).first();
-    return successResponse(updated, requestId);
+      const updated = await env.DB.prepare('SELECT * FROM music WHERE id = ? AND user_id = ?;').bind(id, userId).first();
+      return successResponse(updated, requestId);
+    } catch (err) {
+      console.error('[Music Update Error]', err);
+      return errorResponse('MUSIC_UPDATE_FAILED', err.message || 'Failed to update track', requestId, 500);
+    }
   }
 
-  // ── DELETE /v1/music/:id — Delete track ──
+  // ── DELETE /v1/music/:id ── Delete track ──
   if (method === 'DELETE' && pathname.startsWith('/v1/music/')) {
     const id = pathname.split('/')[3];
     if (!id) return errorResponse('INVALID_INPUT', 'Track ID required', requestId, 400);
-    const res = await env.DB.prepare('DELETE FROM music WHERE id = ? AND user_id = ?;').bind(id, userId).run();
-    if (res.meta.changes === 0) return errorResponse('NOT_FOUND', 'Track not found', requestId, 404);
-    return successResponse({ deleted: true, id }, requestId);
+    try {
+      const res = await env.DB.prepare('DELETE FROM music WHERE id = ? AND user_id = ?;').bind(id, userId).run();
+      if (res.meta.changes === 0) return errorResponse('NOT_FOUND', 'Track not found', requestId, 404);
+      return successResponse({ deleted: true, id }, requestId);
+    } catch (err) {
+      console.error('[Music Delete Error]', err);
+      return errorResponse('MUSIC_DELETE_FAILED', err.message || 'Failed to delete track', requestId, 500);
+    }
   }
 
-  // ── POST /v1/music/sync-playlist — Sync YouTube Playlist by URL / ID ──
+  // ── POST /v1/music/sync-playlist ── Sync YouTube Playlist by URL / ID ──
   if (method === 'POST' && pathname === '/v1/music/sync-playlist') {
     let body = {};
     try { body = await request.json(); } catch (e) {}
 
     const playlistUrl = sanitizeString(body.playlist_url || body.playlistUrl, 500);
-    const syncInterval = validateInt(body.sync_interval_days || body.syncIntervalDays, 1, 7);
+    const syncInterval = validateInt(body.sync_interval_days ?? body.syncIntervalDays, 0, 7);
 
     if (!playlistUrl) return errorResponse('INVALID_INPUT', 'Playlist URL or ID required', requestId, 400);
 
@@ -98,37 +118,50 @@ export async function handleMusicRoutes(request, env, ctx, requestId, pathname, 
 
     if (!playlistId) return errorResponse('INVALID_INPUT', 'Could not parse playlist ID from provided link', requestId, 400);
 
-    const apiKey = env.YOUTUBE_API_KEY || env.GOOGLE_API_KEY;
-    const plData = await fetchYouTubePlaylistData(playlistId, apiKey);
+    try {
+      const apiKey = env.YOUTUBE_API_KEY || env.GOOGLE_API_KEY;
+      const plData = await fetchYouTubePlaylistData(playlistId, apiKey);
 
-    // Save/Update playlist in D1
-    await env.DB.prepare(`
-      INSERT INTO playlists (id, user_id, title, description, thumbnail, item_count, synced, playlist_url, sync_interval_days, last_synced_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, unixepoch(), unixepoch())
-      ON CONFLICT(id) DO UPDATE SET
-        title = excluded.title,
-        description = excluded.description,
-        thumbnail = excluded.thumbnail,
-        item_count = excluded.item_count,
-        synced = 1,
-        playlist_url = excluded.playlist_url,
-        sync_interval_days = excluded.sync_interval_days,
-        last_synced_at = unixepoch(),
-        updated_at = unixepoch();
-    `).bind(
-      playlistId,
-      userId,
-      sanitizeString(plData.title, 300),
-      sanitizeString(plData.description, 1000) || null,
-      sanitizeString(plData.thumbnail, 500) || null,
-      plData.itemCount || 0,
-      playlistUrl,
-      syncInterval
-    ).run();
+      if (!plData || !plData.tracks || plData.tracks.length === 0) {
+        return errorResponse('PLAYLIST_EMPTY', 'No tracks found in playlist. Please ensure playlist is public or unlisted.', requestId, 422);
+      }
 
-    // Insert/Update tracks for playlist
-    for (const t of plData.tracks) {
+      // Save/Update playlist in D1
       await env.DB.prepare(`
+        INSERT INTO playlists (id, user_id, title, description, thumbnail, item_count, synced, playlist_url, sync_interval_days, last_synced_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, unixepoch(), unixepoch())
+        ON CONFLICT(id) DO UPDATE SET
+          title = excluded.title,
+          description = excluded.description,
+          thumbnail = excluded.thumbnail,
+          item_count = excluded.item_count,
+          synced = 1,
+          playlist_url = excluded.playlist_url,
+          sync_interval_days = excluded.sync_interval_days,
+          last_synced_at = unixepoch(),
+          updated_at = unixepoch();
+      `).bind(
+        playlistId,
+        userId,
+        sanitizeString(plData.title, 300),
+        sanitizeString(plData.description, 1000) || null,
+        sanitizeString(plData.thumbnail, 500) || null,
+        plData.itemCount || 0,
+        playlistUrl,
+        syncInterval
+      ).run();
+
+      // Deduplicate tracks by id to prevent conflicts
+      const uniqueTracks = [];
+      const seen = new Set();
+      for (const t of plData.tracks) {
+        if (!t || !t.id || seen.has(t.id)) continue;
+        seen.add(t.id);
+        uniqueTracks.push(t);
+      }
+
+      // Batch Insert/Update tracks for playlist
+      const statements = uniqueTracks.map(t => env.DB.prepare(`
         INSERT INTO music (id, user_id, title, artist, album, duration_sec, youtube_id, playlist_id, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())
         ON CONFLICT(id) DO UPDATE SET
@@ -147,96 +180,153 @@ export async function handleMusicRoutes(request, env, ctx, requestId, pathname, 
         t.duration_sec || null,
         t.youtube_id || null,
         playlistId
-      ).run();
-    }
+      ));
 
-    const { results: tracks } = await env.DB.prepare('SELECT * FROM music WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
-    const { results: playlists } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
-
-    const mappedTracks = (tracks || []).map(t => ({
-      ...t,
-      durationSec: t.duration_sec,
-      youtubeId: t.youtube_id,
-      playlistId: t.playlist_id,
-      addedAt: t.created_at,
-      updatedAt: t.updated_at,
-    }));
-
-    return successResponse({
-      syncedPlaylistId: playlistId,
-      tracksCount: plData.tracks.length,
-      tracks: mappedTracks,
-      playlists: playlists || [],
-    }, requestId);
-  }
-
-  // ── POST /v1/music/sync-due — Sync all playlists past sync interval ──
-  if (method === 'POST' && pathname === '/v1/music/sync-due') {
-    const { results: duePlaylists } = await env.DB.prepare(`
-      SELECT * FROM playlists
-      WHERE user_id = ? AND synced = 1 AND playlist_url IS NOT NULL
-        AND (last_synced_at + (sync_interval_days * 86400)) <= unixepoch();
-    `).bind(userId).all();
-
-    const apiKey = env.YOUTUBE_API_KEY || env.GOOGLE_API_KEY;
-    let syncedCount = 0;
-
-    for (const pl of duePlaylists || []) {
-      const match = pl.playlist_url.match(/[?&]list=([a-zA-Z0-9_-]+)/) || pl.playlist_url.match(/^([a-zA-Z0-9_-]{10,50})$/);
-      const playlistId = match ? match[1] : pl.id;
-      if (!playlistId) continue;
-
-      const plData = await fetchYouTubePlaylistData(playlistId, apiKey);
-      await env.DB.prepare(`
-        UPDATE playlists SET
-          title = ?, description = ?, thumbnail = ?, item_count = ?, last_synced_at = unixepoch(), updated_at = unixepoch()
-        WHERE id = ? AND user_id = ?;
-      `).bind(sanitizeString(plData.title, 300), sanitizeString(plData.description, 1000) || null, sanitizeString(plData.thumbnail, 500) || null, plData.itemCount || 0, pl.id, userId).run();
-
-      for (const t of plData.tracks) {
-        await env.DB.prepare(`
-          INSERT INTO music (id, user_id, title, artist, album, duration_sec, youtube_id, playlist_id, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())
-          ON CONFLICT(id) DO UPDATE SET title = excluded.title, artist = excluded.artist, duration_sec = excluded.duration_sec, updated_at = unixepoch();
-        `).bind(t.id, userId, sanitizeString(t.title, 300), sanitizeString(t.artist, 200) || null, t.album || null, t.duration_sec || null, t.youtube_id || null, pl.id).run();
+      for (let i = 0; i < statements.length; i += 100) {
+        await env.DB.batch(statements.slice(i, i + 100));
       }
-      syncedCount++;
+
+      const { results: tracks } = await env.DB.prepare('SELECT * FROM music WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
+      const { results: playlists } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
+
+      const mappedTracks = (tracks || []).map(t => ({
+        ...t,
+        durationSec: t.duration_sec,
+        youtubeId: t.youtube_id,
+        playlistId: t.playlist_id,
+        addedAt: t.created_at,
+        updatedAt: t.updated_at,
+      }));
+
+      return successResponse({
+        syncedPlaylistId: playlistId,
+        tracksCount: uniqueTracks.length,
+        tracks: mappedTracks,
+        playlists: playlists || [],
+      }, requestId);
+    } catch (syncErr) {
+      console.error('[Music Sync-Playlist Error]', syncErr);
+      return errorResponse('SYNC_PLAYLIST_FAILED', syncErr.message || 'Failed to sync playlist', requestId, 500);
     }
-
-    const { results: tracks } = await env.DB.prepare('SELECT * FROM music WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
-    const { results: playlists } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
-
-    return successResponse({ syncedCount, tracks: tracks || [], playlists: playlists || [] }, requestId);
   }
 
-  // ── PUT /v1/playlists — Sync YouTube playlists array ──
+  // ── POST /v1/music/sync-due ── Sync all playlists past sync interval ──
+  if (method === 'POST' && pathname === '/v1/music/sync-due') {
+    try {
+      const { results: duePlaylists } = await env.DB.prepare(`
+        SELECT * FROM playlists
+        WHERE user_id = ? AND synced = 1 AND playlist_url IS NOT NULL
+          AND sync_interval_days > 0
+          AND (last_synced_at + (sync_interval_days * 86400)) <= unixepoch();
+      `).bind(userId).all();
+
+      const apiKey = env.YOUTUBE_API_KEY || env.GOOGLE_API_KEY;
+      let syncedCount = 0;
+
+      for (const pl of duePlaylists || []) {
+        try {
+          const match = pl.playlist_url.match(/[?&]list=([a-zA-Z0-9_-]+)/) || pl.playlist_url.match(/^([a-zA-Z0-9_-]{10,50})$/);
+          const playlistId = match ? match[1] : pl.id;
+          if (!playlistId) continue;
+
+          const plData = await fetchYouTubePlaylistData(playlistId, apiKey);
+          if (!plData || !plData.tracks || plData.tracks.length === 0) {
+            // Still update last_synced_at so we don't repeatedly fail on every render
+            await env.DB.prepare(`
+              UPDATE playlists SET last_synced_at = unixepoch(), updated_at = unixepoch()
+              WHERE id = ? AND user_id = ?;
+            `).bind(pl.id, userId).run();
+            continue;
+          }
+
+          await env.DB.prepare(`
+            UPDATE playlists SET
+              title = ?, description = ?, thumbnail = ?, item_count = ?, last_synced_at = unixepoch(), updated_at = unixepoch()
+            WHERE id = ? AND user_id = ?;
+          `).bind(sanitizeString(plData.title, 300), sanitizeString(plData.description, 1000) || null, sanitizeString(plData.thumbnail, 500) || null, plData.itemCount || 0, pl.id, userId).run();
+
+          const uniqueTracks = [];
+          const seen = new Set();
+          for (const t of plData.tracks) {
+            if (!t || !t.id || seen.has(t.id)) continue;
+            seen.add(t.id);
+            uniqueTracks.push(t);
+          }
+
+          const statements = uniqueTracks.map(t => env.DB.prepare(`
+            INSERT INTO music (id, user_id, title, artist, album, duration_sec, youtube_id, playlist_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())
+            ON CONFLICT(id) DO UPDATE SET title = excluded.title, artist = excluded.artist, duration_sec = excluded.duration_sec, youtube_id = excluded.youtube_id, playlist_id = excluded.playlist_id, updated_at = unixepoch();
+          `).bind(t.id, userId, sanitizeString(t.title, 300), sanitizeString(t.artist, 200) || null, t.album || null, t.duration_sec || null, t.youtube_id || null, pl.id));
+
+          for (let i = 0; i < statements.length; i += 100) {
+            await env.DB.batch(statements.slice(i, i + 100));
+          }
+          syncedCount++;
+        } catch (plErr) {
+          console.warn('[Music Sync-Due Playlist Error]', pl.id, plErr);
+          await env.DB.prepare('UPDATE playlists SET last_synced_at = unixepoch() WHERE id = ? AND user_id = ?;').bind(pl.id, userId).run().catch(() => {});
+        }
+      }
+
+      const { results: tracks } = await env.DB.prepare('SELECT * FROM music WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
+      const { results: playlists } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
+
+      const mappedTracks = (tracks || []).map(t => ({
+        ...t,
+        durationSec: t.duration_sec,
+        youtubeId: t.youtube_id,
+        playlistId: t.playlist_id,
+        addedAt: t.created_at,
+        updatedAt: t.updated_at,
+      }));
+
+      return successResponse({ syncedCount, tracks: mappedTracks, playlists: playlists || [] }, requestId);
+    } catch (err) {
+      console.error('[Music Sync-Due Error]', err);
+      return errorResponse('SYNC_DUE_FAILED', err.message || 'Failed to sync due playlists', requestId, 500);
+    }
+  }
+
+  // ── PUT /v1/playlists ── Sync YouTube playlists array ──
   if (method === 'PUT' && pathname === '/v1/playlists') {
     let body = {};
     try { body = await request.json(); } catch (e) {}
     const playlists = Array.isArray(body.playlists) ? body.playlists : [];
 
-    // Atomic replace playlists for user
-    await env.DB.prepare('DELETE FROM playlists WHERE user_id = ?;').bind(userId).run();
-    for (const p of playlists) {
-      await env.DB.prepare(`
-        INSERT INTO playlists (id, user_id, title, description, thumbnail, item_count, synced, playlist_url, sync_interval_days, last_synced_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch());
-      `).bind(
-        p.id || crypto.randomUUID(),
-        userId,
-        sanitizeString(p.title, 300),
-        sanitizeString(p.description, 1000) || null,
-        sanitizeString(p.thumbnail, 500) || null,
-        validateInt(p.itemCount || p.item_count, 0, 0),
-        p.synced ? 1 : 0,
-        p.playlist_url || p.playlistUrl || null,
-        validateInt(p.sync_interval_days || p.syncIntervalDays, 1, 7),
-        p.last_synced_at || p.lastSyncedAt || 0
-      ).run();
-    }
+    try {
+      const statements = [
+        env.DB.prepare('DELETE FROM playlists WHERE user_id = ?;').bind(userId)
+      ];
 
-    const { results } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ?;').bind(userId).all();
-    return successResponse(results || [], requestId);
+      for (const p of playlists) {
+        statements.push(env.DB.prepare(`
+          INSERT INTO playlists (id, user_id, title, description, thumbnail, item_count, synced, playlist_url, sync_interval_days, last_synced_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch());
+        `).bind(
+          p.id || crypto.randomUUID(),
+          userId,
+          sanitizeString(p.title, 300),
+          sanitizeString(p.description, 1000) || null,
+          sanitizeString(p.thumbnail, 500) || null,
+          validateInt(p.itemCount || p.item_count, 0, 0),
+          p.synced ? 1 : 0,
+          p.playlist_url || p.playlistUrl || null,
+          validateInt(p.sync_interval_days ?? p.syncIntervalDays, 0, 7),
+          p.last_synced_at || p.lastSyncedAt || 0
+        ));
+      }
+
+      for (let i = 0; i < statements.length; i += 100) {
+        await env.DB.batch(statements.slice(i, i + 100));
+      }
+
+      const { results } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ?;').bind(userId).all();
+      return successResponse(results || [], requestId);
+    } catch (err) {
+      console.error('[Playlists PUT Error]', err);
+      return errorResponse('PLAYLISTS_UPDATE_FAILED', err.message || 'Failed to update playlists', requestId, 500);
+    }
   }
 
   return null;
@@ -308,23 +398,31 @@ async function fetchYouTubePlaylistData(playlistId, apiKey) {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9',
-      }
+      },
+      redirect: 'follow',
     });
     if (htmlRes.ok) {
       const html = await htmlRes.text();
       const jsonMatch = html.match(/var\s+ytInitialData\s*=\s*({.+?});<\/script>/s) || html.match(/window\["ytInitialData"\]\s*=\s*({.+?});/s);
       if (jsonMatch) {
         const data = JSON.parse(jsonMatch[1]);
-        const header = data.header?.playlistHeaderRenderer || data.sidebar?.playlistSidebarRenderer?.items?.[0]?.playlistSidebarPrimaryInfoRenderer;
+        const header = data.header?.playlistHeaderRenderer
+          || data.sidebar?.playlistSidebarRenderer?.items?.[0]?.playlistSidebarPrimaryInfoRenderer
+          || data.header?.musicDetailHeaderRenderer;
         if (header) {
           title = header.title?.simpleText || header.title?.runs?.[0]?.text || title;
-          const thumbs = header.thumbnailRenderer?.playlistVideoThumbnailRenderer?.thumbnail?.thumbnails || header.thumbnail?.thumbnails;
+          const thumbs = header.thumbnailRenderer?.playlistVideoThumbnailRenderer?.thumbnail?.thumbnails
+            || header.thumbnail?.thumbnails
+            || header.thumbnailRenderer?.musicThumbnailRenderer?.thumbnail?.thumbnails;
           if (thumbs && thumbs.length) thumbnail = thumbs[thumbs.length - 1].url;
         }
 
-        const secList = data.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+        const secList = data.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents
+          || data.contents?.singleColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents
+          || [];
+
         for (const sec of secList) {
-          const isrContents = sec.itemSectionRenderer?.contents || [];
+          const isrContents = sec.itemSectionRenderer?.contents || sec.musicPlaylistShelfRenderer?.contents || [];
           for (const item of isrContents) {
             // 1. playlistVideoListRenderer (nested legacy desktop)
             if (item.playlistVideoListRenderer?.contents) {
@@ -385,6 +483,27 @@ async function fetchYouTubePlaylistData(playlistId, apiKey) {
                 album: null,
                 duration_sec,
               });
+            }
+
+            // 4. musicResponsiveListItemRenderer (YouTube Music layout)
+            if (item.musicResponsiveListItemRenderer) {
+              const m = item.musicResponsiveListItemRenderer;
+              const vid = m.playlistItemData?.videoId
+                || m.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId;
+              if (vid) {
+                const trackTitle = m.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.text || 'Unknown Track';
+                const artist = m.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.text || 'Unknown Artist';
+                const durText = m.fixedColumns?.[0]?.musicResponsiveListItemFixedColumnRenderer?.text?.runs?.[0]?.text || '';
+                const duration_sec = parseDurationText(durText);
+                tracks.push({
+                  id: 'yt_' + vid,
+                  youtube_id: vid,
+                  title: trackTitle,
+                  artist,
+                  album: null,
+                  duration_sec,
+                });
+              }
             }
           }
         }

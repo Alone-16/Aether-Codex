@@ -103,7 +103,11 @@ export async function submitAddPlaylistSync() {
       if (res.tracks) setMDATA(res.tracks);
       if (res.playlists) setMPLAYLISTS(res.playlists);
       closePanel();
-      toast(`✓ Synced ${res.tracksCount || 0} tracks from playlist!`, '#4ade80');
+      if ((res.tracksCount || 0) > 0) {
+        toast(`✓ Synced ${res.tracksCount} tracks from playlist!`, '#4ade80');
+      } else {
+        toast('Synced playlist, but no tracks could be extracted.', '#f59e0b');
+      }
       renderMusicBody();
     }
   } catch (e) {
@@ -125,7 +129,7 @@ export async function syncSinglePlaylist(playlistUrl, syncIntervalDays = 7) {
     if (res) {
       if (res.tracks) setMDATA(res.tracks);
       if (res.playlists) setMPLAYLISTS(res.playlists);
-      toast(`✓ Re-synced playlist`, '#4ade80');
+      toast(`✓ Re-synced playlist (${res.tracksCount || 0} tracks)`, '#4ade80');
       renderMusicBody();
     }
   } catch (e) {
@@ -136,16 +140,28 @@ export async function syncSinglePlaylist(playlistUrl, syncIntervalDays = 7) {
   }
 }
 
+let _dueSyncPromise = null;
+let _lastDueSyncCheck = 0;
+
 export async function syncDuePlaylists() {
-  try {
-    const res = await (window.musicApi || musicApi).syncDuePlaylists();
-    if (res && res.syncedCount > 0) {
-      if (res.tracks) setMDATA(res.tracks);
-      if (res.playlists) setMPLAYLISTS(res.playlists);
-      toast(`✓ Auto-synced ${res.syncedCount} playlist(s)`, '#4ade80');
-      renderMusicBody();
+  const now = Date.now();
+  if (YT_SYNCING || _dueSyncPromise || (now - _lastDueSyncCheck < 60000)) return;
+  _lastDueSyncCheck = now;
+  _dueSyncPromise = (async () => {
+    try {
+      const res = await (window.musicApi || musicApi).syncDuePlaylists();
+      if (res && res.syncedCount > 0) {
+        if (res.tracks) setMDATA(res.tracks);
+        if (res.playlists) setMPLAYLISTS(res.playlists);
+        toast(`✓ Auto-synced ${res.syncedCount} playlist(s)`, '#4ade80');
+        renderMusicBody();
+      }
+    } catch (e) {
+      console.warn('[Music syncDuePlaylists]', e);
+    } finally {
+      _dueSyncPromise = null;
     }
-  } catch (e) {}
+  })();
 }
 
 function fmtDuration(secs) {
@@ -384,7 +400,7 @@ function renderMusicPlaylists(c) {
         </div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
-        <button onclick="syncSinglePlaylist('${esc(plUrl)}', ${pl.sync_interval_days || 7})" class="mu-sync-toggle synced" title="Re-sync this playlist now">
+        <button onclick="syncSinglePlaylist('${esc(plUrl).replace(/'/g, "\\'")}', ${pl.sync_interval_days || 7})" class="mu-sync-toggle synced" title="Re-sync this playlist now">
           ↻ Sync Now
         </button>
       </div>
