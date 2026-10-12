@@ -2165,3 +2165,10 @@ textarea.fin{resize:vertical;min-height:70px}
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+/* ── Virtual scroll wrapper slot ── */
+.m-card-slot {
+  width: 100%;
+  position: relative;
+  contain: layout style;
+}
+

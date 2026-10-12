@@ -16,7 +16,10 @@ import {
   SECTION_META, render,
 } from './shared/utils.js';
 
-import { toast, showConfirm, showAlert, closePanel } from './shared/ui.js';
+import {
+  toast, showConfirm, showAlert, closePanel,
+  _cardSlot, _hydrateSlots, _observeCardVisibility, _throttledTilt, _slotCache
+} from './shared/ui.js';
 
 import { renderPage } from './shared/routing.js';
 import { nav }        from './shared/nav.js';
@@ -31,6 +34,7 @@ import { initNotifications, fetchNotifications } from './shared/notifications.js
 Object.assign(window, {
   nav, render, renderPage,
   toast, showConfirm, showAlert, closePanel,
+  _cardSlot, _hydrateSlots, _observeCardVisibility, _throttledTilt, _slotCache,
   openMob, closeMob, driveAction, syncDrive,
   DATA, GENRES, GACTIVE, CURRENT, SEARCH, MEDIA_PAGE, ls, K, DATA_VERSION,
   uid, esc, today, fmtDate, h2r, gbyid, estTime, entryStats, fmtMin,

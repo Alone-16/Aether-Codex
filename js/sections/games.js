@@ -2,6 +2,7 @@
 //  GAMES DATA
 // ═══════════════════════════════════════════════════════
 import { uploadSaveFile as apiUploadSaveFile } from '../shared/api.js';
+import { _cardSlot, _hydrateSlots, _observeCardVisibility } from '../shared/ui.js';
 
 const GAMES_KEY = 'ac_v4_games';
 const GAMES_VER = '1.0';

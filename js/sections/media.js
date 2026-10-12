@@ -2,7 +2,10 @@
 //  MEDIA SECTION
 // ═══════════════════════════════
 
-import { toast, showConfirm, showAlert, closePanel } from '../shared/ui.js';
+import {
+  toast, showConfirm, showAlert, closePanel,
+  _cardSlot, _hydrateSlots, _observeCardVisibility, _throttledTilt, _slotCache
+} from '../shared/ui.js';
 import { esc } from '../shared/utils.js';
 import { mediaApi } from '../shared/api.js';
 import { isMediaAiring } from '../shared/airing_sync.js';
@@ -1919,106 +1922,7 @@ function askDel(id) {
    when scrolling out, keeping only visible cards
    in the DOM for maximum smoothness.
 ═══════════════════════════════ */
-let _cardObserver = null;
-// Map of slot element -> { html, height } for re-hydration
-const _slotCache = new WeakMap();
-if (typeof window !== 'undefined') window._slotCache = _slotCache;
-
-function _observeCardVisibility(container) {
-  if (_cardObserver) _cardObserver.disconnect();
-
-  // Immediately reveal any non-slotted lazy elements (e.g. Dashboard / Upcoming stats)
-  container.querySelectorAll('.m-card-lazy:not(.m-card-slot *)').forEach((el, i) => {
-    el.classList.add('m-card-visible');
-  });
-
-  const slots = container.querySelectorAll('.m-card-slot');
-  if (!slots.length) return;
-
-  let batchIndex = 0;
-  let batchFrame = null;
-
-  _cardObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      const slot = entry.target;
-      const cache = _slotCache.get(slot);
-      if (!cache) return;
-
-      if (entry.isIntersecting) {
-        // ── LOAD: populate card HTML into the slot ──
-        if (slot.dataset.loaded === '1') return;
-        slot.style.minHeight = '';
-        slot.innerHTML = cache.html;
-        slot.dataset.loaded = '1';
-
-        // Animate in with stagger
-        const card = slot.firstElementChild;
-        if (card) {
-          const delay = batchIndex * 0.035;
-          card.style.animationDelay = delay + 's';
-          card.classList.add('m-card-visible');
-          batchIndex++;
-        }
-        if (!batchFrame) {
-          batchFrame = requestAnimationFrame(() => {
-            batchIndex = 0;
-            batchFrame = null;
-          });
-        }
-      } else {
-        // ── UNLOAD: replace with height placeholder ──
-        if (slot.dataset.loaded !== '1') return;
-        // Save measured height so scroll position stays stable
-        cache.height = slot.offsetHeight;
-        slot.style.minHeight = cache.height + 'px';
-        slot.innerHTML = '';
-        slot.dataset.loaded = '0';
-      }
-    });
-  }, {
-    // Pre-load 300px ahead so cards are ready before user sees them,
-    // unload 600px after leaving to avoid flicker on small scrolls
-    rootMargin: '600px 0px',
-    threshold: 0
-  });
-
-  slots.forEach(slot => _cardObserver.observe(slot));
-}
-
-/** Wraps a card HTML string into a virtual-scroll slot div */
-function _cardSlot(cardHtml, entryId) {
-  const slotId = entryId ? `slot-${entryId}` : '';
-  return `<div class="m-card-slot" id="${slotId}" data-loaded="0" data-card-html style="min-height:62px"></div>`;
-}
-
-/** After innerHTML is set, hydrate slot elements with their card HTML */
-function _hydrateSlots(container, htmlMap) {
-  const slots = container.querySelectorAll('.m-card-slot[data-card-html]');
-  let i = 0;
-  slots.forEach(slot => {
-    if (i < htmlMap.length) {
-      _slotCache.set(slot, { html: htmlMap[i], height: 62 });
-      slot.removeAttribute('data-card-html');
-    }
-    i++;
-  });
-}
-
-/* ── Throttled 3D Tilt (rAF-based) ── */
-let _tiltFrame = null;
-function _throttledTilt(el, event) {
-  if (_tiltFrame) return;
-  _tiltFrame = requestAnimationFrame(() => {
-    const r = el.getBoundingClientRect();
-    const x = event.clientX - r.left;
-    const y = event.clientY - r.top;
-    el.style.setProperty('--mouse-x', x + 'px');
-    el.style.setProperty('--mouse-y', y + 'px');
-    el.style.setProperty('--rot-x', ((y / r.height) - 0.5) * -8 + 'deg');
-    el.style.setProperty('--rot-y', ((x / r.width) - 0.5) * 8 + 'deg');
-    _tiltFrame = null;
-  });
-}
+// ── Virtual scroll & slot functions imported from shared/ui.js ──
 
 function _injectPremiumStyles() {
   if (document.getElementById('m-premium-styles')) return;
@@ -3603,6 +3507,7 @@ if (typeof window !== 'undefined') {
   _renderFilterChips,
 
   // Performance: lazy visibility & throttled tilt
+  _throttledTilt, _observeCardVisibility, _cardSlot, _hydrateSlots,
   });
 }
 
@@ -3615,5 +3520,10 @@ export {
   fetchMalFromInput,
   syncMediaEntryFromMal,
   _malSelect,
+  _cardSlot,
+  _hydrateSlots,
+  _observeCardVisibility,
+  _throttledTilt,
+  _slotCache,
 };
 

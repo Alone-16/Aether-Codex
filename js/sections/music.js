@@ -1,13 +1,15 @@
 // ═══════════════════════════════════════════════════════
 //  MUSIC DATA & STATE — YouTube Music Link Sync via Cloudflare Worker
 // ═══════════════════════════════════════════════════════
+import { _cardSlot, _hydrateSlots, _observeCardVisibility } from '../shared/ui.js';
+
 const MUSIC_KEY     = 'ac_v4_music';
 const MUSIC_PL_KEY  = 'ac_v4_music_playlists';
 
-function loadMusic()      { return window.MDATA || []; }
-function saveMusic(d)     { MDATA = d; window.MDATA = d; }
-function loadPlaylists()  { return window.MPLAYLISTS || []; }
-function savePlaylists(p) { MPLAYLISTS = p; window.MPLAYLISTS = p; if (window.musicApi?.putPlaylists) window.musicApi.putPlaylists(p).catch(() => {}); }
+function loadMusic()      { return (window.MDATA && window.MDATA.length) ? window.MDATA : (typeof ls !== 'undefined' && ls.get ? ls.get(MUSIC_KEY) : null) || window.MDATA || []; }
+function saveMusic(d)     { MDATA = d; window.MDATA = d; if (typeof ls !== 'undefined' && ls.set) ls.set(MUSIC_KEY, d); }
+function loadPlaylists()  { return (window.MPLAYLISTS && window.MPLAYLISTS.length) ? window.MPLAYLISTS : (typeof ls !== 'undefined' && ls.get ? ls.get(MUSIC_PL_KEY) : null) || window.MPLAYLISTS || []; }
+function savePlaylists(p) { MPLAYLISTS = p; window.MPLAYLISTS = p; if (typeof ls !== 'undefined' && ls.set) ls.set(MUSIC_PL_KEY, p); if (window.musicApi?.putPlaylists) window.musicApi.putPlaylists(p).catch(() => {}); }
 
 let MDATA      = loadMusic();
 window.MDATA = MDATA;
