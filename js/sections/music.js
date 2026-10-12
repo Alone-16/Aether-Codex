@@ -1,11 +1,13 @@
-// ═══════════════════════════════════════════════════════
-//  MUSIC DATA & STATE — YouTube Music Link Sync via Cloudflare Worker
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+//  MUSIC DATA & STATE ── YouTube Music Link Sync via Cloudflare Worker
+// ═══════════════════════════════════════════════════════════════════════════════
 import { musicApi } from '../shared/api.js';
 import { _cardSlot, _hydrateSlots, _observeCardVisibility } from '../shared/ui.js';
+import { esc } from '../shared/utils.js';
 
 const MUSIC_KEY     = 'ac_v4_music';
 const MUSIC_PL_KEY  = 'ac_v4_music_playlists';
+const MUSIC_SORT_KEY = 'ac_v5_music_sort';
 
 function loadMusic()      { return (window.MDATA && window.MDATA.length) ? window.MDATA : (typeof ls !== 'undefined' && ls.get ? ls.get(MUSIC_KEY) : null) || window.MDATA || []; }
 function saveMusic(d)     { MDATA = d; window.MDATA = d; if (typeof ls !== 'undefined' && ls.set) ls.set(MUSIC_KEY, d); }
@@ -31,12 +33,122 @@ window.setMDATA = setMDATA;
 window.setMPLAYLISTS = setMPLAYLISTS;
 
 let MUSIC_PAGE = 'library';
-let MSEARCH    = '';
+let MSEARCH    = (typeof window !== 'undefined' && window.MSEARCH) ? window.MSEARCH : '';
 let YT_SYNCING = false;
+let SELECTED_PLAYLIST = null;
 
-// ═══════════════════════════════════════════════════════
+let MUSIC_SORT = (typeof localStorage !== 'undefined' ? localStorage.getItem(MUSIC_SORT_KEY) : null) || 'added';
+window.MUSIC_SORT = MUSIC_SORT;
+
+export function getMusicSearch() {
+  const srch = typeof document !== 'undefined' ? document.getElementById('srch') : null;
+  const val = (srch && srch.value !== undefined) ? srch.value : (window.MSEARCH ?? MSEARCH ?? '');
+  return String(val || '').toLowerCase().trim();
+}
+
+export function setMusicSearch(q) {
+  MSEARCH = String(q || '').toLowerCase().trim();
+  window.MSEARCH = MSEARCH;
+  const srch = typeof document !== 'undefined' ? document.getElementById('srch') : null;
+  if (srch && srch.value !== q) srch.value = q;
+  renderMusicBody();
+}
+
+export function clearMusicSearch() {
+  const srch = typeof document !== 'undefined' ? document.getElementById('srch') : null;
+  if (srch) srch.value = '';
+  MSEARCH = '';
+  window.MSEARCH = '';
+  renderMusicBody();
+  if (srch) srch.focus();
+}
+
+export function filterMusicByPlaylist(id) {
+  SELECTED_PLAYLIST = id;
+  MUSIC_PAGE = 'library';
+  renderMusicBody();
+}
+
+export function clearPlaylistFilter() {
+  SELECTED_PLAYLIST = null;
+  renderMusicBody();
+}
+
+export function getSortLabel() {
+  if (MUSIC_SORT === 'title') return 'A → Z';
+  if (MUSIC_SORT === 'title-desc') return 'Z → A';
+  if (MUSIC_SORT === 'oldest') return 'Time added (Oldest)';
+  return 'Time added (Newest)';
+}
+
+export function toggleMusicSortDd(e) {
+  if (e) e.stopPropagation();
+  const dd = document.getElementById('mu-sort-dd');
+  const menu = dd?.querySelector('.m-dd-menu');
+  const btn = dd?.querySelector('.m-dd-btn');
+  const isOpen = menu?.classList.contains('open');
+
+  document.querySelectorAll('.m-dd-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.m-dd-btn[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+
+  if (!isOpen && menu && btn) {
+    menu.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+  }
+}
+
+export function setMusicSort(val) {
+  MUSIC_SORT = val;
+  window.MUSIC_SORT = val;
+  try { localStorage.setItem(MUSIC_SORT_KEY, val); } catch (e) {}
+  document.querySelectorAll('.m-dd-menu.open').forEach(m => m.classList.remove('open'));
+  document.querySelectorAll('.m-dd-btn[aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+  renderMusicBody();
+}
+
+function getSongAddedTime(s) {
+  const t = s.addedAt || s.created_at || s.updated_at || s.updatedAt || 0;
+  return t < 1e11 ? t * 1000 : t;
+}
+
+function getPlaylistAddedTime(pl) {
+  const t = pl.last_synced_at || pl.lastSyncedAt || pl.updated_at || pl.updatedAt || pl.created_at || 0;
+  return t < 1e11 ? t * 1000 : t;
+}
+
+function renderSortDropdown(target = 'music') {
+  const sortLbl = getSortLabel();
+  return `
+    <div class="m-sort-dd m-dd" id="mu-sort-dd">
+      <button type="button" class="m-dd-btn" onclick="toggleMusicSortDd(event)" aria-haspopup="listbox" aria-expanded="false" aria-label="Sort ${target}">
+        <span class="m-dd-lbl">${sortLbl}</span>
+        <span class="m-dd-chev" aria-hidden="true"></span>
+      </button>
+      <div class="m-dd-menu" id="mu-sort-menu" role="listbox">
+        <button type="button" class="m-dd-opt${MUSIC_SORT === 'added' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'added' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('added')">Time added (Newest)</button>
+        <button type="button" class="m-dd-opt${MUSIC_SORT === 'title' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'title' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('title')">A → Z</button>
+        <button type="button" class="m-dd-opt${MUSIC_SORT === 'title-desc' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'title-desc' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('title-desc')">Z → A</button>
+        <button type="button" class="m-dd-opt${MUSIC_SORT === 'oldest' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'oldest' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('oldest')">Time added (Oldest)</button>
+      </div>
+    </div>`;
+}
+
+// Global click closer for sort dropdown
+if (typeof window !== 'undefined') {
+  window.addEventListener('click', (e) => {
+    if (e.target.closest('#mu-sort-dd')) return;
+    const menu = document.getElementById('mu-sort-menu');
+    const btn = document.querySelector('#mu-sort-dd .m-dd-btn');
+    if (menu && menu.classList.contains('open')) {
+      menu.classList.remove('open');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  YOUTUBE PLAYLIST LINK SYNC (SERVER API)
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export function openAddPlaylistModal() {
   const rpanel = document.getElementById('rpanel');
@@ -86,7 +198,7 @@ export async function submitAddPlaylistSync() {
   const intervalInput = document.getElementById('pl-sync-interval');
 
   const url = urlInput?.value?.trim();
-  const interval = parseInt(intervalInput?.value || '7', 10);
+  const interval = parseInt(intervalInput?.value ?? '7', 10);
 
   if (!url) {
     showAlert('Please enter a YouTube playlist link or ID.', { title: 'Missing Playlist Link' });
@@ -133,7 +245,7 @@ export async function syncSinglePlaylist(playlistUrl, syncIntervalDays = 7) {
       renderMusicBody();
     }
   } catch (e) {
-    toast('Sync failed: ' + e.message, '#fb7185');
+    toast('Sync failed: ' + (e.message || 'Error'), '#fb7185');
   } finally {
     YT_SYNCING = false;
     updateMusicSyncBtn('idle');
@@ -174,18 +286,18 @@ function fmtDuration(secs) {
 function updateMusicSyncBtn(state) {
   const btn = document.getElementById('music-sync-btn'); if (!btn) return;
   const map = {
-    syncing: ['<span class="mu-sync-spinning">↻</span> Syncing', 'var(--ac)'],
+    syncing: ['<span class="mu-sync-spinning">🔄</span> Syncing', 'var(--ac)'],
     synced:  ['✓ Synced',  '#4ade80'],
-    error:   ['✗ Sync',    '#fb7185'],
+    error:   ['⚠ Sync',    '#fb7185'],
     idle:    ['⟳ Sync Link', 'var(--ac)'],
   };
   const [label, color] = map[state] || map.idle;
   btn.innerHTML = label; btn.style.color = color;
 }
 
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
 //  MUSIC RENDER
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
 function renderMusic(c) {
   const tabs = ['Library', 'Playlists', 'Dashboard'];
   c.innerHTML = `
@@ -194,6 +306,14 @@ function renderMusic(c) {
       .mu-row.m-card-lazy, .mu-pl-card.m-card-lazy { opacity: 0; transform: translateY(20px) scale(0.96); animation: none; }
       .mu-row.m-card-lazy.m-card-visible, .mu-pl-card.m-card-lazy.m-card-visible {
         animation: mu-cardEnter 0.5s cubic-bezier(0.16,1,0.3,1) both;
+      }
+      .mu-pl-badge:hover {
+        background: rgba(var(--ac-rgb), 0.15) !important;
+        color: var(--ac) !important;
+        border-color: rgba(var(--ac-rgb), 0.3) !important;
+      }
+      .mu-toolbar {
+        animation: mu-cardEnter 0.3s cubic-bezier(0.16,1,0.3,1) both;
       }
     </style>
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
@@ -212,16 +332,27 @@ function renderMusic(c) {
 
 function setMusicPage(p) {
   MUSIC_PAGE = p;
-  document.getElementById('srch').value = '';
-  MSEARCH = '';
+  const srch = document.getElementById('srch');
+  if (srch) {
+    srch.placeholder = p === 'playlists' ? 'Search playlists...' : 'Search songs, artists, albums...';
+  }
   renderMusicBody();
 }
 
 function renderMusicBody() {
   const el = document.getElementById('music-body'); if (!el) return;
+  const srch = document.getElementById('srch');
+  if (srch && srch.value !== undefined) {
+    MSEARCH = srch.value.toLowerCase().trim();
+    window.MSEARCH = MSEARCH;
+  } else if (window.MSEARCH !== undefined) {
+    MSEARCH = String(window.MSEARCH).toLowerCase().trim();
+  }
+
   if (MUSIC_PAGE === 'library')    renderMusicLibrary(el);
   else if (MUSIC_PAGE === 'playlists') renderMusicPlaylists(el);
   else if (MUSIC_PAGE === 'dashboard') renderMusicDash(el);
+
   document.querySelectorAll('.stab').forEach((t,i) => {
     t.classList.toggle('active', ['library','playlists','dashboard'][i] === MUSIC_PAGE);
   });
@@ -234,14 +365,14 @@ function handleMusicSync() {
 
 // ── LIBRARY ──
 function renderMusicLibrary(c) {
-  const songs = MSEARCH
-    ? MDATA.filter(s => !s.removedFromPlaylist && (s.title.toLowerCase().includes(MSEARCH) || (s.artist||'').toLowerCase().includes(MSEARCH)))
-    : MDATA.filter(s => !s.removedFromPlaylist);
+  const q = getMusicSearch();
+  const rawSongs = Array.isArray(MDATA) ? MDATA : [];
+  const songsWithoutRemoved = rawSongs.filter(s => !s.removedFromPlaylist);
 
-  if (!songs.length) {
+  if (!songsWithoutRemoved.length) {
     c.innerHTML = `
       <div class="mu-empty">
-        <div class="mu-empty-ico">♪</div>
+        <div class="mu-empty-ico">🎵</div>
         <div class="mu-empty-title">No songs in library</div>
         <div class="mu-empty-sub">Sync a YouTube / YT Music playlist link or add songs manually</div>
         <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
@@ -252,7 +383,85 @@ function renderMusicLibrary(c) {
     return;
   }
 
+  let songs = [...songsWithoutRemoved];
+
+  let selectedPl = null;
+  if (SELECTED_PLAYLIST) {
+    selectedPl = MPLAYLISTS.find(p => p.id === SELECTED_PLAYLIST);
+    if (selectedPl) {
+      songs = songs.filter(s => (s.playlist_id || s.playlistId) === SELECTED_PLAYLIST);
+    } else {
+      SELECTED_PLAYLIST = null;
+    }
+  }
+
+  if (q) {
+    const plMap = new Map();
+    MPLAYLISTS.forEach(p => plMap.set(p.id, (p.title || '').toLowerCase()));
+
+    songs = songs.filter(s => {
+      const titleMatch = (s.title || '').toLowerCase().includes(q);
+      const artistMatch = (s.artist || '').toLowerCase().includes(q);
+      const albumMatch = (s.album || '').toLowerCase().includes(q);
+      const plId = s.playlist_id || s.playlistId;
+      const plTitle = plId ? (plMap.get(plId) || '') : '';
+      const plMatch = plTitle.includes(q);
+      return titleMatch || artistMatch || albumMatch || plMatch;
+    });
+  }
+
+  if (MUSIC_SORT === 'title') {
+    songs.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' }));
+  } else if (MUSIC_SORT === 'title-desc') {
+    songs.sort((a, b) => (b.title || '').localeCompare(a.title || '', undefined, { sensitivity: 'base' }));
+  } else if (MUSIC_SORT === 'oldest') {
+    songs.sort((a, b) => {
+      const ta = getSongAddedTime(a);
+      const tb = getSongAddedTime(b);
+      return ta !== tb ? ta - tb : (a.title || '').localeCompare(b.title || '');
+    });
+  } else {
+    // 'added' (Newest time added first)
+    songs.sort((a, b) => {
+      const ta = getSongAddedTime(a);
+      const tb = getSongAddedTime(b);
+      return tb !== ta ? tb - ta : (a.title || '').localeCompare(b.title || '');
+    });
+  }
+
+  const selectedPlPill = selectedPl
+    ? `<span style="font-size:11px;background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.3);padding:2px 8px;border-radius:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px">📁 ${esc(selectedPl.title)} <button onclick="clearPlaylistFilter()" title="Clear playlist filter" style="background:none;border:none;color:inherit;cursor:pointer;font-size:13px;padding:0;line-height:1">✕</button></span>`
+    : '';
+
+  if (!songs.length) {
+    c.innerHTML = `
+      <div class="mu-toolbar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div class="mu-cnt-lbl" style="margin:0">0 of ${songsWithoutRemoved.length} songs</div>
+          ${selectedPlPill}
+          ${q ? `<span style="font-size:11px;background:rgba(var(--ac-rgb),0.12);color:var(--ac);padding:2px 8px;border-radius:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px">for "${esc(q)}" <button onclick="clearMusicSearch()" style="background:none;border:none;color:inherit;cursor:pointer;font-size:13px;padding:0;line-height:1">✕</button></span>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${renderSortDropdown('songs')}
+        </div>
+      </div>
+      <div class="mu-empty">
+        <div class="mu-empty-ico">🔍</div>
+        <div class="mu-empty-title">No songs found</div>
+        <div class="mu-empty-sub">${q ? `No tracks match "${esc(q)}"` : 'No tracks in this playlist'}</div>
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:14px">
+          ${q ? `<button onclick="clearMusicSearch()" class="nb-btn ac">Clear Search</button>` : ''}
+          ${SELECTED_PLAYLIST ? `<button onclick="clearPlaylistFilter()" class="nb-btn">Show All Songs</button>` : ''}
+        </div>
+      </div>`;
+    return;
+  }
+
   const totalSecs = songs.reduce((a, s) => a + (s.duration_sec || s.duration || 0), 0);
+  const countLabel = (q || selectedPl)
+    ? `Showing ${songs.length} of ${songsWithoutRemoved.length} songs • ${fmtTotalDuration(totalSecs)}`
+    : `${songs.length} song${songs.length!==1?'s':''} • ${fmtTotalDuration(totalSecs)}`;
+
   const cardHtmls = [];
   const rows = songs.map((s, i) => {
     const html = songRowHtml(s, i);
@@ -261,7 +470,16 @@ function renderMusicLibrary(c) {
   }).join('');
 
   c.innerHTML = `
-    <div class="mu-cnt-lbl">${songs.length} song${songs.length!==1?'s':''} · ${fmtTotalDuration(totalSecs)}</div>
+    <div class="mu-toolbar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="mu-cnt-lbl" style="margin:0">${countLabel}</div>
+        ${selectedPlPill}
+        ${q ? `<span style="font-size:11px;background:rgba(var(--ac-rgb),0.12);color:var(--ac);padding:2px 8px;border-radius:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px">for "${esc(q)}" <button onclick="clearMusicSearch()" style="background:none;border:none;color:inherit;cursor:pointer;font-size:13px;padding:0;line-height:1">✕</button></span>` : ''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        ${renderSortDropdown('songs')}
+      </div>
+    </div>
     <div style="display:flex;flex-direction:column;gap:0">
       ${rows}
     </div>`;
@@ -274,23 +492,27 @@ function songRowHtml(s, idx=0) {
   const duration = s.duration_sec || s.duration;
   const ytId = s.youtube_id || s.videoId;
   const thumb = s.thumbnail || (ytId ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` : '');
+  const plId = s.playlist_id || s.playlistId;
+  const pl = plId ? MPLAYLISTS.find(p => p.id === plId) : null;
+  const plBadge = pl ? `<span class="mu-pl-badge" onclick="event.stopPropagation();filterMusicByPlaylist('${pl.id}')" title="Filter by playlist: ${esc(pl.title)}" style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.06);color:var(--mu);border:1px solid rgba(255,255,255,0.08);cursor:pointer;transition:all .15s">📁 ${esc(pl.title)}</span>` : '';
 
   return `<div class="mu-row m-card-lazy" onclick="openSongDetail('${s.id}')">
     <div class="mu-row-bar" style="background:var(--ac)"></div>
-    ${thumb ? `<img src="${esc(thumb)}" class="mu-thumb" onerror="this.style.display='none'">` : '<div class="mu-thumb-ph">♪</div>'}
+    ${thumb ? `<img src="${esc(thumb)}" class="mu-thumb" onerror="this.style.display='none'">` : '<div class="mu-thumb-ph">🎵</div>'}
     <div class="mu-info">
       <div class="mu-title">${esc(s.title)}</div>
       <div class="mu-meta">
         <span class="mu-artist">${esc(s.artist||'Unknown')}</span>
         ${s.album?`<span class="mu-album">${esc(s.album)}</span>`:''}
-        ${hasLyrics?'<span class="mu-lyrics-badge">♫ Lyrics</span>':''}
+        ${plBadge}
+        ${hasLyrics?'<span class="mu-lyrics-badge">🎵 Lyrics</span>':''}
       </div>
     </div>
     <div class="mu-right">
       <div class="mu-eq"><span></span><span></span><span></span></div>
       <span class="mu-dur">${fmtDuration(duration)}</span>
       <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
-        ${ytId?`<button class="mu-act-btn mu-act-play" onclick="window.open('https://youtu.be/${ytId}','_blank')" title="Open on YouTube">▶</button>`:''}
+        ${ytId?`<button class="mu-act-btn mu-act-play" onclick="window.open('https://youtu.be/${ytId}','_blank')" title="Open on YouTube">▶ </button>`:''}
         <button class="mu-act-btn mu-act-edit" onclick="openEditSong('${s.id}')" title="Edit">✎</button>
         <button class="mu-act-btn mu-act-del" onclick="delSong('${s.id}')">✕</button>
       </div>
@@ -299,49 +521,45 @@ function songRowHtml(s, idx=0) {
 }
 
 function fmtTotalDuration(secs) {
-  if (!secs) return '';
-  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
 }
 
+// ── SONG DETAIL PANEL ──
 function openSongDetail(id) {
   const s = MDATA.find(x => x.id === id); if (!s) return;
+  const duration = s.duration_sec || s.duration;
   const ytId = s.youtube_id || s.videoId;
   const thumb = s.thumbnail || (ytId ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` : '');
-  const duration = s.duration_sec || s.duration;
+  const plId = s.playlist_id || s.playlistId;
+  const pl = plId ? MPLAYLISTS.find(p => p.id === plId) : null;
 
   document.getElementById('rpanel').classList.add('open');
   document.getElementById('poverlay').classList.add('show');
   document.getElementById('content').classList.add('pushed');
 
   const lyricsSection = s.lyrics ? `
-    <div class="mu-lyrics-section">
-      <div class="mu-lyrics-header" onclick="document.getElementById('mu-lyrics-body').classList.toggle('collapsed');this.querySelector('.mu-lyrics-arrow').classList.toggle('open')">
-        <span class="flbl" style="margin:0;cursor:pointer">♫ Lyrics</span>
-        <span class="mu-lyrics-arrow open">▾</span>
-      </div>
-      <div id="mu-lyrics-body" class="mu-lyrics-body">
-        <pre class="mu-lyrics-text">${esc(s.lyrics)}</pre>
+    <div style="margin-top:16px">
+      <div class="flbl" style="margin-bottom:8px">Lyrics</div>
+      <div style="background:var(--surf2);border:1px solid var(--brd);border-radius:10px;padding:14px;font-size:13px;line-height:1.7;white-space:pre-wrap;max-height:260px;overflow-y:auto;color:var(--tx2)">
+        ${esc(s.lyrics)}
       </div>
     </div>` : '';
 
   document.getElementById('panel-inner').innerHTML = `
     <div class="ph">
-      <div>
-        <div class="ph-title">${esc(s.title)}</div>
-        <div class="pbadges" style="margin-top:4px">
-          <span style="font-size:12px;color:var(--tx2)">${esc(s.artist||'Unknown Artist')}</span>
-        </div>
-      </div>
+      <div class="ph-title">${esc(s.title)}</div>
       <button class="ph-close" onclick="closePanel()">✕</button>
     </div>
-    ${thumb?`<div class="mu-det-hero"><img src="${esc(thumb)}" class="mu-det-hero-img" onerror="this.parentElement.style.display='none'"><div class="mu-det-hero-overlay"></div></div>`:''}
-    <div style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;font-size:13px">
-      ${s.artist?`<div><span class="flbl">Artist</span><span style="color:var(--tx);font-size:14px;font-weight:600">${esc(s.artist)}</span></div>`:''}
+    ${thumb ? `<img src="${esc(thumb)}" style="width:100%;height:180px;object-fit:cover;border-radius:12px;margin-bottom:16px;box-shadow:0 8px 24px rgba(0,0,0,0.4)">` : ''}
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div><span class="flbl">Artist</span><span style="color:var(--tx);font-size:14px;font-weight:600">${esc(s.artist||'Unknown')}</span></div>
       ${s.album?`<div><span class="flbl">Album</span><span style="color:var(--tx);font-size:14px;font-weight:600">${esc(s.album)}</span></div>`:''}
       ${duration?`<div><span class="flbl">Duration</span><span style="color:var(--tx);font-size:14px;font-weight:600">${fmtDuration(duration)}</span></div>`:''}
-      ${ytId?`<div><span class="flbl">YouTube</span>
-        <a href="https://youtu.be/${ytId}" target="_blank" style="color:var(--ac);font-weight:600;font-size:14px;transition:opacity .2s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">Open on YouTube ↗</a></div>`:''}
+      ${pl?`<div><span class="flbl">Playlist</span><span style="color:var(--ac);font-size:13px;font-weight:600;cursor:pointer" onclick="closePanel();filterMusicByPlaylist('${pl.id}')">📁 ${esc(pl.title)}</span></div>`:''}
+      ${ytId?`<div><span class="flbl">YouTube</span><a href="https://youtu.be/${ytId}" target="_blank" style="color:var(--ac);font-size:13px;font-weight:600">Open on YouTube ↗</a></div>`:''}
       ${s.lyricsLink?`<div><span class="flbl">Lyrics Link</span>
         <a href="${esc(s.lyricsLink)}" target="_blank" style="color:var(--ac);font-weight:600;font-size:14px;transition:opacity .2s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">View Lyrics ↗</a></div>`:''}
     </div>
@@ -357,7 +575,7 @@ function delSong(id) {
   showConfirm('Remove this song from your library?', () => {
     const _mdel=MDATA.find(x=>x.id===id);
     MDATA = MDATA.filter(x => x.id !== id);
-    if(_mdel) addLog('music','Removed',_mdel.title,_mdel.artist||null);
+    if(_mdel && typeof addLog === 'function') addLog('music','Removed',_mdel.title,_mdel.artist||null);
     saveMusic(MDATA);
     closePanel();
     renderMusicBody();
@@ -367,10 +585,13 @@ function delSong(id) {
 
 // ── PLAYLISTS ──
 function renderMusicPlaylists(c) {
-  if (!MPLAYLISTS.length) {
+  const q = getMusicSearch();
+  const rawPlaylists = Array.isArray(MPLAYLISTS) ? MPLAYLISTS : [];
+
+  if (!rawPlaylists.length) {
     c.innerHTML = `
       <div class="mu-empty">
-        <div class="mu-empty-ico">♪</div>
+        <div class="mu-empty-ico">🎵</div>
         <div class="mu-empty-title">No synced playlists</div>
         <div class="mu-empty-sub">Add any YouTube or YT Music playlist URL to auto-sync tracks on your preferred interval</div>
         <button onclick="openAddPlaylistModal()" class="nb-btn ac" style="margin:14px auto 0">+ Sync Playlist Link</button>
@@ -378,8 +599,57 @@ function renderMusicPlaylists(c) {
     return;
   }
 
+  let filtered = q
+    ? rawPlaylists.filter(pl => {
+        const titleMatch = (pl.title || '').toLowerCase().includes(q);
+        const descMatch = (pl.description || '').toLowerCase().includes(q);
+        const idMatch = (pl.id || '').toLowerCase().includes(q);
+        return titleMatch || descMatch || idMatch;
+      })
+    : [...rawPlaylists];
+
+  if (MUSIC_SORT === 'title') {
+    filtered.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' }));
+  } else if (MUSIC_SORT === 'title-desc') {
+    filtered.sort((a, b) => (b.title || '').localeCompare(a.title || '', undefined, { sensitivity: 'base' }));
+  } else if (MUSIC_SORT === 'oldest') {
+    filtered.sort((a, b) => {
+      const ta = getPlaylistAddedTime(a);
+      const tb = getPlaylistAddedTime(b);
+      return ta !== tb ? ta - tb : (a.title || '').localeCompare(b.title || '');
+    });
+  } else {
+    // 'added' (Newest / recent sync first)
+    filtered.sort((a, b) => {
+      const ta = getPlaylistAddedTime(a);
+      const tb = getPlaylistAddedTime(b);
+      return tb !== ta ? tb - ta : (a.title || '').localeCompare(b.title || '');
+    });
+  }
+
+  if (!filtered.length) {
+    c.innerHTML = `
+      <div class="mu-toolbar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div class="mu-cnt-lbl" style="margin:0">0 of ${rawPlaylists.length} playlists</div>
+          <span style="font-size:11px;background:rgba(var(--ac-rgb),0.12);color:var(--ac);padding:2px 8px;border-radius:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px">for "${esc(q)}" <button onclick="clearMusicSearch()" style="background:none;border:none;color:inherit;cursor:pointer;font-size:13px;padding:0;line-height:1">✕</button></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${renderSortDropdown('playlists')}
+          <button onclick="openAddPlaylistModal()" class="nb-btn ac" style="font-size:11px">+ Sync Playlist Link</button>
+        </div>
+      </div>
+      <div class="mu-empty">
+        <div class="mu-empty-ico">🔍</div>
+        <div class="mu-empty-title">No playlists match "${esc(q)}"</div>
+        <div class="mu-empty-sub">Try searching by a different playlist title or keyword</div>
+        <button onclick="clearMusicSearch()" class="nb-btn ac" style="margin:14px auto 0">Clear Search</button>
+      </div>`;
+    return;
+  }
+
   const cardHtmls = [];
-  const cards = MPLAYLISTS.map((pl) => {
+  const cards = filtered.map((pl) => {
     const songCount = MDATA.filter(s => (s.playlist_id || s.playlistId) === pl.id && !s.removedFromPlaylist).length;
     const intervalText = pl.sync_interval_days === 1 ? 'Every 1 day'
       : pl.sync_interval_days === 7 ? 'Every 1 week'
@@ -389,19 +659,22 @@ function renderMusicPlaylists(c) {
     const lastSyncDate = pl.last_synced_at ? new Date(pl.last_synced_at * 1000).toLocaleDateString() : 'Never';
     const plUrl = pl.playlist_url || `https://www.youtube.com/playlist?list=${pl.id}`;
 
-    const cardHtml = `<div class="mu-pl-card m-card-lazy">
-      ${pl.thumbnail?`<img src="${esc(pl.thumbnail)}" class="mu-pl-thumb" onerror="this.style.display='none'">`:'<div class="mu-pl-thumb-ph">♪</div>'}
+    const cardHtml = `<div class="mu-pl-card m-card-lazy" onclick="filterMusicByPlaylist('${pl.id}')" style="cursor:pointer" title="Click to view songs in this playlist">
+      ${pl.thumbnail?`<img src="${esc(pl.thumbnail)}" class="mu-pl-thumb" onerror="this.style.display='none'">`:'<div class="mu-pl-thumb-ph">🎵</div>'}
       <div class="mu-pl-info">
         <div class="mu-pl-title">${esc(pl.title)}</div>
         <div class="mu-pl-meta">${pl.item_count || pl.itemCount || 0} videos · ${songCount} synced</div>
         <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.3);font-weight:600">⚡ ${intervalText}</span>
+          <span style="font-size:10px;padding:2px 6px;border-radius:4px;background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.3);font-weight:600">⏱ ${intervalText}</span>
           <span style="font-size:10px;color:var(--mu)">Last synced: ${lastSyncDate}</span>
         </div>
       </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <button onclick="syncSinglePlaylist('${esc(plUrl).replace(/'/g, "\\'")}', ${pl.sync_interval_days || 7})" class="mu-sync-toggle synced" title="Re-sync this playlist now">
-          ↻ Sync Now
+      <div style="display:flex;gap:6px;align-items:center" onclick="event.stopPropagation()">
+        <button onclick="event.stopPropagation();filterMusicByPlaylist('${pl.id}')" class="nb-btn" style="font-size:11px;padding:6px 12px;color:var(--tx)" title="View songs in this playlist">
+          View Songs →
+        </button>
+        <button onclick="event.stopPropagation();syncSinglePlaylist('${esc(plUrl).replace(/'/g, "\\'")}', ${pl.sync_interval_days || 7})" class="mu-sync-toggle synced" title="Re-sync this playlist now">
+          🔄 Sync Now
         </button>
       </div>
     </div>`;
@@ -410,9 +683,15 @@ function renderMusicPlaylists(c) {
   }).join('');
 
   c.innerHTML = `
-    <div style="display:flex;align-items:center;justify-space-between;margin-bottom:12px">
-      <div class="mu-cnt-lbl" style="margin:0">${MPLAYLISTS.length} playlist${MPLAYLISTS.length!==1?'s':''} synced</div>
-      <button onclick="openAddPlaylistModal()" class="nb-btn ac" style="font-size:11px">+ Sync Playlist Link</button>
+    <div class="mu-toolbar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="mu-cnt-lbl" style="margin:0">${q ? `Showing ${filtered.length} of ${rawPlaylists.length} playlists` : `${rawPlaylists.length} playlist${rawPlaylists.length!==1?'s':''} synced`}</div>
+        ${q ? `<span style="font-size:11px;background:rgba(var(--ac-rgb),0.12);color:var(--ac);padding:2px 8px;border-radius:12px;font-weight:600;display:inline-flex;align-items:center;gap:5px">for "${esc(q)}" <button onclick="clearMusicSearch()" style="background:none;border:none;color:inherit;cursor:pointer;font-size:13px;padding:0;line-height:1">✕</button></span>` : ''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        ${renderSortDropdown('playlists')}
+        <button onclick="openAddPlaylistModal()" class="nb-btn ac" style="font-size:11px">+ Sync Playlist Link</button>
+      </div>
     </div>
     ${cards}`;
   _hydrateSlots(c, cardHtmls);
@@ -430,12 +709,12 @@ function openAddSong() {
       <button class="ph-close" onclick="closePanel()">✕</button>
     </div>
     <div class="form-wrap">
-      <div class="fg"><label class="flbl">Title *</label><input class="fin" id="ms-title" placeholder="Song title"></div>
-      <div class="fg"><label class="flbl">Artist</label><input class="fin" id="ms-artist" placeholder="Artist name"></div>
+      <div class="fg"><label class="flbl">Song Title *</label><input class="fin" id="ms-title" placeholder="Song title"></div>
+      <div class="fg"><label class="flbl">Artist</label><input class="fin" id="ms-artist" placeholder="Artist or Band"></div>
       <div class="fg"><label class="flbl">Album</label><input class="fin" id="ms-album" placeholder="Album name"></div>
-      <div class="fg"><label class="flbl">YouTube Video ID (optional)</label><input class="fin" id="ms-vid" placeholder="e.g. dQw4w9WgXcQ"></div>
-      <div class="fg"><label class="flbl">Lyrics Link (optional)</label><input class="fin" id="ms-lyricslink" placeholder="https://genius.com/..."></div>
-      <div class="fg"><label class="flbl">Lyrics (optional)</label><textarea class="fin mu-lyrics-input" id="ms-lyrics" placeholder="Paste song lyrics here..." rows="6"></textarea></div>
+      <div class="fg"><label class="flbl">YouTube Video URL or ID</label><input class="fin" id="ms-vid" placeholder="e.g. dQw4w9WgXcQ or full link"></div>
+      <div class="fg"><label class="flbl">Lyrics Link (Genius, AZLyrics, etc.)</label><input class="fin" id="ms-lyricslink" placeholder="https://genius.com/..."></div>
+      <div class="fg"><label class="flbl">Lyrics (Paste text)</label><textarea class="fta" id="ms-lyrics" rows="5" placeholder="Paste song lyrics here..."></textarea></div>
     </div>
     <div class="panel-actions">
       <button class="btn-cancel" onclick="closePanel()">Cancel</button>
@@ -458,6 +737,7 @@ function saveManualSong() {
     addedAt: Date.now(), updatedAt: Date.now(),
   };
   MDATA.unshift(song); saveMusic(MDATA);
+  if (typeof addLog === 'function') addLog('music', 'Added', song.title, song.artist || null);
   closePanel(); renderMusicBody(); toast('✓ Song added');
 }
 
@@ -505,7 +785,7 @@ function saveEditSong(id) {
   s.updatedAt  = Date.now();
 
   saveMusic(MDATA);
-  addLog('music', 'Edited', s.title, s.artist || null);
+  if (typeof addLog === 'function') addLog('music', 'Edited', s.title, s.artist || null);
   closePanel();
   renderMusicBody();
   toast('✓ Song updated');
@@ -544,7 +824,7 @@ function renderMusicDash(c) {
     </div>` : ''}`;
 }
 
-// ── Register all music functions as globals ───────────────────────────────
+// ── Register all music functions as globals ──
 Object.assign(window, {
   renderMusic, renderMusicBody, setMusicPage,
   saveMusic, savePlaylists,
@@ -556,4 +836,7 @@ Object.assign(window, {
   openEditSong, saveEditSong,
   renderMusicDash, updateMusicSyncBtn,
   fmtDuration,
+  toggleMusicSortDd, setMusicSort, getSortLabel,
+  getMusicSearch, setMusicSearch, clearMusicSearch,
+  filterMusicByPlaylist, clearPlaylistFilter,
 });

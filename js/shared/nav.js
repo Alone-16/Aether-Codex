@@ -55,7 +55,7 @@ export function nav(id, push = true) {
     if (nbSec) nbSec.textContent = m.label;
 
     const srch = document.getElementById('srch');
-    if (srch) srch.placeholder = 'Search';
+    if (srch) srch.placeholder = id === 'music' ? 'Search songs, playlists, artists...' : 'Search';
 
     const addBtn = document.getElementById('add-btn');
     if (addBtn) {
@@ -71,7 +71,7 @@ export function nav(id, push = true) {
 
     // Section-specific search handlers
     if      (id === 'games') srch.oninput = e => { window.GSEARCH = e.target.value.toLowerCase(); if (typeof window.renderGamesBody==='function') window.renderGamesBody(); };
-    else if (id === 'music') srch.oninput = e => { window.MSEARCH = e.target.value.toLowerCase(); if (typeof window.renderMusicBody==='function') window.renderMusicBody(); };
+    else if (id === 'music') srch.oninput = e => { const q = e.target.value.toLowerCase(); window.MSEARCH = q; if (typeof window.setMusicSearch === 'function') window.setMusicSearch(q); else if (typeof window.renderMusicBody === 'function') window.renderMusicBody(); };
     else if (id === 'books') srch.oninput = e => { window.BSEARCH = e.target.value.toLowerCase(); if (typeof window.renderBooksBody==='function') window.renderBooksBody(); };
     else if (id === 'vault') srch.oninput = e => { window.VSEARCH = e.target.value.toLowerCase(); if (typeof window.renderVaultBody==='function') window.renderVaultBody(); };
     else if (id === 'log')   srch.oninput = e => { window.LSEARCH = e.target.value.toLowerCase(); if (typeof window.renderLogBody==='function') window.renderLogBody();   };

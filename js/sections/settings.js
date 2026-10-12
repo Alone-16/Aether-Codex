@@ -945,7 +945,7 @@ function saveIdleTimeout() {
 // ═══════════════════════════════
 //  SEARCH
 // ═══════════════════════════════
-function onSearch(v){SEARCH=v.toLowerCase();if(CURRENT==='media')renderMediaBody();}
+function onSearch(v){SEARCH=v.toLowerCase();if(CURRENT==='media')renderMediaBody();else if(CURRENT==='music'&&typeof window.renderMusicBody==='function'){window.MSEARCH=v.toLowerCase();if(typeof window.setMusicSearch==='function')window.setMusicSearch(v);else window.renderMusicBody();}}
 
 // ═══════════════════════════════
 //  EXPORT / IMPORT  (same shape as Google Drive sync + local prefs)
