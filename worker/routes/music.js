@@ -322,24 +322,71 @@ async function fetchYouTubePlaylistData(playlistId, apiKey) {
           if (thumbs && thumbs.length) thumbnail = thumbs[thumbs.length - 1].url;
         }
 
-        const contents = data.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.playlistVideoListRenderer?.contents || [];
-        for (const item of contents) {
-          const v = item.playlistVideoRenderer;
-          if (!v || !v.videoId) continue;
-          const vid = v.videoId;
-          const trackTitle = v.title?.runs?.[0]?.text || v.title?.simpleText || 'Unknown Track';
-          const artist = v.shortBylineText?.runs?.[0]?.text || v.ownerBadges?.[0]?.metadataBadgeRenderer?.label || 'Unknown Artist';
-          const durText = v.lengthText?.simpleText || '';
-          const duration_sec = parseDurationText(durText);
+        const secList = data.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+        for (const sec of secList) {
+          const isrContents = sec.itemSectionRenderer?.contents || [];
+          for (const item of isrContents) {
+            // 1. playlistVideoListRenderer (nested legacy desktop)
+            if (item.playlistVideoListRenderer?.contents) {
+              for (const pv of item.playlistVideoListRenderer.contents) {
+                const v = pv.playlistVideoRenderer;
+                if (!v || !v.videoId) continue;
+                const vid = v.videoId;
+                const trackTitle = v.title?.runs?.[0]?.text || v.title?.simpleText || 'Unknown Track';
+                const artist = v.shortBylineText?.runs?.[0]?.text || v.ownerBadges?.[0]?.metadataBadgeRenderer?.label || 'Unknown Artist';
+                const durText = v.lengthText?.simpleText || '';
+                const duration_sec = parseDurationText(durText);
+                tracks.push({
+                  id: 'yt_' + vid,
+                  youtube_id: vid,
+                  title: trackTitle,
+                  artist,
+                  album: null,
+                  duration_sec,
+                });
+              }
+            }
 
-          tracks.push({
-            id: 'yt_' + vid,
-            youtube_id: vid,
-            title: trackTitle,
-            artist,
-            album: null,
-            duration_sec,
-          });
+            // 2. Direct playlistVideoRenderer
+            if (item.playlistVideoRenderer) {
+              const v = item.playlistVideoRenderer;
+              if (v.videoId) {
+                const vid = v.videoId;
+                const trackTitle = v.title?.runs?.[0]?.text || v.title?.simpleText || 'Unknown Track';
+                const artist = v.shortBylineText?.runs?.[0]?.text || v.ownerBadges?.[0]?.metadataBadgeRenderer?.label || 'Unknown Artist';
+                const durText = v.lengthText?.simpleText || '';
+                const duration_sec = parseDurationText(durText);
+                tracks.push({
+                  id: 'yt_' + vid,
+                  youtube_id: vid,
+                  title: trackTitle,
+                  artist,
+                  album: null,
+                  duration_sec,
+                });
+              }
+            }
+
+            // 3. lockupViewModel (modern YouTube desktop layout)
+            if (item.lockupViewModel) {
+              const lvm = item.lockupViewModel;
+              const vid = lvm.contentId;
+              if (!vid) continue;
+              const trackTitle = lvm.metadata?.lockupMetadataViewModel?.title?.content || 'Unknown Track';
+              const metaRows = lvm.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows || [];
+              const artist = metaRows[0]?.metadataParts?.[0]?.text?.content || 'Unknown Artist';
+              const duration_sec = parseA11yDuration(lvm.rendererContext?.accessibilityContext?.label);
+
+              tracks.push({
+                id: 'yt_' + vid,
+                youtube_id: vid,
+                title: trackTitle,
+                artist,
+                album: null,
+                duration_sec,
+              });
+            }
+          }
         }
 
         return { title, description, thumbnail, itemCount: tracks.length, tracks };
@@ -367,4 +414,16 @@ function parseDurationText(str) {
   if (parts.length === 3) return parts[0]*3600 + parts[1]*60 + parts[2];
   if (parts.length === 2) return parts[0]*60 + parts[1];
   return null;
+}
+
+function parseA11yDuration(label) {
+  if (!label) return null;
+  const h = label.match(/(\d+)\s+hour/);
+  const m = label.match(/(\d+)\s+minute/);
+  const s = label.match(/(\d+)\s+second/);
+  if (!h && !m && !s) return null;
+  const hours = h ? parseInt(h[1], 10) : 0;
+  const mins = m ? parseInt(m[1], 10) : 0;
+  const secs = s ? parseInt(s[1], 10) : 0;
+  return hours * 3600 + mins * 60 + secs;
 }

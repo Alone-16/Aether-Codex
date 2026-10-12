@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════
 //  MUSIC DATA & STATE — YouTube Music Link Sync via Cloudflare Worker
 // ═══════════════════════════════════════════════════════
+import { musicApi } from '../shared/api.js';
 import { _cardSlot, _hydrateSlots, _observeCardVisibility } from '../shared/ui.js';
 
 const MUSIC_KEY     = 'ac_v4_music';
@@ -9,7 +10,7 @@ const MUSIC_PL_KEY  = 'ac_v4_music_playlists';
 function loadMusic()      { return (window.MDATA && window.MDATA.length) ? window.MDATA : (typeof ls !== 'undefined' && ls.get ? ls.get(MUSIC_KEY) : null) || window.MDATA || []; }
 function saveMusic(d)     { MDATA = d; window.MDATA = d; if (typeof ls !== 'undefined' && ls.set) ls.set(MUSIC_KEY, d); }
 function loadPlaylists()  { return (window.MPLAYLISTS && window.MPLAYLISTS.length) ? window.MPLAYLISTS : (typeof ls !== 'undefined' && ls.get ? ls.get(MUSIC_PL_KEY) : null) || window.MPLAYLISTS || []; }
-function savePlaylists(p) { MPLAYLISTS = p; window.MPLAYLISTS = p; if (typeof ls !== 'undefined' && ls.set) ls.set(MUSIC_PL_KEY, p); if (window.musicApi?.putPlaylists) window.musicApi.putPlaylists(p).catch(() => {}); }
+function savePlaylists(p) { MPLAYLISTS = p; window.MPLAYLISTS = p; if (typeof ls !== 'undefined' && ls.set) ls.set(MUSIC_PL_KEY, p); const api = window.musicApi || musicApi; if (api?.putPlaylists) api.putPlaylists(p).catch(() => {}); }
 
 let MDATA      = loadMusic();
 window.MDATA = MDATA;
@@ -19,10 +20,12 @@ window.MPLAYLISTS = MPLAYLISTS;
 export function setMDATA(d) {
   MDATA = Array.isArray(d) ? d : [];
   window.MDATA = MDATA;
+  if (typeof ls !== 'undefined' && ls.set) ls.set(MUSIC_KEY, MDATA);
 }
 export function setMPLAYLISTS(p) {
   MPLAYLISTS = Array.isArray(p) ? p : [];
   window.MPLAYLISTS = MPLAYLISTS;
+  if (typeof ls !== 'undefined' && ls.set) ls.set(MUSIC_PL_KEY, MPLAYLISTS);
 }
 window.setMDATA = setMDATA;
 window.setMPLAYLISTS = setMPLAYLISTS;
@@ -95,7 +98,7 @@ export async function submitAddPlaylistSync() {
     updateMusicSyncBtn('syncing');
     toast('Fetching YouTube playlist & tracks...', 'var(--ac)');
 
-    const res = await window.musicApi.syncPlaylist(url, interval);
+    const res = await (window.musicApi || musicApi).syncPlaylist(url, interval);
     if (res) {
       if (res.tracks) setMDATA(res.tracks);
       if (res.playlists) setMPLAYLISTS(res.playlists);
@@ -118,7 +121,7 @@ export async function syncSinglePlaylist(playlistUrl, syncIntervalDays = 7) {
     YT_SYNCING = true;
     updateMusicSyncBtn('syncing');
     toast('Re-syncing playlist...', 'var(--ac)');
-    const res = await window.musicApi.syncPlaylist(playlistUrl, syncIntervalDays);
+    const res = await (window.musicApi || musicApi).syncPlaylist(playlistUrl, syncIntervalDays);
     if (res) {
       if (res.tracks) setMDATA(res.tracks);
       if (res.playlists) setMPLAYLISTS(res.playlists);
@@ -135,7 +138,7 @@ export async function syncSinglePlaylist(playlistUrl, syncIntervalDays = 7) {
 
 export async function syncDuePlaylists() {
   try {
-    const res = await window.musicApi.syncDuePlaylists();
+    const res = await (window.musicApi || musicApi).syncDuePlaylists();
     if (res && res.syncedCount > 0) {
       if (res.tracks) setMDATA(res.tracks);
       if (res.playlists) setMPLAYLISTS(res.playlists);

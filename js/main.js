@@ -98,7 +98,17 @@ import {
   publicShareApi
 } from './shared/api.js';
 
-window.publicShareApi = publicShareApi;
+Object.assign(window, {
+  mediaApi,
+  gamesApi,
+  booksApi,
+  musicApi,
+  notesApi,
+  vaultApi,
+  logsApi,
+  settingsApi,
+  publicShareApi,
+});
 
 import { initServerAuth, updateNavbarUserUI, promptEditName, updateUserName, openAccountModal } from './shared/auth_ui.js';
 

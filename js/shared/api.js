@@ -379,3 +379,18 @@ export async function uploadSaveFile(gameTitle, file, relativePath) {
   setSyncStatus('saved');
   return json.data;
 }
+
+// ── Expose APIs to window ──
+if (typeof window !== 'undefined') {
+  Object.assign(window, {
+    mediaApi,
+    gamesApi,
+    booksApi,
+    musicApi,
+    notesApi,
+    vaultApi,
+    logsApi,
+    settingsApi,
+    publicShareApi,
+  });
+}
