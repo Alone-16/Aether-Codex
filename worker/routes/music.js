@@ -12,11 +12,11 @@ export async function handleMusicRoutes(request, env, ctx, requestId, pathname, 
   // ── GET /v1/music ── Fetch tracks & playlists ──
   if (method === 'GET' && pathname === '/v1/music') {
     try {
-      const { results: tracks } = await env.DB.prepare('SELECT rowid, * FROM music WHERE user_id = ? ORDER BY updated_at DESC, rowid DESC;').bind(userId).all();
+      const { results: tracks } = await env.DB.prepare('SELECT rowid, * FROM music WHERE user_id = ? ORDER BY CASE WHEN track_order > 0 THEN 0 ELSE 1 END, track_order ASC, rowid ASC;').bind(userId).all();
       const { results: playlists } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
       const mappedTracks = (tracks || []).map(t => ({
         ...t,
-        durationSec: t.duration_sec, youtubeId: t.youtube_id, playlistId: t.playlist_id, addedAt: t.created_at, updatedAt: t.updated_at, rowid: t.rowid,
+        durationSec: t.duration_sec, youtubeId: t.youtube_id, playlistId: t.playlist_id, addedAt: t.created_at, updatedAt: t.updated_at, trackOrder: t.track_order || 0, track_order: t.track_order || 0, rowid: t.rowid,
       }));
       return successResponse({ tracks: mappedTracks, playlists: playlists || [] }, requestId);
     } catch (err) {
@@ -156,16 +156,17 @@ export async function handleMusicRoutes(request, env, ctx, requestId, pathname, 
         uniqueTracks.push(t);
       }
 
-      // Batch Insert/Update tracks for playlist
-      const statements = uniqueTracks.map(t => env.DB.prepare(`
-        INSERT INTO music (id, user_id, title, artist, album, duration_sec, youtube_id, playlist_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())
+      // Batch Insert/Update tracks for playlist with track_order
+      const statements = uniqueTracks.map((t, idx) => env.DB.prepare(`
+        INSERT INTO music (id, user_id, title, artist, album, duration_sec, youtube_id, playlist_id, track_order, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())
         ON CONFLICT(id) DO UPDATE SET
           title = excluded.title,
           artist = excluded.artist,
           duration_sec = excluded.duration_sec,
           youtube_id = excluded.youtube_id,
           playlist_id = excluded.playlist_id,
+          track_order = excluded.track_order,
           updated_at = unixepoch();
       `).bind(
         t.id,
@@ -175,19 +176,20 @@ export async function handleMusicRoutes(request, env, ctx, requestId, pathname, 
         t.album || null,
         t.duration_sec || null,
         t.youtube_id || null,
-        playlistId
+        playlistId,
+        t.track_order || (idx + 1)
       ));
 
       for (let i = 0; i < statements.length; i += 100) {
         await env.DB.batch(statements.slice(i, i + 100));
       }
 
-      const { results: tracks } = await env.DB.prepare('SELECT rowid, * FROM music WHERE user_id = ? ORDER BY updated_at DESC, rowid DESC;').bind(userId).all();
+      const { results: tracks } = await env.DB.prepare('SELECT rowid, * FROM music WHERE user_id = ? ORDER BY CASE WHEN track_order > 0 THEN 0 ELSE 1 END, track_order ASC, rowid ASC;').bind(userId).all();
       const { results: playlists } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
 
       const mappedTracks = (tracks || []).map(t => ({
         ...t,
-        durationSec: t.duration_sec, youtubeId: t.youtube_id, playlistId: t.playlist_id, addedAt: t.created_at, updatedAt: t.updated_at, rowid: t.rowid,
+        durationSec: t.duration_sec, youtubeId: t.youtube_id, playlistId: t.playlist_id, addedAt: t.created_at, updatedAt: t.updated_at, trackOrder: t.track_order || 0, track_order: t.track_order || 0, rowid: t.rowid,
       }));
 
       return successResponse({
@@ -261,12 +263,12 @@ export async function handleMusicRoutes(request, env, ctx, requestId, pathname, 
         }
       }
 
-      const { results: tracks } = await env.DB.prepare('SELECT rowid, * FROM music WHERE user_id = ? ORDER BY updated_at DESC, rowid DESC;').bind(userId).all();
+      const { results: tracks } = await env.DB.prepare('SELECT rowid, * FROM music WHERE user_id = ? ORDER BY CASE WHEN track_order > 0 THEN 0 ELSE 1 END, track_order ASC, rowid ASC;').bind(userId).all();
       const { results: playlists } = await env.DB.prepare('SELECT * FROM playlists WHERE user_id = ? ORDER BY updated_at DESC;').bind(userId).all();
 
       const mappedTracks = (tracks || []).map(t => ({
         ...t,
-        durationSec: t.duration_sec, youtubeId: t.youtube_id, playlistId: t.playlist_id, addedAt: t.created_at, updatedAt: t.updated_at, rowid: t.rowid,
+        durationSec: t.duration_sec, youtubeId: t.youtube_id, playlistId: t.playlist_id, addedAt: t.created_at, updatedAt: t.updated_at, trackOrder: t.track_order || 0, track_order: t.track_order || 0, rowid: t.rowid,
       }));
 
       return successResponse({ syncedCount, tracks: mappedTracks, playlists: playlists || [] }, requestId);
@@ -496,6 +498,78 @@ async function fetchYouTubePlaylistData(playlistId, apiKey) {
           }
         }
 
+        // Check for pagination / continuation token
+        let contToken = null;
+        for (const sec of secList) {
+          const isrContents = sec.itemSectionRenderer?.contents || [];
+          for (const item of isrContents) {
+            const civm = item.continuationItemViewModel;
+            if (civm) {
+              const cmd = civm.continuationCommand;
+              contToken = cmd?.innertubeCommand?.continuationCommand?.token
+                || cmd?.continuationCommand?.token
+                || cmd?.token;
+            }
+          }
+        }
+
+        // Fetch up to 15 additional pages via InnerTube browse continuation
+        let page = 1;
+        while (contToken && page < 15) {
+          page++;
+          try {
+            const cRes = await fetch('https://www.youtube.com/youtubei/v1/browse?prettyPrint=false', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              },
+              body: JSON.stringify({
+                context: { client: { clientName: 'WEB', clientVersion: '2.20240101.00.00' } },
+                continuation: decodeURIComponent(contToken)
+              })
+            });
+
+            if (!cRes.ok) break;
+            const cJson = await cRes.json();
+            const actions = cJson.onResponseReceivedActions || cJson.onResponseReceivedEndpoints || [];
+            contToken = null;
+
+            for (const act of actions) {
+              const items = act.appendContinuationItemsAction?.continuationItems || [];
+              for (const item of items) {
+                if (item.lockupViewModel) {
+                  const lvm = item.lockupViewModel;
+                  const vid = lvm.contentId;
+                  if (!vid) continue;
+                  const trackTitle = lvm.metadata?.lockupMetadataViewModel?.title?.content || 'Unknown Track';
+                  const metaRows = lvm.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows || [];
+                  const artist = metaRows[0]?.metadataParts?.[0]?.text?.content || 'Unknown Artist';
+                  const duration_sec = parseA11yDuration(lvm.rendererContext?.accessibilityContext?.label);
+                  tracks.push({ id: 'yt_' + vid, youtube_id: vid, title: trackTitle, artist, album: null, duration_sec });
+                } else if (item.playlistVideoRenderer) {
+                  const v = item.playlistVideoRenderer;
+                  if (!v || !v.videoId) continue;
+                  const vid = v.videoId;
+                  const trackTitle = v.title?.runs?.[0]?.text || v.title?.simpleText || 'Unknown Track';
+                  const artist = v.shortBylineText?.runs?.[0]?.text || 'Unknown Artist';
+                  const duration_sec = parseDurationText(v.lengthText?.simpleText || '');
+                  tracks.push({ id: 'yt_' + vid, youtube_id: vid, title: trackTitle, artist, album: null, duration_sec });
+                } else if (item.continuationItemViewModel) {
+                  const cmd = item.continuationItemViewModel.continuationCommand;
+                  contToken = cmd?.innertubeCommand?.continuationCommand?.token || cmd?.continuationCommand?.token || cmd?.token;
+                }
+              }
+            }
+          } catch (contErr) {
+            console.warn('[Music Route] Continuation fetch error:', contErr.message);
+            break;
+          }
+        }
+
+        // Attach 1-indexed track_order to every track
+        tracks.forEach((t, i) => { t.track_order = i + 1; });
+
         return { title, description, thumbnail, itemCount: tracks.length, tracks };
       }
     }
@@ -503,6 +577,7 @@ async function fetchYouTubePlaylistData(playlistId, apiKey) {
     console.warn('[Music Route] HTML Scraper error:', e.message);
   }
 
+  tracks.forEach((t, i) => { t.track_order = i + 1; });
   return { title, description, thumbnail, itemCount: tracks.length, tracks };
 }
 

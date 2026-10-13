@@ -7,7 +7,7 @@ import { esc } from '../shared/utils.js';
 
 const MUSIC_KEY     = 'ac_v4_music';
 const MUSIC_PL_KEY  = 'ac_v4_music_playlists';
-const MUSIC_SORT_KEY = 'ac_v5_music_sort';
+const MUSIC_SORT_KEY = 'ac_v6_music_sort';
 
 function loadMusic()      { return (window.MDATA && window.MDATA.length) ? window.MDATA : (typeof ls !== 'undefined' && ls.get ? ls.get(MUSIC_KEY) : null) || window.MDATA || []; }
 function saveMusic(d)     { MDATA = d; window.MDATA = d; if (typeof ls !== 'undefined' && ls.set) ls.set(MUSIC_KEY, d); }
@@ -75,10 +75,12 @@ export function clearPlaylistFilter() {
 }
 
 export function getSortLabel() {
+  if (MUSIC_SORT === 'playlist') return 'Playlist order';
   if (MUSIC_SORT === 'title') return 'A → Z';
   if (MUSIC_SORT === 'title-desc') return 'Z → A';
   if (MUSIC_SORT === 'oldest') return 'Time added (Oldest)';
-  return 'Time added (Newest)';
+  if (MUSIC_SORT === 'added') return 'Time added (Newest)';
+  return 'Playlist order';
 }
 
 export function toggleMusicSortDd(e) {
@@ -129,10 +131,11 @@ function renderSortDropdown(target = 'music') {
         <span class="m-dd-chev" aria-hidden="true"></span>
       </button>
       <div class="m-dd-menu" id="mu-sort-menu" role="listbox">
+        <button type="button" class="m-dd-opt${MUSIC_SORT === 'playlist' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'playlist' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('playlist')">Playlist order</button>
         <button type="button" class="m-dd-opt${MUSIC_SORT === 'added' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'added' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('added')">Time added (Newest)</button>
+        <button type="button" class="m-dd-opt${MUSIC_SORT === 'oldest' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'oldest' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('oldest')">Time added (Oldest)</button>
         <button type="button" class="m-dd-opt${MUSIC_SORT === 'title' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'title' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('title')">A &rarr; Z</button>
         <button type="button" class="m-dd-opt${MUSIC_SORT === 'title-desc' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'title-desc' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('title-desc')">Z &rarr; A</button>
-        <button type="button" class="m-dd-opt${MUSIC_SORT === 'oldest' ? ' active' : ''}" role="option" aria-selected="${MUSIC_SORT === 'oldest' ? 'true' : 'false'}" onclick="event.stopPropagation();setMusicSort('oldest')">Time added (Oldest)</button>
       </div>
     </div>`;
 }
@@ -429,7 +432,19 @@ function renderMusicLibrary(c) {
   const rawSongIndex = new Map();
   rawSongs.forEach((s, idx) => rawSongIndex.set(s.id || s, idx));
 
-  if (MUSIC_SORT === 'title') {
+  if (MUSIC_SORT === 'playlist') {
+    // Playlist order (matches YouTube playlist 1, 2, 3...)
+    songs.sort((a, b) => {
+      const oa = a.track_order || a.trackOrder || 0;
+      const ob = b.track_order || b.trackOrder || 0;
+      if (oa && ob && oa !== ob) return oa - ob;
+      if (oa && !ob) return -1;
+      if (!oa && ob) return 1;
+      const ra = a.rowid ?? rawSongIndex.get(a.id || a) ?? 0;
+      const rb = b.rowid ?? rawSongIndex.get(b.id || b) ?? 0;
+      return ra - rb;
+    });
+  } else if (MUSIC_SORT === 'title') {
     songs.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base', numeric: true }));
   } else if (MUSIC_SORT === 'title-desc') {
     songs.sort((a, b) => (b.title || '').localeCompare(a.title || '', undefined, { sensitivity: 'base', numeric: true }));
@@ -652,8 +667,7 @@ function renderMusicPlaylists(c) {
       if (ra !== rb) return ra - rb;
       return (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base', numeric: true });
     });
-  } else {
-    // 'added' (Newest / recent sync first)
+  } else if (MUSIC_SORT === 'added') {
     filtered.sort((a, b) => {
       const ta = getPlaylistAddedTime(a);
       const tb = getPlaylistAddedTime(b);
@@ -662,6 +676,13 @@ function renderMusicPlaylists(c) {
       const rb = b.rowid ?? (1000000 - (rawPlIndex.get(b.id || b) ?? 0));
       if (rb !== ra) return rb - ra;
       return (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base', numeric: true });
+    });
+  } else {
+    // 'playlist' (Default)
+    filtered.sort((a, b) => {
+      const ra = a.rowid ?? rawPlIndex.get(a.id || a) ?? 0;
+      const rb = b.rowid ?? rawPlIndex.get(b.id || b) ?? 0;
+      return ra - rb;
     });
   }
 
