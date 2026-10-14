@@ -83,26 +83,67 @@ function _updateBadge(count) {
   }
 }
 
+export function positionNotifDropdown() {
+  const dd = document.getElementById('notif-dropdown');
+  const btn = document.getElementById('notif-btn');
+  if (!dd) return;
+
+  const isMobile = window.innerWidth < 640;
+  if (isMobile) {
+    const nb = document.getElementById('navbar');
+    const nbBottom = nb ? nb.getBoundingClientRect().bottom : 52;
+    const topOffset = Math.max(8, nbBottom + 6);
+    dd.style.position = 'fixed';
+    dd.style.top = `${topOffset}px`;
+    dd.style.left = '10px';
+    dd.style.right = '10px';
+    dd.style.bottom = 'auto';
+    dd.style.width = 'auto';
+    dd.style.maxWidth = 'calc(100vw - 20px)';
+    dd.style.maxHeight = `calc(100dvh - ${topOffset + 68}px)`;
+    dd.style.borderRadius = '14px';
+  } else {
+    const rect = btn ? btn.getBoundingClientRect() : null;
+    const topOffset = rect ? (rect.bottom + 8) : 66;
+    const rightOffset = rect ? Math.max(12, window.innerWidth - rect.right) : 20;
+    dd.style.position = 'fixed';
+    dd.style.top = `${topOffset}px`;
+    dd.style.right = `${rightOffset}px`;
+    dd.style.left = 'auto';
+    dd.style.bottom = 'auto';
+    dd.style.width = '390px';
+    dd.style.maxWidth = 'calc(100vw - 24px)';
+    dd.style.borderRadius = '12px';
+    dd.style.maxHeight = `min(540px, calc(100dvh - ${topOffset + 20}px))`;
+  }
+}
+
 export function toggleNotifDropdown(e) {
   if (e) e.stopPropagation();
   _isOpen = !_isOpen;
 
   const dd = document.getElementById('notif-dropdown');
+  const backdrop = document.getElementById('notif-backdrop');
   if (!dd) return;
 
   if (_isOpen) {
+    positionNotifDropdown();
     renderNotifDropdown();
-    dd.style.display = 'block';
+    dd.style.display = 'flex';
+    if (backdrop) backdrop.style.display = window.innerWidth < 640 ? 'block' : 'none';
     fetchNotifications();
   } else {
     dd.style.display = 'none';
+    if (backdrop) backdrop.style.display = 'none';
   }
 }
 
 export function closeNotifDropdown() {
   _isOpen = false;
   const dd = document.getElementById('notif-dropdown');
+  const backdrop = document.getElementById('notif-backdrop');
   if (dd) dd.style.display = 'none';
+  if (backdrop) backdrop.style.display = 'none';
 }
 
 export function toggleNotifFilter(unreadOnly, e) {
@@ -370,56 +411,36 @@ export function renderNotifDropdown() {
   const dd = document.getElementById('notif-dropdown');
   if (!dd) return;
 
-  const isMobile = window.innerWidth < 640;
-  if (isMobile) {
-    dd.style.position = 'fixed';
-    dd.style.left = '0';
-    dd.style.right = '0';
-    dd.style.bottom = '0';
-    dd.style.top = 'auto';
-    dd.style.width = '100%';
-    dd.style.maxWidth = '100%';
-    dd.style.borderRadius = '16px 16px 0 0';
-    dd.style.maxHeight = '80vh';
-  } else {
-    dd.style.position = 'absolute';
-    dd.style.left = 'auto';
-    dd.style.right = '0';
-    dd.style.bottom = 'auto';
-    dd.style.top = 'calc(100% + 8px)';
-    dd.style.width = '390px';
-    dd.style.maxWidth = '92vw';
-    dd.style.borderRadius = '12px';
-    dd.style.maxHeight = '520px';
-  }
+  positionNotifDropdown();
 
+  const isMobile = window.innerWidth < 640;
   const items = _filterUnreadOnly ? _notifications.filter(n => !n.isRead) : _notifications;
   const hasRead = _notifications.some(n => n.isRead);
 
   const headerHtml = `
-    <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.02)">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:13px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--tx)">Notifications</span>
-        ${_unreadCount > 0 ? `<span style="font-size:10px;font-weight:700;background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:1px 6px">${_unreadCount} unread</span>` : ''}
+    <div style="flex-shrink:0;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.02)">
+      <div style="display:flex;align-items:center;gap:6px;min-width:0">
+        <span style="font-size:13px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--tx);white-space:nowrap">Notifications</span>
+        ${_unreadCount > 0 ? `<span style="font-size:10px;font-weight:700;background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:1px 6px;white-space:nowrap">${_unreadCount} unread</span>` : ''}
       </div>
-      <div style="display:flex;align-items:center;gap:6px">
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         ${_unreadCount > 0 ? `
-          <button onclick="markAllRead(event)" style="background:none;border:none;color:var(--ac);font-size:11px;font-weight:600;cursor:pointer;padding:3px 6px">Mark all read</button>
+          <button onclick="markAllRead(event)" style="background:none;border:none;color:var(--ac);font-size:11px;font-weight:600;cursor:pointer;padding:3px 6px;white-space:nowrap">Mark all read</button>
         ` : ''}
         ${hasRead ? `
-          <button onclick="deleteReadNotifs(event)" style="background:none;border:none;color:var(--mu);font-size:11px;font-weight:600;cursor:pointer;padding:3px 6px;transition:color .15s" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='var(--mu)'" title="Delete all read notifications">
+          <button onclick="deleteReadNotifs(event)" style="background:none;border:none;color:var(--mu);font-size:11px;font-weight:600;cursor:pointer;padding:3px 6px;transition:color .15s;white-space:nowrap" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='var(--mu)'" title="Delete all read notifications">
             Delete read
           </button>
         ` : ''}
-        ${isMobile ? `<button onclick="closeNotifDropdown()" style="background:none;border:none;color:var(--mu);font-size:16px;cursor:pointer;padding:0 4px">✕</button>` : ''}
+        <button onclick="closeNotifDropdown()" style="background:none;border:none;color:var(--mu);font-size:18px;cursor:pointer;padding:0 6px;line-height:1;transition:color .15s" onmouseover="this.style.color='var(--tx)'" onmouseout="this.style.color='var(--mu)'" title="Close notifications">✕</button>
       </div>
     </div>
-    <div style="padding:6px 16px;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:space-between;gap:8px">
+    <div style="flex-shrink:0;padding:6px 14px;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap">
       <div style="display:flex;gap:4px">
-        <button onclick="toggleNotifFilter(false, event)" style="padding:3px 8px;border-radius:4px;font-size:11px;font-weight:${!_filterUnreadOnly?'700':'500'};border:none;cursor:pointer;background:${!_filterUnreadOnly?'rgba(var(--ac-rgb),0.15)':'transparent'};color:${!_filterUnreadOnly?'var(--ac)':'var(--mu)'}">All</button>
-        <button onclick="toggleNotifFilter(true, event)" style="padding:3px 8px;border-radius:4px;font-size:11px;font-weight:${_filterUnreadOnly?'700':'500'};border:none;cursor:pointer;background:${_filterUnreadOnly?'rgba(var(--ac-rgb),0.15)':'transparent'};color:${_filterUnreadOnly?'var(--ac)':'var(--mu)'}">Unread (${_unreadCount})</button>
+        <button onclick="toggleNotifFilter(false, event)" style="padding:4px 9px;border-radius:5px;font-size:11px;font-weight:${!_filterUnreadOnly?'700':'500'};border:none;cursor:pointer;background:${!_filterUnreadOnly?'rgba(var(--ac-rgb),0.15)':'transparent'};color:${!_filterUnreadOnly?'var(--ac)':'var(--mu)'}">All</button>
+        <button onclick="toggleNotifFilter(true, event)" style="padding:4px 9px;border-radius:5px;font-size:11px;font-weight:${_filterUnreadOnly?'700':'500'};border:none;cursor:pointer;background:${_filterUnreadOnly?'rgba(var(--ac-rgb),0.15)':'transparent'};color:${_filterUnreadOnly?'var(--ac)':'var(--mu)'}">Unread (${_unreadCount})</button>
       </div>
-      <button onclick="syncUpcomingNow(event)" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:var(--tx2);font-size:11px;border-radius:5px;padding:3px 8px;cursor:pointer;display:flex;align-items:center;gap:4px">
+      <button onclick="syncUpcomingNow(event)" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:var(--tx2);font-size:11px;border-radius:5px;padding:4px 9px;cursor:pointer;display:flex;align-items:center;gap:4px">
         <span style="display:inline-block;animation:${_isSyncing?'ai-bounce .8s infinite':'none'}">🔄</span> Check MAL/AniList
       </button>
     </div>
@@ -428,14 +449,14 @@ export function renderNotifDropdown() {
   let listHtml = '';
   if (items.length === 0) {
     listHtml = `
-      <div style="padding:32px 16px;text-align:center;color:var(--mu);font-size:12px">
+      <div style="padding:32px 16px;text-align:center;color:var(--mu);font-size:12px;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center">
         <div style="font-size:24px;margin-bottom:6px">🔕</div>
         ${_filterUnreadOnly ? 'No unread notifications' : 'No notifications yet'}<br>
         <span style="font-size:11px;opacity:0.7">New seasons and release dates for your anime will appear here</span>
       </div>
     `;
   } else {
-    listHtml = `<div style="max-height:360px;overflow-y:auto;padding:6px 0">` + items.map(n => {
+    listHtml = `<div style="flex:1;min-height:0;overflow-y:auto;padding:6px 0;-webkit-overflow-scrolling:touch" id="notif-list-container">` + items.map(n => {
       const data = n.data || {};
       const isSequel = n.type === 'sequel_discovery';
       const isDateChange = n.type === 'date_change';
@@ -503,7 +524,7 @@ export function renderNotifDropdown() {
   }
 
   const footerHtml = `
-    <div style="padding:8px 14px;border-top:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.01)">
+    <div style="flex-shrink:0;padding:8px 14px;border-top:1px solid rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.01)">
       <a href="javascript:void(0)" class="notif-shortcuts-link" onclick="closeNotifDropdown();if(typeof showKeyboardHelp==='function')showKeyboardHelp()" style="color:var(--mu);font-size:11px;text-decoration:none;display:flex;align-items:center;gap:4px">
         ⌨ Shortcuts (?)
       </a>
@@ -518,28 +539,26 @@ export function renderNotifDropdown() {
  * Initializes notification listeners and background poll.
  */
 export function initNotifications() {
-  // Close dropdown on outside click
-  document.addEventListener('click', (e) => {
-    const wrap = document.getElementById('notif-wrap');
-    if (!_isOpen || !wrap) return;
-
-    if (typeof e.composedPath === 'function' && e.composedPath().includes(wrap)) {
-      return;
-    }
-    if (wrap.contains(e.target)) {
-      return;
-    }
-    const rect = wrap.getBoundingClientRect();
-    if (
-      e.clientX >= rect.left &&
-      e.clientX <= rect.right &&
-      e.clientY >= rect.top &&
-      e.clientY <= rect.bottom
-    ) {
-      return;
-    }
-
+  // Close dropdown on outside click or tap
+  const handleOutsideClick = (e) => {
+    if (!_isOpen) return;
+    const dd = document.getElementById('notif-dropdown');
+    const btn = document.getElementById('notif-btn');
+    if (dd && (dd === e.target || dd.contains(e.target))) return;
+    if (btn && (btn === e.target || btn.contains(e.target))) return;
     closeNotifDropdown();
+  };
+
+  document.addEventListener('click', handleOutsideClick);
+  document.addEventListener('touchend', handleOutsideClick, { passive: true });
+
+  // Reposition on window resize / orientation change
+  window.addEventListener('resize', () => {
+    if (_isOpen) {
+      positionNotifDropdown();
+      const backdrop = document.getElementById('notif-backdrop');
+      if (backdrop) backdrop.style.display = window.innerWidth < 640 ? 'block' : 'none';
+    }
   });
 
   // Close dropdown on Escape
@@ -560,6 +579,7 @@ export function initNotifications() {
 
 // Global exposure for onclick handlers
 Object.assign(window, {
+  positionNotifDropdown,
   toggleNotifDropdown,
   closeNotifDropdown,
   toggleNotifFilter,

@@ -509,9 +509,15 @@ textarea.fin{resize:vertical;min-height:70px}
   /* ── HOME TWO-COL LAYOUT → single col ── */
   .home-two-col{grid-template-columns:1fr!important;gap:12px}
 
-  /* ── AIRING WIDGET → horizontal scroll ── */
-  #airing-pills{display:flex!important;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:5px}
-  #airing-pills button{min-width:44px;flex:1}
+  /* ── AIRING CALENDAR WIDGET (Fits phone viewport) ── */
+  .airing-widget-card{width:100%!important;max-width:100%!important;box-sizing:border-box!important}
+  #airing-pills{display:grid!important;grid-template-columns:repeat(7,1fr)!important;gap:4px!important;padding:8px 8px 6px!important;overflow-x:visible!important;box-sizing:border-box!important}
+  #airing-pills button{min-width:0!important;padding:6px 2px!important;font-size:10.5px!important;width:100%!important;box-sizing:border-box!important}
+  #airing-shows{padding:4px 10px 10px!important}
+
+  /* ── NOTIFICATION DROPDOWN MOBILE ── */
+  #notif-dropdown{border-radius:14px!important;box-shadow:0 12px 40px rgba(0,0,0,0.85)!important}
+  .notif-card{padding:10px 12px!important}
 
   /* ── SECTION OVERVIEW (Database Overview Cards — compact 2-col) ── */
   .section-ov-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
@@ -2187,4 +2193,50 @@ textarea.fin{resize:vertical;min-height:70px}
   left: auto !important;
   min-width: 195px !important;
   z-index: 99999 !important;
+}
+
+/* ── NOTIFICATIONS DROPDOWN & BACKDROP ── */
+#notif-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 9490;
+  transition: opacity 0.2s ease;
+  cursor: pointer;
+}
+
+#notif-dropdown {
+  display: none;
+  flex-direction: column;
+  position: fixed;
+  background: var(--surf2);
+  border: 1px solid var(--brd2);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
+  z-index: 9500;
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  animation: notif-drop-show 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes notif-drop-show {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.notif-card {
+  transition: background 0.15s ease;
+}
+.notif-card:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
 }

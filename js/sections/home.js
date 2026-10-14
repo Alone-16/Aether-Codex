@@ -287,101 +287,110 @@ export async function checkAllAiringAndUpcoming(force = true) {
   }
 }
 
-function renderAiringWidget(){
+function _renderDayPills(selectedDay) {
   const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const todayN = new Date().getDay();
-  const todayStr = localDay(new Date());
 
-  // Build day pills (checks if either watching or upcoming premiere is scheduled)
-  const pills = days.map((d, i) => {
+  return days.map((d, i) => {
     const shows = getCalendarShowsForDay(i);
     const hasShows = shows.length > 0;
     const hasPremiere = shows.some(x => x.isUpcomingPremiere);
     const isToday  = i === todayN;
-    const isSel    = i === AIRING_DAY;
+    const isSel    = i === selectedDay;
     const borderColor = isSel ? 'var(--ac)' : hasPremiere ? '#fb923c' : hasShows ? 'rgba(var(--ac-rgb),.25)' : 'var(--brd)';
     const bgColor = isSel ? 'var(--ac)' : hasPremiere ? 'rgba(251,146,60,.12)' : hasShows ? 'rgba(var(--ac-rgb),.08)' : 'transparent';
     const textColor = isSel ? '#000' : hasPremiere ? '#fb923c' : hasShows ? 'var(--ac)' : 'var(--mu)';
 
-    return `<button onclick="selectAiringDay(${i})"
-      style="padding:7px 4px;border-radius:20px;font-size:12px;font-weight:${isSel?'700':'500'};cursor:pointer;white-space:nowrap;border:1px solid ${borderColor};background:${bgColor};color:${textColor};position:relative;transition:all .15s;text-align:center;width:100%">
+    return `<button type="button" class="airing-pill-btn" onclick="selectAiringDay(${i})"
+      aria-label="${d}"
+      style="padding:7px 2px;border-radius:20px;font-size:11px;font-weight:${isSel?'700':'600'};cursor:pointer;white-space:nowrap;border:1px solid ${borderColor};background:${bgColor};color:${textColor};position:relative;transition:all .15s;text-align:center;width:100%;min-width:0;box-sizing:border-box">
       ${isToday?`<span style="position:absolute;top:2px;right:2px;width:4px;height:4px;border-radius:50%;background:${isSel?'#000':'var(--ac)'}"></span>`:''}
       ${d}
     </button>`;
   }).join('');
+}
 
-  // Shows for selected day
-  const sel = getCalendarShowsForDay(AIRING_DAY);
+function _renderDayShows(selectedDay) {
+  const sel = getCalendarShowsForDay(selectedDay);
+  const todayStr = localDay(new Date());
 
-  const showList = sel.length
-    ? sel.map(e => `
-        <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer" onclick="openDetail('${e.id}')">
-          <div style="width:6px;height:6px;border-radius:50%;background:${e.isUpcomingPremiere ? '#fb923c' : 'var(--ac)'};flex-shrink:0"></div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;color:var(--tx)">${esc(e.title)}</div>
-            <div style="font-size:11px;color:var(--mu);margin-top:1px">
-              ${e.isUpcomingPremiere ? `<span style="color:#fb923c;font-weight:600">Season Premiere</span>` : (e.airingTime || 'Weekly')}
-            </div>
-          </div>
-          ${e.isUpcomingPremiere ? `
-            <div style="display:flex;align-items:center;gap:8px" onclick="event.stopPropagation()">
-              <span style="font-size:11px;font-weight:700;color:${e.lblCol};white-space:nowrap">${e.dayLbl}</span>
-              ${(e.targetDateStr || todayStr) <= todayStr ? `
-                <button type="button" onclick="startWatchingEntry('${e.id}')"
-                  style="padding:3px 8px;border-radius:5px;background:rgba(var(--ac-rgb),0.15);border:1px solid rgba(var(--ac-rgb),0.3);color:var(--ac);font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s"
-                  onmouseover="this.style.background='var(--ac)';this.style.color='#000'"
-                  onmouseout="this.style.background='rgba(var(--ac-rgb),0.15)';this.style.color='var(--ac)'">
-                  ▶ Start watching
-                </button>
-              ` : ''}
-            </div>
-          ` : `
-            <span style="font-size:11px;font-weight:700;color:${e.lblCol};white-space:nowrap">${e.dayLbl}</span>
-          `}
-        </div>`).join('')
-    : `<div style="font-size:13px;color:var(--mu);text-align:center;padding:16px 0">Nothing airing</div>`;
-
-  // "Released, not started" section
-  const releasedNotStarted = getReleasedNotStartedShows();
-  let releasedHtml = '';
-  if (releasedNotStarted.length > 0) {
-    const itemsHtml = releasedNotStarted.slice(0, 3).map(e => `
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03)">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</div>
-          <div style="font-size:10px;color:var(--mu);margin-top:1px">Released ${formatReleaseDate(e.releaseDate || e.release_date)}</div>
-        </div>
-        <button type="button" onclick="startWatchingEntry('${e.id}')"
-          style="padding:4px 9px;border-radius:5px;background:rgba(var(--ac-rgb),0.12);border:1px solid rgba(var(--ac-rgb),0.3);color:var(--ac);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s"
-          onmouseover="this.style.background='var(--ac)';this.style.color='#000'"
-          onmouseout="this.style.background='rgba(var(--ac-rgb),0.12)';this.style.color='var(--ac)'">
-          ▶ Start watching
-        </button>
-      </div>
-    `).join('');
-
-    releasedHtml = `
-      <div style="margin-top:12px;padding-top:12px;border-top:1px dashed rgba(255,255,255,0.08)">
-        <div style="font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#fbbf24;margin-bottom:6px">
-          ★ Released — Ready to Watch (${releasedNotStarted.length})
-        </div>
-        ${itemsHtml}
-      </div>
-    `;
+  if (!sel.length) {
+    return `<div style="font-size:12.5px;color:var(--mu);text-align:center;padding:16px 0">Nothing airing</div>`;
   }
 
-  return `<div style="background:linear-gradient(to bottom right, var(--surf2), var(--surf)); border-radius:12px; border:1px solid rgba(255,255,255,0.06); box-shadow:0 4px 15px rgba(0,0,0,0.1); overflow:hidden">
-    <div style="padding:14px 18px 12px; border-bottom:1px solid rgba(255,255,255,0.04); display:flex; justify-content:space-between; align-items:center">
-      <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:var(--tx)">📺 Airing This Week</div>
-      <div style="display:flex;align-items:center;gap:6px">
+  return sel.map(e => `
+    <div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;min-width:0" onclick="openDetail('${e.id}')">
+      <div style="width:6px;height:6px;border-radius:50%;background:${e.isUpcomingPremiere ? '#fb923c' : 'var(--ac)'};flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</div>
+        <div style="font-size:10.5px;color:var(--mu);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          ${e.isUpcomingPremiere ? `<span style="color:#fb923c;font-weight:600">Season Premiere</span>` : (e.airingTime || 'Weekly')}
+        </div>
+      </div>
+      ${e.isUpcomingPremiere ? `
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0" onclick="event.stopPropagation()">
+          <span style="font-size:10.5px;font-weight:700;color:${e.lblCol};white-space:nowrap">${e.dayLbl}</span>
+          ${(e.targetDateStr || todayStr) <= todayStr ? `
+            <button type="button" onclick="startWatchingEntry('${e.id}')"
+              style="padding:3px 7px;border-radius:5px;background:rgba(var(--ac-rgb),0.15);border:1px solid rgba(var(--ac-rgb),0.3);color:var(--ac);font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s"
+              onmouseover="this.style.background='var(--ac)';this.style.color='#000'"
+              onmouseout="this.style.background='rgba(var(--ac-rgb),0.15)';this.style.color='var(--ac)'">
+              ▶ Start
+            </button>
+          ` : ''}
+        </div>
+      ` : `
+        <span style="font-size:10.5px;font-weight:700;color:${e.lblCol};white-space:nowrap;flex-shrink:0">${e.dayLbl}</span>
+      `}
+    </div>`).join('');
+}
+
+function _renderReleasedSection() {
+  const releasedNotStarted = getReleasedNotStartedShows();
+  if (releasedNotStarted.length === 0) return '';
+
+  const itemsHtml = releasedNotStarted.slice(0, 3).map(e => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03);min-width:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</div>
+        <div style="font-size:10px;color:var(--mu);margin-top:1px">Released ${formatReleaseDate(e.releaseDate || e.release_date)}</div>
+      </div>
+      <button type="button" onclick="startWatchingEntry('${e.id}')"
+        style="padding:4px 8px;border-radius:5px;background:rgba(var(--ac-rgb),0.12);border:1px solid rgba(var(--ac-rgb),0.3);color:var(--ac);font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0"
+        onmouseover="this.style.background='var(--ac)';this.style.color='#000'"
+        onmouseout="this.style.background='rgba(var(--ac-rgb),0.12)';this.style.color='var(--ac)'">
+        ▶ Start
+      </button>
+    </div>
+  `).join('');
+
+  return `
+    <div style="margin-top:12px;padding-top:12px;border-top:1px dashed rgba(255,255,255,0.08)">
+      <div style="font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#fbbf24;margin-bottom:6px">
+        ★ Released — Ready to Watch (${releasedNotStarted.length})
+      </div>
+      ${itemsHtml}
+    </div>
+  `;
+}
+
+function renderAiringWidget(){
+  const pills = _renderDayPills(AIRING_DAY);
+  const showList = _renderDayShows(AIRING_DAY);
+  const releasedHtml = _renderReleasedSection();
+
+  return `<div class="airing-widget-card" style="background:linear-gradient(to bottom right, var(--surf2), var(--surf)); border-radius:12px; border:1px solid rgba(255,255,255,0.06); box-shadow:0 4px 15px rgba(0,0,0,0.1); overflow:hidden">
+    <div style="padding:12px 14px 10px; border-bottom:1px solid rgba(255,255,255,0.04); display:flex; justify-content:space-between; align-items:center; gap:8px">
+      <div style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:var(--tx); white-space:nowrap; overflow:hidden; text-overflow:ellipsis">📺 Airing This Week</div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         <button type="button" onclick="checkAllAiringAndUpcoming(true)" title="Check airing and upcoming anime updates" style="padding:4px 8px;background:rgba(var(--ac-rgb),0.1);border-radius:6px;transition:all 0.2s;color:var(--ac);font-size:11px;font-weight:600;border:none;cursor:pointer" onmouseover="this.style.background='rgba(var(--ac-rgb),0.2)'" onmouseout="this.style.background='rgba(var(--ac-rgb),0.1)'">🔄 Check</button>
         <div style="font-size:11px;color:var(--ac);cursor:pointer;padding:4px 8px;background:rgba(var(--ac-rgb),0.1);border-radius:6px;transition:all 0.2s;font-weight:600" onmouseover="this.style.background='rgba(var(--ac-rgb),0.2)'" onmouseout="this.style.background='rgba(var(--ac-rgb),0.1)'" onclick="nav('media')">Manage →</div>
       </div>
     </div>
-    <div style="padding:12px 18px 8px; display:grid; grid-template-columns:repeat(7,1fr); gap:6px" id="airing-pills">
+    <div style="padding:10px 12px 8px; display:grid; grid-template-columns:repeat(7,1fr); gap:4px; box-sizing:border-box" id="airing-pills">
       ${pills}
     </div>
-    <div style="padding:4px 18px 14px" id="airing-shows">
+    <div style="padding:4px 14px 12px" id="airing-shows">
       ${showList}
       ${releasedHtml}
     </div>
@@ -390,32 +399,14 @@ function renderAiringWidget(){
 
 function selectAiringDay(d) {
   AIRING_DAY = d;
-  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const todayN = new Date().getDay();
 
   // Update pills
   const pillsEl = document.getElementById('airing-pills');
   if (pillsEl) {
-    pillsEl.innerHTML = days.map((day, i) => {
-      const shows = getCalendarShowsForDay(i);
-      const hasShows = shows.length > 0;
-      const hasPremiere = shows.some(x => x.isUpcomingPremiere);
-      const isToday  = i === todayN;
-      const isSel    = i === d;
-      const borderColor = isSel ? 'var(--ac)' : hasPremiere ? '#fb923c' : hasShows ? 'rgba(var(--ac-rgb),.25)' : 'var(--brd)';
-      const bgColor = isSel ? 'var(--ac)' : hasPremiere ? 'rgba(251,146,60,.12)' : hasShows ? 'rgba(var(--ac-rgb),.08)' : 'transparent';
-      const textColor = isSel ? '#000' : hasPremiere ? '#fb923c' : hasShows ? 'var(--ac)' : 'var(--mu)';
-
-      return `<button onclick="selectAiringDay(${i})"
-        style="padding:7px 4px;border-radius:20px;font-size:12px;font-weight:${isSel?'700':'500'};cursor:pointer;white-space:nowrap;border:1px solid ${borderColor};background:${bgColor};color:${textColor};position:relative;transition:all .15s;text-align:center;width:100%">
-        ${isToday?`<span style="position:absolute;top:2px;right:2px;width:4px;height:4px;border-radius:50%;background:${isSel?'#000':'var(--ac)'}"></span>`:''}
-        ${day}
-      </button>`;
-    }).join('');
+    pillsEl.innerHTML = _renderDayPills(d);
   }
 
   // Update show list
-  const sel = getCalendarShowsForDay(d);
   const showsEl = document.getElementById('airing-shows');
   if (showsEl) {
     showsEl.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
@@ -423,62 +414,8 @@ function selectAiringDay(d) {
     showsEl.style.transform = 'translateY(4px)';
 
     setTimeout(() => {
-      const todayStr = localDay(new Date());
-      const showList = sel.length
-        ? sel.map(e => `
-            <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer" onclick="openDetail('${e.id}')">
-              <div style="width:6px;height:6px;border-radius:50%;background:${e.isUpcomingPremiere ? '#fb923c' : 'var(--ac)'};flex-shrink:0"></div>
-              <div style="flex:1;min-width:0">
-                <div style="font-size:13px;font-weight:600;color:var(--tx)">${esc(e.title)}</div>
-                <div style="font-size:11px;color:var(--mu);margin-top:1px">
-                  ${e.isUpcomingPremiere ? `<span style="color:#fb923c;font-weight:600">Season Premiere</span>` : (e.airingTime || 'Weekly')}
-                </div>
-              </div>
-              ${e.isUpcomingPremiere ? `
-                <div style="display:flex;align-items:center;gap:8px" onclick="event.stopPropagation()">
-                  <span style="font-size:11px;font-weight:700;color:${e.lblCol};white-space:nowrap">${e.dayLbl}</span>
-                  ${(e.targetDateStr || todayStr) <= todayStr ? `
-                    <button type="button" onclick="startWatchingEntry('${e.id}')"
-                      style="padding:3px 8px;border-radius:5px;background:rgba(var(--ac-rgb),0.15);border:1px solid rgba(var(--ac-rgb),0.3);color:var(--ac);font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s"
-                      onmouseover="this.style.background='var(--ac)';this.style.color='#000'"
-                      onmouseout="this.style.background='rgba(var(--ac-rgb),0.15)';this.style.color='var(--ac)'">
-                      ▶ Start watching
-                    </button>
-                  ` : ''}
-                </div>
-              ` : `
-                <span style="font-size:11px;font-weight:700;color:${e.lblCol};white-space:nowrap">${e.dayLbl}</span>
-              `}
-            </div>`).join('')
-        : `<div style="font-size:13px;color:var(--mu);text-align:center;padding:16px 0">Nothing airing</div>`;
-
-      const releasedNotStarted = getReleasedNotStartedShows();
-      let releasedHtml = '';
-      if (releasedNotStarted.length > 0) {
-        const itemsHtml = releasedNotStarted.slice(0, 3).map(e => `
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03)">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.title)}</div>
-              <div style="font-size:10px;color:var(--mu);margin-top:1px">Released ${formatReleaseDate(e.releaseDate || e.release_date)}</div>
-            </div>
-            <button type="button" onclick="startWatchingEntry('${e.id}')"
-              style="padding:4px 9px;border-radius:5px;background:rgba(var(--ac-rgb),0.12);border:1px solid rgba(var(--ac-rgb),0.3);color:var(--ac);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s"
-              onmouseover="this.style.background='var(--ac)';this.style.color='#000'"
-              onmouseout="this.style.background='rgba(var(--ac-rgb),0.12)';this.style.color='var(--ac)'">
-              ▶ Start watching
-            </button>
-          </div>
-        `).join('');
-
-        releasedHtml = `
-          <div style="margin-top:12px;padding-top:12px;border-top:1px dashed rgba(255,255,255,0.08)">
-            <div style="font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#fbbf24;margin-bottom:6px">
-              ★ Released — Ready to Watch (${releasedNotStarted.length})
-            </div>
-            ${itemsHtml}
-          </div>
-        `;
-      }
+      const showList = _renderDayShows(d);
+      const releasedHtml = _renderReleasedSection();
 
       showsEl.innerHTML = showList + releasedHtml;
       void showsEl.offsetWidth;
@@ -488,10 +425,7 @@ function selectAiringDay(d) {
   }
 }
 
-/**
- * Transitions an upcoming entry to watching status when user clicks "Start watching".
- * For TV anime with a day-precision release date, pre-fills airingDay from the release date's weekday.
- */
+
 export async function startWatchingEntry(id) {
   const e = DATA.find(x => x.id === id);
   if (!e) return;
