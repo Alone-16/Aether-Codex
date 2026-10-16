@@ -25,8 +25,8 @@ BRIDGE_VERSION = "1.0.0"
 
 # ── Baked Template Defaults ──────────────────────────────────────────
 # These placeholders are substituted by the browser at download time.
-BAKED_TOKEN = "ac_bridge_test_token_728nzo5ca06"
-ALLOWED_ORIGIN = "https://aethercodex.pages.dev"
+BAKED_TOKEN = "5fa4a28551efca8b0825d18558c09c6d"
+ALLOWED_ORIGIN = "http://localhost:3000"
 CONFIGURED_PORT = 47619
 try:
     DEFAULT_SETTINGS = json.loads(r'''{"player":"mpv","quality":"best","audio":"sub","autoSelect":true}''')
