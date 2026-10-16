@@ -20,12 +20,33 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
+
+# Guard against pythonw.exe on Windows where sys.stdout and sys.stderr are None
+if sys.stdout is None or sys.stderr is None:
+    try:
+        if sys.platform == "win32":
+            _base = os.environ.get("APPDATA") or os.path.expanduser("~")
+        else:
+            _base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+        _log_dir = os.path.join(_base, "aether-bridge")
+        os.makedirs(_log_dir, exist_ok=True)
+        _log_file = open(os.path.join(_log_dir, "bridge.log"), "a", encoding="utf-8")
+        if sys.stdout is None:
+            sys.stdout = _log_file
+        if sys.stderr is None:
+            sys.stderr = _log_file
+    except Exception:
+        if sys.stdout is None:
+            sys.stdout = open(os.devnull, "w", encoding="utf-8")
+        if sys.stderr is None:
+            sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
 BRIDGE_VERSION = "1.0.0"
 
 # ── Baked Template Defaults ──────────────────────────────────────────
 # These placeholders are substituted by the browser at download time.
-BAKED_TOKEN = "ac_bridge_test_token_76f2amx3esw"
+BAKED_TOKEN = "ac_bridge_test_token_v6e9mq741db"
 ALLOWED_ORIGIN = "https://aethercodex.pages.dev"
 CONFIGURED_PORT = 47619
 try:
@@ -662,6 +683,7 @@ class AetherBridgeHandler(http.server.BaseHTTPRequestHandler):
 # ── Server Setup ─────────────────────────────────────────────────────
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
+    allow_reuse_address = True
 
 
 def run_bridge_server(token, origin, port, dry_run=False):
@@ -683,6 +705,9 @@ def run_bridge_server(token, origin, port, dry_run=False):
         server.serve_forever()
     except KeyboardInterrupt:
         sys.stdout.write("\nShutting down bridge server...\n")
+    except Exception as e:
+        sys.stderr.write(f"\n[ERROR] Server error: {e}\n{traceback.format_exc()}\n")
+        sys.stderr.flush()
     finally:
         server.server_close()
 
@@ -701,10 +726,12 @@ def install_autostart():
             sys.stderr.write(f"Startup directory not found: {startup_dir}\n")
             return 1
 
+        script_dir = os.path.dirname(script_path)
         vbs_path = os.path.join(startup_dir, "aether-bridge.vbs")
         # Run pythonw with hidden window (0) and do not wait for exit (False)
         vbs_content = (
             'Set WshShell = CreateObject("WScript.Shell")\r\n'
+            f'WshShell.CurrentDirectory = "{script_dir}"\r\n'
             f'WshShell.Run """{pythonw}"" ""{script_path}""", 0, False\r\n'
         )
         try:
@@ -833,4 +860,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        sys.stderr.write(f"\n[FATAL] Unhandled fatal error: {e}\n{traceback.format_exc()}\n")
+        sys.stderr.flush()
+        sys.exit(1)
