@@ -353,6 +353,9 @@ def launch_in_terminal(argv, capabilities, config):
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = 1  # win32con.SW_SHOWNORMAL (ensures GUI apps like VLC are visible)
 
+        win_env = os.environ.copy()
+        win_env.pop("DISPLAY", None)
+
         is_batch = argv[0].lower().endswith((".cmd", ".bat"))
         git_bash = None
         if os.path.isfile(r"C:\Program Files\Git\bin\bash.exe"):
@@ -374,7 +377,7 @@ def launch_in_terminal(argv, capabilities, config):
         else:
             cmd = ["cmd.exe", "/c", "start", "ani-cli", "cmd.exe", "/k", "call"] + argv
 
-        subprocess.Popen(cmd, env=os.environ.copy(), creationflags=creationflags, startupinfo=startupinfo)
+        subprocess.Popen(cmd, env=win_env, creationflags=creationflags, startupinfo=startupinfo)
 
     elif sys.platform == "darwin":
         quoted = " ".join(shlex.quote(a) for a in argv)
