@@ -302,6 +302,14 @@ def launch_in_terminal(argv, capabilities, config):
     custom_cmd = config.get("terminal_command")
 
     if custom_cmd:
+        popen_kwargs = {"env": os.environ.copy()}
+        if sys.platform == "win32":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 1  # win32con.SW_SHOWNORMAL
+            popen_kwargs["startupinfo"] = startupinfo
+            popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_CONSOLE", 0x00000010)
+
         if isinstance(custom_cmd, list):
             cmd = []
             for item in custom_cmd:
@@ -309,14 +317,14 @@ def launch_in_terminal(argv, capabilities, config):
                     cmd.extend(argv)
                 else:
                     cmd.append(item)
-            subprocess.Popen(cmd, env=os.environ.copy())
+            subprocess.Popen(cmd, **popen_kwargs)
             return
         elif isinstance(custom_cmd, str):
             quoted = " ".join(shlex.quote(a) for a in argv)
             final_str = custom_cmd.replace("{cmd}", quoted)
             # Never execute with shell=True; parse arguments safely
             parsed_cmd = shlex.split(final_str, posix=(sys.platform != "win32"))
-            subprocess.Popen(parsed_cmd, env=os.environ.copy())
+            subprocess.Popen(parsed_cmd, **popen_kwargs)
             return
 
     if sys.platform.startswith("linux"):
@@ -341,6 +349,10 @@ def launch_in_terminal(argv, capabilities, config):
 
     elif sys.platform == "win32":
         creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0x00000010)
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 1  # win32con.SW_SHOWNORMAL (ensures GUI apps like VLC are visible)
+
         is_batch = argv[0].lower().endswith((".cmd", ".bat"))
         git_bash = None
         if os.path.isfile(r"C:\Program Files\Git\bin\bash.exe"):
@@ -362,7 +374,7 @@ def launch_in_terminal(argv, capabilities, config):
         else:
             cmd = ["cmd.exe", "/c", "start", "ani-cli", "cmd.exe", "/k", "call"] + argv
 
-        subprocess.Popen(cmd, env=os.environ.copy(), creationflags=creationflags)
+        subprocess.Popen(cmd, env=os.environ.copy(), creationflags=creationflags, startupinfo=startupinfo)
 
     elif sys.platform == "darwin":
         quoted = " ".join(shlex.quote(a) for a in argv)
