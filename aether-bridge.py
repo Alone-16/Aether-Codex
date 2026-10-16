@@ -46,8 +46,8 @@ BRIDGE_VERSION = "1.0.0"
 
 # ── Baked Template Defaults ──────────────────────────────────────────
 # These placeholders are substituted by the browser at download time.
-BAKED_TOKEN = "ac_bridge_test_token_v6e9mq741db"
-ALLOWED_ORIGIN = "https://aethercodex.pages.dev"
+BAKED_TOKEN = "d0f9fa3a256f4752e81766e1591c18d8"
+ALLOWED_ORIGIN = "https://aether-codex.nadeempubgmobile2-0.workers.dev"
 CONFIGURED_PORT = 47619
 try:
     DEFAULT_SETTINGS = json.loads(r'''{"player":"mpv","quality":"best","audio":"sub","autoSelect":true}''')
@@ -438,8 +438,8 @@ class AetherBridgeHandler(http.server.BaseHTTPRequestHandler):
                     is_valid = True
                     break
 
-            # If no custom token is saved yet and request is from a verified trusted origin, auto-pair with browser token
-            if not is_valid and not saved_token and token_header.startswith("ac_bridge_"):
+            # If no match yet and request is from a verified trusted origin, auto-pair with browser token
+            if not is_valid and origin and self.get_validated_origin(origin) and token_header and len(token_header) >= 8:
                 self.server.config["token"] = token_header
                 save_config(self.server.config)
                 self.server.auth_token = token_header
