@@ -679,7 +679,7 @@ export function init(settings) {
       const entryId = btn.dataset.id || btn.closest('.m-card')?.id?.replace('row-', '');
       if (!entryId) return;
 
-      const entry = (window.DATA || []).find(x => x.id === entryId);
+      const entry = (window.DATA || []).find(x => String(x.id) === String(entryId));
       if (!entry) return;
 
       launchAnime(entry);

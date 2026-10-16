@@ -293,15 +293,17 @@ def launch_in_terminal(argv, capabilities, config):
 
         if wt:
             if git_bash:
-                quoted = " ".join(shlex.quote(a) for a in argv)
+                clean_args = [a.replace("\\", "/") for a in argv]
+                quoted = " ".join(shlex.quote(a) for a in clean_args)
                 bash_script = f"{quoted}; echo; read -p 'Press Enter to exit...'"
-                cmd = [wt, "-w", "0", "nt", git_bash, "-c", bash_script]
+                cmd = [wt, "nt", git_bash, "-c", bash_script]
                 subprocess.Popen(cmd, env=os.environ.copy(), creationflags=creationflags)
             else:
-                cmd = [wt, "-w", "0", "nt", "cmd.exe", "/k"] + argv
+                cmd = [wt, "nt", "cmd.exe", "/k"] + argv
                 subprocess.Popen(cmd, env=os.environ.copy(), creationflags=creationflags)
         elif git_bash:
-            quoted = " ".join(shlex.quote(a) for a in argv)
+            clean_args = [a.replace("\\", "/") for a in argv]
+            quoted = " ".join(shlex.quote(a) for a in clean_args)
             bash_script = f"{quoted}; echo; read -p 'Press Enter to exit...'"
             cmd = [git_bash, "-c", bash_script]
             subprocess.Popen(cmd, env=os.environ.copy(), creationflags=creationflags)
@@ -352,7 +354,11 @@ class AetherBridgeHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Origin", valid_origin)
             self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Aether-Token")
+        req_headers = self.headers.get("Access-Control-Request-Headers")
+        if req_headers:
+            self.send_header("Access-Control-Allow-Headers", req_headers)
+        else:
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Aether-Token, *")
         self.send_header("Access-Control-Allow-Private-Network", "true")
         self.send_header("Access-Control-Max-Age", "86400")
 
@@ -403,30 +409,51 @@ class AetherBridgeHandler(http.server.BaseHTTPRequestHandler):
         return True
 
     def do_OPTIONS(self):
-        # Validate Host & Origin for preflight
-        if not self.validate_request_security(require_token=False):
-            return
+        try:
+            # Validate Host & Origin for preflight
+            if not self.validate_request_security(require_token=False):
+                return
 
-        origin = self.headers.get("Origin")
-        self.send_response(204)
-        self.send_cors_headers(origin)
-        self.end_headers()
+            origin = self.headers.get("Origin")
+            self.send_response(204)
+            self.send_cors_headers(origin)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        except Exception as e:
+            sys.stderr.write(f"Error handling OPTIONS: {e}\n")
 
     def do_GET(self):
-        path = self.path.split("?")[0].rstrip("/")
-        if path == "/ping":
-            if not self.validate_request_security(require_token=True):
-                return
-            self.send_json({"ok": True, "version": BRIDGE_VERSION, "os": sys.platform})
-        elif path == "/capabilities":
-            if not self.validate_request_security(require_token=True):
-                return
-            caps = detect_capabilities(self.server.config)
-            self.send_json(caps)
-        else:
-            self.send_json({"ok": False, "error": "Not found"}, status=404)
+        try:
+            path = self.path.split("?")[0].rstrip("/")
+            if path == "/ping":
+                if not self.validate_request_security(require_token=True):
+                    return
+                self.send_json({"ok": True, "version": BRIDGE_VERSION, "os": sys.platform})
+            elif path == "/capabilities":
+                if not self.validate_request_security(require_token=True):
+                    return
+                caps = detect_capabilities(self.server.config)
+                self.send_json(caps)
+            else:
+                self.send_json({"ok": False, "error": "Not found"}, status=404)
+        except Exception as e:
+            sys.stderr.write(f"Error handling GET: {e}\n")
+            try:
+                self.send_json({"ok": False, "error": f"Internal server error: {e}"}, status=500)
+            except Exception:
+                pass
 
     def do_POST(self):
+        try:
+            self._handle_post_play()
+        except Exception as e:
+            sys.stderr.write(f"Error handling POST: {e}\n")
+            try:
+                self.send_json({"ok": False, "error": f"Internal server error: {e}"}, status=500)
+            except Exception:
+                pass
+
+    def _handle_post_play(self):
         path = self.path.split("?")[0].rstrip("/")
         if path != "/play":
             self.send_json({"ok": False, "error": "Not found"}, status=404)

@@ -141,7 +141,7 @@ test.describe('ani-cli Launcher Plugin E2E Tests', () => {
 
     // Reload the page
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Return to Plugins tab
     await page.click('button.stab:has-text("Plugins")');
@@ -342,7 +342,8 @@ test.describe('ani-cli Launcher Plugin E2E Tests', () => {
     }, testDeck);
 
     await page.goto('/#/media');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForFunction(() => typeof window.renderMediaBody === 'function');
 
     const durationDisabled = await page.evaluate(() => {
       const t0 = performance.now();
@@ -360,7 +361,8 @@ test.describe('ani-cli Launcher Plugin E2E Tests', () => {
     });
 
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForFunction(() => typeof window.renderMediaBody === 'function');
 
     const durationEnabled = await page.evaluate(() => {
       const t0 = performance.now();
