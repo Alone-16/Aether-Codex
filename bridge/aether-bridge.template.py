@@ -465,15 +465,6 @@ class AetherBridgeHandler(http.server.BaseHTTPRequestHandler):
                     is_valid = True
                     break
 
-            # If no match yet and request is from a verified trusted origin, auto-pair with browser token
-            if not is_valid and origin and self.get_validated_origin(origin) and token_header and len(token_header) >= 8:
-                self.server.config["token"] = token_header
-                save_config(self.server.config)
-                self.server.auth_token = token_header
-                is_valid = True
-                sys.stdout.write(f"[OK] Paired with browser token: {token_header[:12]}...\n")
-                sys.stdout.flush()
-
             if not is_valid:
                 self.send_json({"ok": False, "error": "Unauthorized: invalid or missing authentication token"}, status=401)
                 return False

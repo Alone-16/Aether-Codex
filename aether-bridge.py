@@ -46,8 +46,8 @@ BRIDGE_VERSION = "1.0.0"
 
 # ── Baked Template Defaults ──────────────────────────────────────────
 # These placeholders are substituted by the browser at download time.
-BAKED_TOKEN = "d0f9fa3a256f4752e81766e1591c18d8"
-ALLOWED_ORIGIN = "https://aether-codex.nadeempubgmobile2-0.workers.dev"
+BAKED_TOKEN = "ac_bridge_test_token_bahwj41j3tm"
+ALLOWED_ORIGIN = "https://aethercodex.pages.dev"
 CONFIGURED_PORT = 47619
 try:
     DEFAULT_SETTINGS = json.loads(r'''{"player":"mpv","quality":"best","audio":"sub","autoSelect":true}''')
@@ -464,15 +464,6 @@ class AetherBridgeHandler(http.server.BaseHTTPRequestHandler):
                 if valid_candidate and token_header and hmac.compare_digest(token_header.encode("utf-8"), valid_candidate.encode("utf-8")):
                     is_valid = True
                     break
-
-            # If no match yet and request is from a verified trusted origin, auto-pair with browser token
-            if not is_valid and origin and self.get_validated_origin(origin) and token_header and len(token_header) >= 8:
-                self.server.config["token"] = token_header
-                save_config(self.server.config)
-                self.server.auth_token = token_header
-                is_valid = True
-                sys.stdout.write(f"[OK] Paired with browser token: {token_header[:12]}...\n")
-                sys.stdout.flush()
 
             if not is_valid:
                 self.send_json({"ok": False, "error": "Unauthorized: invalid or missing authentication token"}, status=401)
