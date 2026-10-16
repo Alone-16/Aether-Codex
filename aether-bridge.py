@@ -283,6 +283,7 @@ def launch_in_terminal(argv, capabilities, config):
 
     elif sys.platform == "win32":
         creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0x00000010)
+        is_batch = argv[0].lower().endswith((".cmd", ".bat"))
         git_bash = None
         if os.path.isfile(r"C:\Program Files\Git\bin\bash.exe"):
             git_bash = r"C:\Program Files\Git\bin\bash.exe"
@@ -292,27 +293,35 @@ def launch_in_terminal(argv, capabilities, config):
         wt = shutil.which("wt") or shutil.which("wt.exe")
 
         if wt:
-            if git_bash:
-                clean_args = [a.replace("\\", "/") for a in argv]
-                quoted = " ".join(shlex.quote(a) for a in clean_args)
-                bash_script = f"{quoted}; echo; read -p 'Press Enter to exit...'"
-                cmd = [wt, "nt", git_bash, "-c", bash_script]
+            try:
+                # -w new forces Windows Terminal to open a brand new foreground window
+                if is_batch:
+                    cmd = [wt, "-w", "new", "cmd.exe", "/k", "call"] + argv
+                elif git_bash:
+                    clean_args = [a.replace("\\", "/") for a in argv]
+                    quoted = " ".join(shlex.quote(a) for a in clean_args)
+                    bash_script = f"{quoted}; echo; read -p 'Press Enter to exit...'"
+                    cmd = [wt, "-w", "new", git_bash, "-c", bash_script]
+                else:
+                    cmd = [wt, "-w", "new", "cmd.exe", "/k"] + argv
+
                 subprocess.Popen(cmd, env=os.environ.copy(), creationflags=creationflags)
-            else:
-                cmd = [wt, "nt", "cmd.exe", "/k"] + argv
-                subprocess.Popen(cmd, env=os.environ.copy(), creationflags=creationflags)
-        elif git_bash:
+                return
+            except Exception as wt_err:
+                sys.stderr.write(f"Windows Terminal launch failed, falling back: {wt_err}\n")
+
+        if git_bash and not is_batch:
             clean_args = [a.replace("\\", "/") for a in argv]
             quoted = " ".join(shlex.quote(a) for a in clean_args)
             bash_script = f"{quoted}; echo; read -p 'Press Enter to exit...'"
-            cmd = [git_bash, "-c", bash_script]
+            cmd = ["cmd.exe", "/c", "start", "ani-cli", git_bash, "-c", bash_script]
             subprocess.Popen(cmd, env=os.environ.copy(), creationflags=creationflags)
         elif shutil.which("wsl") or shutil.which("wsl.exe"):
             wsl_bin = shutil.which("wsl") or shutil.which("wsl.exe")
-            cmd = [wsl_bin, "-e"] + argv
+            cmd = ["cmd.exe", "/c", "start", "ani-cli", wsl_bin, "-e"] + argv
             subprocess.Popen(cmd, env=os.environ.copy(), creationflags=creationflags)
         else:
-            cmd = ["cmd.exe", "/c", "start", "ani-cli", "cmd.exe", "/k"] + argv
+            cmd = ["cmd.exe", "/c", "start", "ani-cli", "cmd.exe", "/k", "call"] + argv
             subprocess.Popen(cmd, env=os.environ.copy(), creationflags=creationflags)
 
     elif sys.platform == "darwin":
