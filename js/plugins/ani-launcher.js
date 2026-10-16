@@ -334,16 +334,13 @@ export async function downloadBridgeScript(settings) {
   script = script.replace('__BAKED_TOKEN__', token);
   script = script.replace('__ALLOWED_ORIGIN__', origin);
   script = script.replace('47619  # __CONFIGURED_PORT__', `${port}`);
-  script = script.replace('{}     # __DEFAULT_SETTINGS_JSON__', JSON.stringify({
+  script = script.replace(/__CONFIGURED_PORT__/g, `${port}`);
+  script = script.replace('__DEFAULT_SETTINGS_JSON__', JSON.stringify({
     player: settings.player || 'mpv',
     quality: settings.quality || 'best',
     audio: settings.audio || 'sub',
     autoSelect: settings.autoSelect !== false,
-  }, null, 2));
-
-  // Also replace direct placeholders if present
-  script = script.replace(/__CONFIGURED_PORT__/g, `${port}`);
-  script = script.replace(/__DEFAULT_SETTINGS_JSON__/g, JSON.stringify(settings));
+  }));
 
   const blob = new Blob([script], { type: 'text/x-python;charset=utf-8' });
   const blobUrl = URL.createObjectURL(blob);

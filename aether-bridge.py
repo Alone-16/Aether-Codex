@@ -25,15 +25,13 @@ BRIDGE_VERSION = "1.0.0"
 
 # ── Baked Template Defaults ──────────────────────────────────────────
 # These placeholders are substituted by the browser at download time.
-BAKED_TOKEN = "ac_bridge_test_token_6lle1wrdett"
+BAKED_TOKEN = "ac_bridge_test_token_8azfnjfau93"
 ALLOWED_ORIGIN = "https://aethercodex.pages.dev"
 CONFIGURED_PORT = 47619
-DEFAULT_SETTINGS = {
-  "player": "mpv",
-  "quality": "best",
-  "audio": "sub",
-  "autoSelect": true
-}
+try:
+    DEFAULT_SETTINGS = json.loads(r'''{"player":"mpv","quality":"best","audio":"sub","autoSelect":true}''')
+except Exception:
+    DEFAULT_SETTINGS = {}
 
 ALLOWED_PLAYERS = {"mpv", "vlc"}
 ALLOWED_QUALITIES = {"auto", "best", "1080", "720", "480", "360", "worst"}
