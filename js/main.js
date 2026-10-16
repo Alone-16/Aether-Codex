@@ -29,6 +29,7 @@ import {
 } from './shared/drive.js';
 import { initAiringSync, checkAiringAnime, isMediaAiring } from './shared/airing_sync.js';
 import { initNotifications, fetchNotifications } from './shared/notifications.js';
+import { initPlugins } from './plugins/registry.js';
 
 // ── Expose globals IMMEDIATELY so inline onclick="" handlers work ──
 Object.assign(window, {
@@ -275,6 +276,9 @@ async function boot() {
 
   // 7. Initialize In-App Notifications & Upcoming Radar
   initNotifications();
+
+  // 8. Initialize Optional Client-Side Plugins (only loads enabled plugins)
+  await initPlugins().catch(e => console.warn('[Boot] Plugin init error:', e));
 }
 
 window.bootApp = boot;

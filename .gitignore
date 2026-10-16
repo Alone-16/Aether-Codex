@@ -13,4 +13,5 @@ node_modules
 playwright-report/
 test-results/
 import_data.sql
-
+__pycache__/
+*.pyc
