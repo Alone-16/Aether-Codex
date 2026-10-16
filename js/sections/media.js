@@ -720,6 +720,17 @@ function rowHtml(e, idx = 0) {
           </div>` : ''}
           <button class="m-act-btn m-act-more" onclick="openEdit('${e.id}')" title="Edit">⋯</button>
           <button class="m-act-btn m-act-del" onclick="askDel('${e.id}')" title="Delete">✕</button>
+          ${(() => {
+            try {
+              const isAnime = (e.genreId || e.genre_id) === 'anime' || (e.type || '').toLowerCase() === 'anime';
+              const isPwa = typeof window !== 'undefined' && (window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator?.standalone === true);
+              const isMobile = typeof navigator !== 'undefined' && (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth && window.innerWidth < 640));
+              if (isAnime && !isPwa && !isMobile && window.AetherPlugins?.isPluginEnabled?.('aniLauncher')) {
+                return `<button class="m-act-btn m-act-terminal m-act-ani-launcher" data-id="${e.id}" data-action="ani-launcher" title="Watch in terminal"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg></button>`;
+              }
+            } catch (err) {}
+            return '';
+          })()}
           ${e.status === 'watching' && e.watchUrl
             ? `<button class="m-act-btn m-act-play" onclick="event.stopPropagation();window.open('${esc(e.watchUrl)}','_blank')" title="Watch">▶</button>` : ''}
         </div>

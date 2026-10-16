@@ -1347,6 +1347,16 @@ textarea.fin{resize:vertical;min-height:70px}
   background:linear-gradient(135deg, rgba(var(--ac-rgb),.15), rgba(var(--ac-rgb),.05));
 }
 .m-act-play:hover { background:linear-gradient(135deg, rgba(var(--ac-rgb),.25), rgba(var(--ac-rgb),.1)); border-color:rgba(var(--ac-rgb),.6); box-shadow: 0 4px 15px rgba(var(--ac-rgb),0.3); }
+.m-act-terminal {
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(56, 189, 248, 0.05));
+}
+.m-act-terminal:hover {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(56, 189, 248, 0.1));
+  border-color: rgba(56, 189, 248, 0.6);
+  box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3);
+}
 
 /* ── Genre badge in detail panel ── */
 .m-genre-badge {

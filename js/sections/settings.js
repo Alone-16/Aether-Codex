@@ -188,8 +188,8 @@ function rebuildSidebar() {
 
 // ─── SETTINGS RENDER ───
 function renderSettings(c) {
-  const tabs       = ['sections','sync','storage','security','share'];
-  const tabLabels  = ['Sections','Account & Sync','Storage','Security','Public Share'];
+  const tabs       = ['sections','sync','storage','security','share','plugins'];
+  const tabLabels  = ['Sections','Account & Sync','Storage','Security','Public Share','Plugins'];
 
   c.innerHTML = `
     <div style="font-family:var(--fd);font-size:20px;font-weight:700;margin-bottom:20px;color:var(--tx)">⚙ Settings</div>
@@ -208,6 +208,7 @@ function renderSettingsBody() {
   else if (SETTINGS_TAB === 'sync')       renderSettingsSync(el);
   else if (SETTINGS_TAB === 'storage')    renderSettingsStorage(el);
   else if (SETTINGS_TAB === 'ai')         renderSettingsAI(el);
+  else if (SETTINGS_TAB === 'plugins')    renderSettingsPlugins(el);
   else if (SETTINGS_TAB === 'share') {
     if (typeof window.renderSettingsPublicShare === 'function') {
       window.renderSettingsPublicShare(el);
@@ -226,10 +227,81 @@ function renderSettingsBody() {
   }
 
   // Update active tab
-  const tabs = ['sections','sync','storage','security','share'];
+  const tabs = ['sections','sync','storage','security','share','plugins'];
   document.querySelectorAll('.stab').forEach((t, i) => {
     t.classList.toggle('active', tabs[i] === SETTINGS_TAB);
   });
+}
+
+// ── PLUGINS TAB ──
+async function renderSettingsPlugins(el) {
+  if (!el) return;
+  const registry = window.AetherPlugins;
+  if (!registry) {
+    el.innerHTML = '<div style="color:var(--mu);padding:20px;text-align:center">Plugins are loading...</div>';
+    return;
+  }
+
+  const isEnabled = registry.isPluginEnabled('aniLauncher');
+
+  el.innerHTML = `
+    <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:14px">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+        <div style="font-size:13px;font-weight:700;color:var(--tx)">Plugins & Extensions</div>
+        <div style="font-size:11px;color:var(--mu);margin-top:2px">
+          Experimental client-side enhancements. Settings and tokens are stored locally on this device only.
+        </div>
+      </div>
+      <div style="padding:14px 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--surf2);border:1px solid var(--brd);border-radius:8px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:22px;color:#38bdf8">⌨</span>
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--tx)">ani-cli Launcher</div>
+              <div style="font-size:11px;color:var(--mu)">Launch anime directly in a local terminal using ani-cli</div>
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--tx2)">
+            <input type="checkbox" id="toggle-ani-launcher" ${isEnabled ? 'checked' : ''}
+              style="width:16px;height:16px;accent-color:var(--ac);cursor:pointer">
+            <span id="lbl-ani-launcher">${isEnabled ? 'Enabled' : 'Disabled'}</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div id="plugin-ani-launcher-panel"></div>
+  `;
+
+  const panelContainer = el.querySelector('#plugin-ani-launcher-panel');
+  const checkbox = el.querySelector('#toggle-ani-launcher');
+  const lbl = el.querySelector('#lbl-ani-launcher');
+
+  async function updatePanel(enabled) {
+    if (enabled) {
+      panelContainer.innerHTML = '<div style="padding:20px;text-align:center;color:var(--mu)">Loading launcher settings...</div>';
+      try {
+        const module = await import('../plugins/ani-launcher.js');
+        module.renderSettingsPanel(panelContainer, registry.getPluginSettings('aniLauncher'), (newSettings) => {
+          registry.savePluginSettings('aniLauncher', newSettings);
+        });
+      } catch (err) {
+        panelContainer.innerHTML = `<div style="padding:14px;color:#fb7185">Failed to load plugin: ${err.message}</div>`;
+      }
+    } else {
+      panelContainer.innerHTML = '';
+    }
+  }
+
+  checkbox.onchange = async (e) => {
+    const checked = e.target.checked;
+    lbl.textContent = checked ? 'Enabled' : 'Disabled';
+    await registry.setPluginEnabled('aniLauncher', checked);
+    await updatePanel(checked);
+  };
+
+  if (isEnabled) {
+    await updatePanel(true);
+  }
 }
 
 // ── DESKTOP TAB ──
