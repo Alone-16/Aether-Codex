@@ -59,6 +59,32 @@ ALLOWED_QUALITIES = {"auto", "best", "1080", "720", "480", "360", "worst"}
 ALLOWED_AUDIOS = {"sub", "dub"}
 
 
+def ensure_windows_player_paths():
+    """Ensure standard player install directories (VLC, MPV, Scoop) are in PATH on Windows."""
+    if sys.platform != "win32":
+        return
+    candidate_dirs = [
+        r"C:\Program Files\VideoLAN\VLC",
+        r"C:\Program Files (x86)\VideoLAN\VLC",
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\VideoLAN\VLC"),
+        os.path.expanduser(r"~\scoop\apps\vlc\current"),
+        os.path.expanduser(r"~\scoop\apps\mpv\current"),
+        os.path.expanduser(r"~\scoop\shims"),
+        r"C:\Tools\bin",
+    ]
+    current_path = os.environ.get("PATH", "")
+    current_parts = [p.lower() for p in current_path.split(os.pathsep) if p]
+    to_add = []
+    for d in candidate_dirs:
+        if os.path.isdir(d) and d.lower() not in current_parts:
+            to_add.append(d)
+    if to_add:
+        os.environ["PATH"] = os.pathsep.join(to_add) + os.pathsep + current_path
+
+
+ensure_windows_player_paths()
+
+
 # ── Configuration Management ─────────────────────────────────────────
 def get_config_dir():
     if sys.platform == "win32":
@@ -215,6 +241,7 @@ def detect_capabilities(config=None):
         except Exception:
             pass
 
+    ensure_windows_player_paths()
     players = {
         "mpv": bool(shutil.which("mpv") or shutil.which("mpv.com") or shutil.which("mpv.exe")),
         "vlc": bool(shutil.which("vlc") or shutil.which("vlc.exe")),
