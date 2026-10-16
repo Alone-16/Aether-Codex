@@ -494,7 +494,7 @@ export function renderSettingsPanel(container, settings, saveFn) {
 
       <!-- Collapsible Setup Guides -->
       <details style="margin-top:14px;background:rgba(255,255,255,0.02);border:1px solid var(--brd);border-radius:8px;padding:10px 14px">
-        <summary style="cursor:pointer;font-weight:600;font-size:12px;color:var(--tx)">📖 Windows Setup Instructions</summary>
+        <summary style="cursor:pointer;font-weight:600;font-size:12px;color:var(--tx)">📖 Windows Setup Instructions (One-Time Setup)</summary>
         <div style="font-size:11px;color:var(--mu);line-height:1.6;margin-top:10px">
           <b>Prerequisites:</b>
           <ul style="margin:4px 0 10px 20px">
@@ -502,36 +502,22 @@ export function renderSettingsPanel(container, settings, saveFn) {
             <li>Install ani-cli (via Scoop: <code>scoop install ani-cli</code> or Git Bash)</li>
             <li>Install mpv (<code>scoop install mpv</code> or winget)</li>
           </ul>
-          <b>Starting the Bridge:</b>
-          <pre style="background:var(--surf2);padding:8px 12px;border-radius:6px;overflow-x:auto;margin:6px 0">python aether-bridge.py</pre>
-          <b>Auto-start on Windows Boot:</b>
-          <p>Press <kbd>Win+R</kbd>, type <code>shell:startup</code>, and create a shortcut to <code>pythonw.exe "C:\\path\\to\\aether-bridge.py"</code>, or configure a Task Scheduler task on user logon.</p>
+          <b>Automatic One-Time Autostart Setup:</b>
+          <p>Run this single command in your terminal. It configures the bridge to launch silently in the background whenever you log in:</p>
+          <pre style="background:var(--surf2);padding:8px 12px;border-radius:6px;overflow-x:auto;margin:6px 0;font-family:monospace">python aether-bridge.py --install-autostart</pre>
+          <p style="font-size:10px;opacity:0.7">To uninstall autostart later: <code>python aether-bridge.py --uninstall-autostart</code></p>
         </div>
       </details>
 
       <details style="margin-top:8px;background:rgba(255,255,255,0.02);border:1px solid var(--brd);border-radius:8px;padding:10px 14px">
-        <summary style="cursor:pointer;font-weight:600;font-size:12px;color:var(--tx)">📖 Arch Linux Setup Instructions</summary>
+        <summary style="cursor:pointer;font-weight:600;font-size:12px;color:var(--tx)">📖 Arch Linux Setup Instructions (One-Time Setup)</summary>
         <div style="font-size:11px;color:var(--mu);line-height:1.6;margin-top:10px">
           <b>Prerequisites:</b>
           <pre style="background:var(--surf2);padding:8px 12px;border-radius:6px;overflow-x:auto;margin:6px 0">sudo pacman -S ani-cli mpv kitty  # or alacritty/foot/wezterm</pre>
-          <b>Starting the Bridge:</b>
-          <pre style="background:var(--surf2);padding:8px 12px;border-radius:6px;overflow-x:auto;margin:6px 0">chmod +x aether-bridge.py && ./aether-bridge.py</pre>
-          <b>Hyprland <code>exec-once</code>:</b>
-          <p>Add to <code>~/.config/hypr/hyprland.conf</code>:</p>
-          <pre style="background:var(--surf2);padding:8px 12px;border-radius:6px;overflow-x:auto;margin:6px 0">exec-once = python ~/.config/aether-bridge/aether-bridge.py</pre>
-          <b>Systemd User Service:</b>
-          <p>Create <code>~/.config/systemd/user/aether-bridge.service</code>:</p>
-          <pre style="background:var(--surf2);padding:8px 12px;border-radius:6px;overflow-x:auto;margin:6px 0">[Unit]
-Description=Aether Codex ani-cli Local Bridge
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/python %h/.config/aether-bridge/aether-bridge.py
-Restart=always
-
-[Install]
-WantedBy=default.target</pre>
-          <p>Enable and start: <code>systemctl --user enable --now aether-bridge.service</code></p>
+          <b>Automatic One-Time Autostart Setup:</b>
+          <p>Run this command to automatically install and start the systemd user service:</p>
+          <pre style="background:var(--surf2);padding:8px 12px;border-radius:6px;overflow-x:auto;margin:6px 0;font-family:monospace">python aether-bridge.py --install-autostart</pre>
+          <p style="font-size:10px;opacity:0.7">To uninstall autostart later: <code>python aether-bridge.py --uninstall-autostart</code></p>
         </div>
       </details>
 

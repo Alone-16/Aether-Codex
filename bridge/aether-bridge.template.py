@@ -687,6 +687,112 @@ def run_bridge_server(token, origin, port, dry_run=False):
         server.server_close()
 
 
+# ── Autostart Management ─────────────────────────────────────────────
+def install_autostart():
+    script_path = os.path.abspath(__file__)
+    if sys.platform == "win32":
+        py_dir = os.path.dirname(sys.executable)
+        pythonw = os.path.join(py_dir, "pythonw.exe")
+        if not os.path.isfile(pythonw):
+            pythonw = shutil.which("pythonw") or sys.executable
+
+        startup_dir = os.path.join(os.environ.get("APPDATA", ""), r"Microsoft\Windows\Start Menu\Programs\Startup")
+        if not os.path.isdir(startup_dir):
+            sys.stderr.write(f"Startup directory not found: {startup_dir}\n")
+            return 1
+
+        vbs_path = os.path.join(startup_dir, "aether-bridge.vbs")
+        # Run pythonw with hidden window (0) and do not wait for exit (False)
+        vbs_content = (
+            'Set WshShell = CreateObject("WScript.Shell")\r\n'
+            f'WshShell.Run """{pythonw}"" ""{script_path}""", 0, False\r\n'
+        )
+        try:
+            with open(vbs_path, "w", encoding="utf-8") as f:
+                f.write(vbs_content)
+        except Exception as e:
+            sys.stderr.write(f"Failed to write startup launcher: {e}\n")
+            return 1
+
+        sys.stdout.write("[OK] Autostart installed successfully on Windows!\n")
+        sys.stdout.write(f"  Startup Launcher: {vbs_path}\n")
+        sys.stdout.write(f"  Target Script:    {script_path}\n")
+        sys.stdout.write(f"  Interpreter:      {pythonw} (Silent background execution)\n\n")
+        sys.stdout.write("The bridge will now start automatically in the background whenever you log in.\n")
+        sys.stdout.write("To remove autostart later, run: python aether-bridge.py --uninstall-autostart\n")
+        return 0
+
+    elif sys.platform.startswith("linux"):
+        systemd_user_dir = os.path.expanduser("~/.config/systemd/user")
+        os.makedirs(systemd_user_dir, exist_ok=True)
+        service_path = os.path.join(systemd_user_dir, "aether-bridge.service")
+        service_content = f"""[Unit]
+Description=Aether Codex ani-cli Local Bridge
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={sys.executable} {script_path}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+"""
+        try:
+            with open(service_path, "w", encoding="utf-8") as f:
+                f.write(service_content)
+        except Exception as e:
+            sys.stderr.write(f"Failed to write systemd service file: {e}\n")
+            return 1
+
+        subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
+        res = subprocess.run(["systemctl", "--user", "enable", "--now", "aether-bridge.service"], check=False)
+        if res.returncode == 0:
+            sys.stdout.write("[OK] Autostart service installed and started via systemd user service!\n")
+            sys.stdout.write(f"  Service file: {service_path}\n")
+        else:
+            sys.stdout.write(f"Service file written to {service_path}.\nRun 'systemctl --user enable --now aether-bridge.service' to activate.\n")
+        return 0
+    else:
+        sys.stderr.write(f"Autostart installer is not supported on {sys.platform}.\n")
+        return 1
+
+
+def uninstall_autostart():
+    if sys.platform == "win32":
+        startup_dir = os.path.join(os.environ.get("APPDATA", ""), r"Microsoft\Windows\Start Menu\Programs\Startup")
+        vbs_path = os.path.join(startup_dir, "aether-bridge.vbs")
+        if os.path.isfile(vbs_path):
+            try:
+                os.remove(vbs_path)
+                sys.stdout.write(f"[OK] Removed autostart launcher: {vbs_path}\n")
+            except Exception as e:
+                sys.stderr.write(f"Failed to remove {vbs_path}: {e}\n")
+                return 1
+        else:
+            sys.stdout.write("Autostart launcher was not found in Windows Startup.\n")
+        return 0
+
+    elif sys.platform.startswith("linux"):
+        subprocess.run(["systemctl", "--user", "disable", "--now", "aether-bridge.service"], check=False)
+        service_path = os.path.expanduser("~/.config/systemd/user/aether-bridge.service")
+        if os.path.isfile(service_path):
+            try:
+                os.remove(service_path)
+                subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
+                sys.stdout.write("[OK] Removed systemd user service.\n")
+            except Exception as e:
+                sys.stderr.write(f"Failed to remove service file: {e}\n")
+                return 1
+        else:
+            sys.stdout.write("systemd service file was not found.\n")
+        return 0
+    else:
+        sys.stderr.write(f"Autostart uninstaller is not supported on {sys.platform}.\n")
+        return 1
+
+
 # ── CLI Entrypoint ───────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description="Aether Codex ani-cli Local Bridge")
@@ -694,6 +800,8 @@ def main():
     parser.add_argument("--port", type=int, default=None, help=f"Listening port (default: {CONFIGURED_PORT})")
     parser.add_argument("--token", type=str, default=None, help="Authentication token override")
     parser.add_argument("--print-config", action="store_true", help="Display local configuration and exit")
+    parser.add_argument("--install-autostart", action="store_true", help="Set up automatic startup on login (Windows/Linux)")
+    parser.add_argument("--uninstall-autostart", action="store_true", help="Remove automatic startup configuration")
     parser.add_argument("--version", action="store_true", help="Print bridge version and exit")
 
     args = parser.parse_args()
@@ -701,6 +809,14 @@ def main():
     if args.version:
         sys.stdout.write(f"aether-bridge {BRIDGE_VERSION}\n")
         return
+
+    if args.install_autostart:
+        code = install_autostart()
+        sys.exit(code)
+
+    if args.uninstall_autostart:
+        code = uninstall_autostart()
+        sys.exit(code)
 
     if args.print_config:
         cfg = load_or_create_config()
