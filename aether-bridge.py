@@ -25,8 +25,8 @@ BRIDGE_VERSION = "1.0.0"
 
 # ── Baked Template Defaults ──────────────────────────────────────────
 # These placeholders are substituted by the browser at download time.
-BAKED_TOKEN = "ac_bridge_test_token_8azfnjfau93"
-ALLOWED_ORIGIN = "https://aethercodex.pages.dev"
+BAKED_TOKEN = "5fa4a28551efca8b0825d18558c09c6d"
+ALLOWED_ORIGIN = "http://localhost:3000"
 CONFIGURED_PORT = 47619
 try:
     DEFAULT_SETTINGS = json.loads(r'''{"player":"mpv","quality":"best","audio":"sub","autoSelect":true}''')
@@ -674,6 +674,7 @@ def main():
     parser = argparse.ArgumentParser(description="Aether Codex ani-cli Local Bridge")
     parser.add_argument("--dry-run", action="store_true", help="Report argv without launching terminal")
     parser.add_argument("--port", type=int, default=None, help=f"Listening port (default: {CONFIGURED_PORT})")
+    parser.add_argument("--token", type=str, default=None, help="Authentication token override")
     parser.add_argument("--print-config", action="store_true", help="Display local configuration and exit")
     parser.add_argument("--version", action="store_true", help="Print bridge version and exit")
 
@@ -691,7 +692,7 @@ def main():
         return
 
     port = args.port or (int(CONFIGURED_PORT) if isinstance(CONFIGURED_PORT, int) else 47619)
-    token = BAKED_TOKEN
+    token = args.token or BAKED_TOKEN
     origin = ALLOWED_ORIGIN
 
     run_bridge_server(token=token, origin=origin, port=port, dry_run=args.dry_run)
