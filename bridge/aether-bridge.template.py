@@ -363,19 +363,19 @@ def launch_in_terminal(argv, capabilities, config):
         else:
             git_bash = shutil.which("bash")
 
-        # Use cmd.exe /c start to guarantee a new interactive window is created and brought to the FOREGROUND
+        # Launch in a brand new interactive console window
         if is_batch:
-            cmd = ["cmd.exe", "/c", "start", "ani-cli", "cmd.exe", "/k", "call"] + argv
+            cmd = ["cmd.exe", "/k", "call"] + argv
         elif git_bash:
             clean_args = [a.replace("\\", "/") for a in argv]
             quoted = " ".join(shlex.quote(a) for a in clean_args)
             bash_script = f"{quoted}; echo; read -p 'Press Enter to exit...'"
-            cmd = ["cmd.exe", "/c", "start", "ani-cli", git_bash, "-c", bash_script]
+            cmd = [git_bash, "-c", bash_script]
         elif shutil.which("wsl") or shutil.which("wsl.exe"):
             wsl_bin = shutil.which("wsl") or shutil.which("wsl.exe")
-            cmd = ["cmd.exe", "/c", "start", "ani-cli", wsl_bin, "-e"] + argv
+            cmd = [wsl_bin, "-e"] + argv
         else:
-            cmd = ["cmd.exe", "/c", "start", "ani-cli", "cmd.exe", "/k", "call"] + argv
+            cmd = ["cmd.exe", "/k", "call"] + argv
 
         subprocess.Popen(cmd, env=win_env, creationflags=creationflags, startupinfo=startupinfo)
 
