@@ -85,6 +85,7 @@ def load_or_create_config():
         "ani_cli_path": "",
         "terminal_command": "",
         "default_settings": DEFAULT_SETTINGS if isinstance(DEFAULT_SETTINGS, dict) else {},
+        "token": "",
     }
 
     if not os.path.isfile(cfg_path):
@@ -104,6 +105,15 @@ def load_or_create_config():
         sys.stderr.write(f"[WARN] Failed to read config file {cfg_path}: {e}\n")
 
     return initial_config
+
+
+def save_config(config):
+    cfg_path = get_config_file_path()
+    try:
+        with open(cfg_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+    except Exception as e:
+        sys.stderr.write(f"[WARN] Failed to save config {cfg_path}: {e}\n")
 
 
 # ── Rate Limiter & Debounce ──────────────────────────────────────────
@@ -382,6 +392,11 @@ class AetherBridgeHandler(http.server.BaseHTTPRequestHandler):
         if req_origin == allowed_exact:
             return req_origin
 
+        # Check Cloudflare Workers & Pages deployments
+        cloud_regex = re.compile(r"^https://[a-zA-Z0-9.-]+\.(workers\.dev|pages\.dev)$")
+        if cloud_regex.match(req_origin):
+            return req_origin
+
         # Check local dev origins
         dev_regex = re.compile(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$")
         if dev_regex.match(req_origin):
@@ -413,8 +428,26 @@ class AetherBridgeHandler(http.server.BaseHTTPRequestHandler):
         # 3. Validate Token
         if require_token:
             auth_token = getattr(self.server, "auth_token", "")
+            saved_token = self.server.config.get("token") or ""
             token_header = self.headers.get("X-Aether-Token") or ""
-            if not token_header or not hmac.compare_digest(token_header.encode("utf-8"), auth_token.encode("utf-8")):
+
+            # Check if token matches server auth_token, saved_token, or baked_token
+            is_valid = False
+            for valid_candidate in (auth_token, saved_token, BAKED_TOKEN):
+                if valid_candidate and token_header and hmac.compare_digest(token_header.encode("utf-8"), valid_candidate.encode("utf-8")):
+                    is_valid = True
+                    break
+
+            # If no custom token is saved yet and request is from a verified trusted origin, auto-pair with browser token
+            if not is_valid and not saved_token and token_header.startswith("ac_bridge_"):
+                self.server.config["token"] = token_header
+                save_config(self.server.config)
+                self.server.auth_token = token_header
+                is_valid = True
+                sys.stdout.write(f"[OK] Paired with browser token: {token_header[:12]}...\n")
+                sys.stdout.flush()
+
+            if not is_valid:
                 self.send_json({"ok": False, "error": "Unauthorized: invalid or missing authentication token"}, status=401)
                 return False
 
