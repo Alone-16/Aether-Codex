@@ -207,7 +207,7 @@ registerPlugin({
     audio: 'sub',
     searchTitle: 'english',
     autoSelect: true,
-    episodeMode: 'none',
+    episodeMode: 'next',
   },
   settingsSchema: {
     bridgeUrl: {
@@ -273,10 +273,23 @@ registerPlugin({
         { value: 'none', label: 'None (select or resume in terminal)' },
         { value: 'next', label: 'Start at next unwatched episode' },
       ],
-      default: 'none',
+      default: 'next',
     },
   },
 });
+
+/**
+ * Determine if current device is a desktop/laptop environment (PC, Mac, Linux).
+ * Terminal plugins require a local desktop shell and are disabled on Android and mobile.
+ */
+export function isDesktopEnvironment() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return true;
+  const ua = navigator.userAgent || '';
+  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
+  const isIPadOS = (navigator.maxTouchPoints || 0) > 2 && /Macintosh/i.test(ua);
+  const isSmallScreen = (window.innerWidth || 0) > 0 && window.innerWidth < 768;
+  return !isMobileUA && !isIPadOS && !isSmallScreen;
+}
 
 // Expose on window for easy access across the app
 if (typeof window !== 'undefined') {
@@ -289,5 +302,7 @@ if (typeof window !== 'undefined') {
     getAllPlugins,
     initPlugins,
     onPluginChange,
+    isDesktopEnvironment,
   };
 }
+

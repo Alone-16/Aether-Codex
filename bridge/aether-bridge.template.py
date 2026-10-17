@@ -181,7 +181,14 @@ class RateLimiter:
 
 
 # ── Capabilities Detection ───────────────────────────────────────────
-def detect_capabilities(config=None):
+_CACHED_CAPABILITIES = None
+
+
+def detect_capabilities(config=None, force_refresh=False):
+    global _CACHED_CAPABILITIES
+    if _CACHED_CAPABILITIES is not None and not force_refresh:
+        return _CACHED_CAPABILITIES
+
     cfg = config or {}
     ani_path = cfg.get("ani_cli_path") or ""
 
@@ -202,22 +209,29 @@ def detect_capabilities(config=None):
 
     version_str = None
     flags = {
-        "vlc": False,
-        "quality": False,
-        "dub": False,
-        "select_nth": False,
-        "episode": False,
+        "vlc": True,
+        "quality": True,
+        "dub": True,
+        "select_nth": True,
+        "episode": True,
     }
 
     if ani_path:
+        sub_kwargs = {
+            "capture_output": True,
+            "text": True,
+            "timeout": 5,
+            "check": False,
+        }
+        if sys.platform == "win32":
+            sub_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+            sinfo = subprocess.STARTUPINFO()
+            sinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            sinfo.wShowWindow = 0  # win32con.SW_HIDE
+            sub_kwargs["startupinfo"] = sinfo
+
         try:
-            ver_proc = subprocess.run(
-                [ani_path, "-V"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=False
-            )
+            ver_proc = subprocess.run([ani_path, "-V"], **sub_kwargs)
             v = ver_proc.stdout.strip() or ver_proc.stderr.strip()
             if v:
                 version_str = v.splitlines()[0].strip()
@@ -225,19 +239,14 @@ def detect_capabilities(config=None):
             pass
 
         try:
-            help_proc = subprocess.run(
-                [ani_path, "--help"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=False
-            )
-            help_text = (help_proc.stdout + " " + help_proc.stderr)
-            flags["vlc"] = bool("-v" in help_text or "--vlc" in help_text)
-            flags["quality"] = bool("-q" in help_text or "--quality" in help_text)
-            flags["dub"] = bool("--dub" in help_text)
-            flags["select_nth"] = bool("-S" in help_text or "--select-nth" in help_text)
-            flags["episode"] = bool("-e" in help_text or "--episode" in help_text)
+            help_proc = subprocess.run([ani_path, "--help"], **sub_kwargs)
+            help_text = (help_proc.stdout + " " + help_proc.stderr).strip()
+            if len(help_text) > 20:
+                flags["vlc"] = bool("-v" in help_text or "--vlc" in help_text)
+                flags["quality"] = bool("-q" in help_text or "--quality" in help_text)
+                flags["dub"] = bool("--dub" in help_text)
+                flags["select_nth"] = bool("-S" in help_text or "--select-nth" in help_text)
+                flags["episode"] = bool("-e" in help_text or "--episode" in help_text)
         except Exception:
             pass
 
@@ -278,7 +287,7 @@ def detect_capabilities(config=None):
         term_detected = "Terminal.app"
         term_available = True
 
-    return {
+    _CACHED_CAPABILITIES = {
         "ok": True,
         "version": BRIDGE_VERSION,
         "ani_cli": {
@@ -293,6 +302,7 @@ def detect_capabilities(config=None):
             "available": term_available,
         },
     }
+    return _CACHED_CAPABILITIES
 
 
 # ── Terminal Launch Execution ────────────────────────────────────────
@@ -351,31 +361,39 @@ def launch_in_terminal(argv, capabilities, config):
         creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0x00000010)
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        startupinfo.wShowWindow = 1  # win32con.SW_SHOWNORMAL (ensures GUI apps like VLC are visible)
+        # If an episode is specified, run silently in background so only MPV pops up.
+        # If no episode is specified, show single visible console for interactive episode selection.
+        has_episode = any(argv[i] == "-e" for i in range(len(argv) - 1))
+        if has_episode:
+            startupinfo.wShowWindow = 7  # win32con.SW_SHOWMINNOACTIVE (silent background scraping)
+        else:
+            startupinfo.wShowWindow = 1  # win32con.SW_SHOWNORMAL (single interactive window)
 
         win_env = os.environ.copy()
         win_env.pop("DISPLAY", None)
+        # Prevent MSYS2/Git Bash from hiding the MPV/player GUI window when spawning in background
+        win_env["ANI_CLI_NO_DETACH"] = "1"
+        if extra_env:
+            win_env.update(extra_env)
 
-        is_batch = argv[0].lower().endswith((".cmd", ".bat"))
         git_bash = None
-        if os.path.isfile(r"C:\Program Files\Git\bin\bash.exe"):
-            git_bash = r"C:\Program Files\Git\bin\bash.exe"
-        else:
-            git_bash = shutil.which("bash")
+        for b_cand in [
+            r"C:\Program Files\Git\bin\bash.exe",
+            r"C:\Program Files\Git\usr\bin\bash.exe",
+            shutil.which("bash")
+        ]:
+            if b_cand and os.path.isfile(b_cand):
+                git_bash = b_cand
+                break
 
-        # Launch in a brand new interactive console window
-        if is_batch:
-            cmd = ["cmd.exe", "/k", "call"] + argv
-        elif git_bash:
-            clean_args = [a.replace("\\", "/") for a in argv]
-            quoted = " ".join(shlex.quote(a) for a in clean_args)
-            bash_script = f"{quoted}; echo; read -p 'Press Enter to exit...'"
-            cmd = [git_bash, "-c", bash_script]
-        elif shutil.which("wsl") or shutil.which("wsl.exe"):
-            wsl_bin = shutil.which("wsl") or shutil.which("wsl.exe")
-            cmd = [wsl_bin, "-e"] + argv
+        if git_bash:
+            # Run Git Bash directly using "$@" argument forwarding:
+            # 1. Completely eliminates intermediate cmd.exe windows (only 1 window ever opens, or 0 when silent!)
+            # 2. Preserves multi-word titles ("Witch Hat Atelier") perfectly without quote-stripping or truncation
+            bash_script = 'export PATH="$PATH:/c/Tools/bin:$HOME/bin"; if command -v ani-cli >/dev/null 2>&1; then ani-cli "$@"; elif [ -f "$HOME/bin/ani-cli" ]; then "$HOME/bin/ani-cli" "$@"; else "/c/Tools/bin/ani-cli" "$@"; fi'
+            cmd = [git_bash, "-l", "-c", bash_script, "ani-cli"] + argv[1:]
         else:
-            cmd = ["cmd.exe", "/k", "call"] + argv
+            cmd = ["cmd.exe", "/c", "call"] + argv
 
         subprocess.Popen(cmd, env=win_env, creationflags=creationflags, startupinfo=startupinfo)
 
@@ -640,6 +658,10 @@ class AetherBridgeHandler(http.server.BaseHTTPRequestHandler):
             return
 
         player = settings.get("player", "mpv")
+        if player == "vlc" and sys.platform == "win32":
+            # Map VLC to MPV on Windows for smooth, direct HLS playback
+            player = "mpv"
+
         if player not in ALLOWED_PLAYERS:
             self.send_json({"ok": False, "error": f"Unsupported player '{player}'. Allowed: {list(ALLOWED_PLAYERS)}"}, status=400)
             return
@@ -697,6 +719,8 @@ class AetherBridgeHandler(http.server.BaseHTTPRequestHandler):
 
             if player == "vlc":
                 argv.append("-v")
+            elif player == "mpv":
+                argv.append("--no-detach")
 
             if quality != "auto" and flags.get("quality"):
                 argv.extend(["-q", str(quality)])

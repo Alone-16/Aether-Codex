@@ -2250,3 +2250,12 @@ textarea.fin{resize:vertical;min-height:70px}
 .notif-card:hover {
   background: rgba(255, 255, 255, 0.04) !important;
 }
+
+/* ani-cli terminal launcher is strictly for desktop / laptop environments */
+@media (max-width: 768px) {
+  .m-act-ani-launcher,
+  .m-act-terminal {
+    display: none !important;
+  }
+}
+

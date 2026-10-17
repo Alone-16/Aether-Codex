@@ -242,12 +242,56 @@ async function renderSettingsPlugins(el) {
     return;
   }
 
+  const isDesktop = typeof registry.isDesktopEnvironment === 'function' ? registry.isDesktopEnvironment() : true;
   const isEnabled = registry.isPluginEnabled('aniLauncher');
+
+  if (!isDesktop) {
+    el.innerHTML = `
+      <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:14px">
+        <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div style="font-size:13px;font-weight:700;color:var(--tx)">Plugins & Extensions</div>
+            <span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:12px;background:rgba(56,189,248,0.12);color:#38bdf8;border:1px solid rgba(56,189,248,0.25)">
+              💻 Desktop Feature
+            </span>
+          </div>
+          <div style="font-size:11px;color:var(--mu);margin-top:2px">
+            Client-side desktop integrations for Aether Codex.
+          </div>
+        </div>
+        <div style="padding:16px">
+          <div style="display:flex;flex-direction:column;gap:12px;padding:16px;background:rgba(56,189,248,0.03);border:1px solid rgba(56,189,248,0.15);border-radius:10px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span style="font-size:26px">🖥</span>
+              <div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:13px;font-weight:700;color:var(--tx)">ani-cli Launcher</span>
+                  <span style="font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(255,255,255,0.08);color:var(--mu)">PC / Laptop Only</span>
+                </div>
+                <div style="font-size:11px;color:var(--mu);margin-top:3px;line-height:1.4">
+                  Stream anime directly in local terminal players (MPV/VLC). Designed specifically for PC and Laptop environments.
+                </div>
+              </div>
+            </div>
+            <div style="font-size:11.5px;color:var(--tx2);line-height:1.5;background:var(--surf2);padding:12px 14px;border-radius:8px;border:1px solid var(--brd)">
+              📱 <b>Desktop Only:</b> This plugin requires a local desktop terminal and Python bridge, so terminal playback actions are hidden on mobile & Android devices. Open Aether Codex on your PC or Laptop to configure and use terminal streaming.
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    return;
+  }
 
   el.innerHTML = `
     <div style="background:var(--surf);border:1px solid var(--brd);border-radius:var(--cr);overflow:hidden;margin-bottom:14px">
       <div style="padding:14px 16px;border-bottom:1px solid var(--brd)">
-        <div style="font-size:13px;font-weight:700;color:var(--tx)">Plugins & Extensions</div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="font-size:13px;font-weight:700;color:var(--tx)">Plugins & Extensions</div>
+          <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;background:rgba(56,189,248,0.12);color:#38bdf8;border:1px solid rgba(56,189,248,0.25)">
+            💻 Desktop & Laptop
+          </span>
+        </div>
         <div style="font-size:11px;color:var(--mu);margin-top:2px">
           Experimental client-side enhancements. Settings and tokens are stored locally on this device only.
         </div>
@@ -257,8 +301,11 @@ async function renderSettingsPlugins(el) {
           <div style="display:flex;align-items:center;gap:12px">
             <span style="font-size:22px;color:#38bdf8">⌨</span>
             <div>
-              <div style="font-size:13px;font-weight:700;color:var(--tx)">ani-cli Launcher</div>
-              <div style="font-size:11px;color:var(--mu)">Launch anime directly in a local terminal using ani-cli</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:13px;font-weight:700;color:var(--tx)">ani-cli Launcher</span>
+                <span style="font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:4px;background:rgba(56,189,248,0.1);color:#38bdf8">PC & Laptop</span>
+              </div>
+              <div style="font-size:11px;color:var(--mu);margin-top:2px">Launch anime directly in a local terminal using ani-cli</div>
             </div>
           </div>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--tx2)">

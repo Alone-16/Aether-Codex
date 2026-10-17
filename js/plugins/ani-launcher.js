@@ -17,7 +17,7 @@ export const defaultSettings = {
   audio: 'sub',
   searchTitle: 'english',
   autoSelect: true,
-  episodeMode: 'none',
+  episodeMode: 'next',
 };
 
 export const settingsSchema = {
@@ -111,8 +111,11 @@ export function generateSecureToken() {
 
 export function isSupportedPlatform() {
   if (typeof window === 'undefined') return true;
+  if (typeof window.AetherPlugins?.isDesktopEnvironment === 'function') {
+    return window.AetherPlugins.isDesktopEnvironment();
+  }
   const isPwa = window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator?.standalone === true;
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth && window.innerWidth < 640);
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent) || (window.innerWidth && window.innerWidth < 768);
   return !isPwa && !isMobile;
 }
 
@@ -243,7 +246,7 @@ export async function launchAnime(entry) {
   } else if (searchPref === 'romaji') {
     title = entry.title_romaji || entry.title;
   } else if (searchPref === 'native') {
-    title = entry.title_native || entry.title_ja || entry.title_japanese || entry.title;
+    title = entry.title_native || entry.title_ja || entry.title_japanese || entry.title_jp || entry.title;
   }
   title = (title || entry.title || '').trim();
 
@@ -252,8 +255,10 @@ export async function launchAnime(entry) {
   if (settings.episodeMode === 'next') {
     // Only use if reliable progress data is available
     const isCompleted = entry.status === 'completed' || entry.status === 'dropped';
-    const cur = parseInt(entry.epCur, 10);
-    const tot = parseInt(entry.epTot || 0, 10);
+    const curVal = entry.epCur ?? entry.ep_cur ?? 0;
+    const totVal = entry.epTot ?? entry.ep_tot ?? 0;
+    const cur = parseInt(curVal, 10);
+    const tot = parseInt(totVal, 10);
     const hasValidCur = !isNaN(cur) && cur >= 0;
 
     if (!isCompleted && hasValidCur && (!tot || cur < tot)) {
