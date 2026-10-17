@@ -60,7 +60,7 @@ ALLOWED_AUDIOS = {"sub", "dub"}
 
 
 def ensure_windows_player_paths():
-    """Ensure standard player install directories (VLC, MPV, Scoop) are in PATH on Windows."""
+    """Ensure standard player install directories (VLC, MPV, Scoop, bin) are in PATH on Windows."""
     if sys.platform != "win32":
         return
     candidate_dirs = [
@@ -70,7 +70,12 @@ def ensure_windows_player_paths():
         os.path.expanduser(r"~\scoop\apps\vlc\current"),
         os.path.expanduser(r"~\scoop\apps\mpv\current"),
         os.path.expanduser(r"~\scoop\shims"),
+        os.path.expanduser(r"~\bin"),
         r"C:\Tools\bin",
+        r"C:\Program Files\Git\bin",
+        r"C:\Program Files\Git\usr\bin",
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Git\bin"),
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Git\usr\bin"),
     ]
     current_path = os.environ.get("PATH", "")
     current_parts = [p.lower() for p in current_path.split(os.pathsep) if p]
@@ -83,6 +88,137 @@ def ensure_windows_player_paths():
 
 
 ensure_windows_player_paths()
+
+
+def find_git_bash():
+    """Locate Git Bash / Bash interpreter on host system."""
+    if sys.platform != "win32":
+        return shutil.which("bash")
+
+    candidates = [
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files\Git\usr\bin\bash.exe",
+        r"C:\Program Files (x86)\Git\bin\bash.exe",
+        r"C:\Program Files (x86)\Git\usr\bin\bash.exe",
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Git\bin\bash.exe"),
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Git\usr\bin\bash.exe"),
+        r"C:\msys64\usr\bin\bash.exe",
+        shutil.which("bash.exe"),
+        shutil.which("bash"),
+    ]
+    for c in candidates:
+        if c and os.path.isfile(c):
+            return os.path.abspath(c)
+
+    # Check Windows Registry for Git install location
+    try:
+        import winreg
+        for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+            for subkey in (r"SOFTWARE\GitForWindows", r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Git_is1"):
+                try:
+                    with winreg.OpenKey(root, subkey) as k:
+                        install_path, _ = winreg.QueryValueEx(k, "InstallPath")
+                        bash_cand = os.path.join(install_path, "bin", "bash.exe")
+                        if os.path.isfile(bash_cand):
+                            return os.path.abspath(bash_cand)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return None
+
+
+def find_ani_cli(bash_path=None):
+    """Find installed ani-cli binary, script, or cmd wrapper."""
+    cfg = load_or_create_config()
+    configured = cfg.get("ani_cli_path")
+    if configured and os.path.isfile(configured):
+        return configured
+
+    # Check direct PATH
+    p = shutil.which("ani-cli") or shutil.which("ani-cli.cmd") or shutil.which("ani-cli.bat")
+    if p:
+        return p
+
+    # Standard Windows & Unix locations
+    candidates = [
+        os.path.expanduser(r"~\bin\ani-cli"),
+        os.path.expanduser(r"~\bin\ani-cli.cmd"),
+        r"C:\Tools\bin\ani-cli",
+        r"C:\Tools\bin\ani-cli.cmd",
+        os.path.expanduser(r"~\scoop\shims\ani-cli.cmd"),
+        os.path.expanduser(r"~\scoop\apps\ani-cli\current\ani-cli"),
+        "/usr/local/bin/ani-cli",
+        "/usr/bin/ani-cli",
+        os.path.expanduser("~/.local/bin/ani-cli"),
+    ]
+    for c in candidates:
+        if c and os.path.isfile(c):
+            return os.path.abspath(c)
+
+    # Probe inside bash if on Windows
+    b = bash_path or find_git_bash()
+    if b and sys.platform == "win32":
+        try:
+            user_bin = os.path.expanduser(r"~\bin").replace("\\", "/")
+            if len(user_bin) >= 2 and user_bin[1] == ":":
+                user_bin = "/" + user_bin[0].lower() + user_bin[2:]
+            res = subprocess.run(
+                [b, "-lc", f'export PATH="$PATH:/c/Tools/bin:$HOME/bin:{user_bin}"; command -v ani-cli'],
+                capture_output=True, text=True, timeout=5, check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+            )
+            out = res.stdout.strip()
+            if out:
+                if len(out) >= 3 and out.startswith("/") and out[2] == "/":
+                    win_p = out[1].upper() + ":\\" + out[3:].replace("/", "\\")
+                    if os.path.isfile(win_p):
+                        return win_p
+                if os.path.isfile(out):
+                    return out
+        except Exception:
+            pass
+
+    return None
+
+
+def add_dir_to_user_path(directory):
+    """Add a directory to User PATH on Windows via registry and update current process PATH."""
+    if sys.platform != "win32":
+        return
+    directory = os.path.abspath(directory)
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment", 0, winreg.KEY_READ | winreg.KEY_WRITE) as key:
+            try:
+                curr_path, ptype = winreg.QueryValueEx(key, "Path")
+            except FileNotFoundError:
+                curr_path, ptype = "", winreg.REG_EXPAND_SZ
+
+            parts = [p for p in curr_path.split(";") if p]
+            if directory.lower() not in [p.lower() for p in parts]:
+                parts.append(directory)
+                new_path = ";".join(parts)
+                winreg.SetValueEx(key, "Path", 0, ptype, new_path)
+                try:
+                    import ctypes
+                    HWND_BROADCAST = 0xFFFF
+                    WM_SETTINGCHANGE = 0x001A
+                    SMTO_ABORTIFHUNG = 0x0002
+                    res = ctypes.c_ulong()
+                    ctypes.windll.user32.SendMessageTimeoutW(
+                        HWND_BROADCAST, WM_SETTINGCHANGE, 0, "Environment",
+                        SMTO_ABORTIFHUNG, 5000, ctypes.byref(res)
+                    )
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    curr_env = os.environ.get("PATH", "")
+    if directory.lower() not in [p.lower() for p in curr_env.split(os.pathsep) if p]:
+        os.environ["PATH"] = directory + os.pathsep + curr_env
 
 
 # ── Configuration Management ─────────────────────────────────────────
@@ -190,22 +326,7 @@ def detect_capabilities(config=None, force_refresh=False):
         return _CACHED_CAPABILITIES
 
     cfg = config or {}
-    ani_path = cfg.get("ani_cli_path") or ""
-
-    if not ani_path or not os.path.isfile(ani_path):
-        ani_path = shutil.which("ani-cli") or shutil.which("ani-cli.cmd") or ""
-
-    if not ani_path and sys.platform == "win32":
-        # Check standard Scoop / Tools paths on Windows
-        candidates = [
-            r"C:\Tools\bin\ani-cli.cmd",
-            os.path.expanduser(r"~\scoop\shims\ani-cli.cmd"),
-            os.path.expanduser(r"~\scoop\apps\ani-cli\current\ani-cli"),
-        ]
-        for c in candidates:
-            if os.path.isfile(c):
-                ani_path = c
-                break
+    ani_path = cfg.get("ani_cli_path") or find_ani_cli()
 
     version_str = None
     flags = {
@@ -271,11 +392,15 @@ def detect_capabilities(config=None, force_refresh=False):
                 term_available = True
                 break
     elif sys.platform == "win32":
-        if shutil.which("wt") or shutil.which("wt.exe"):
+        git_bash = find_git_bash()
+        if git_bash:
+            term_detected = "git-bash"
+            term_available = True
+        elif shutil.which("wt") or shutil.which("wt.exe"):
             term_detected = "wt"
             term_available = True
-        elif os.path.isfile(r"C:\Program Files\Git\bin\bash.exe") or shutil.which("bash"):
-            term_detected = "git-bash"
+        elif shutil.which("cmd") or shutil.which("cmd.exe"):
+            term_detected = "cmd"
             term_available = True
         elif shutil.which("wsl") or shutil.which("wsl.exe"):
             term_detected = "wsl"
@@ -378,21 +503,25 @@ def launch_in_terminal(argv, capabilities, config, extra_env=None):
         if extra_env:
             win_env.update(extra_env)
 
-        git_bash = None
-        for b_cand in [
-            r"C:\Program Files\Git\bin\bash.exe",
-            r"C:\Program Files\Git\usr\bin\bash.exe",
-            shutil.which("bash")
-        ]:
-            if b_cand and os.path.isfile(b_cand):
-                git_bash = b_cand
-                break
+        git_bash = find_git_bash()
 
         if git_bash:
             # Run Git Bash directly using "$@" argument forwarding:
             # 1. Completely eliminates intermediate cmd.exe windows (only 1 window ever opens, or 0 when silent!)
             # 2. Preserves multi-word titles ("Witch Hat Atelier") perfectly without quote-stripping or truncation
-            bash_script = 'export PATH="$PATH:/c/Tools/bin:$HOME/bin"; if command -v ani-cli >/dev/null 2>&1; then ani-cli "$@"; elif [ -f "$HOME/bin/ani-cli" ]; then "$HOME/bin/ani-cli" "$@"; else "/c/Tools/bin/ani-cli" "$@"; fi'
+            # 3. Executes the underlying bash ani-cli script directly, bypassing any .cmd wrappers
+            user_bin = os.path.expanduser(r"~\bin").replace("\\", "/")
+            if len(user_bin) >= 2 and user_bin[1] == ":":
+                user_bin = "/" + user_bin[0].lower() + user_bin[2:]
+
+            bash_script = (
+                f'export PATH="$PATH:/c/Tools/bin:$HOME/bin:{user_bin}"; '
+                'if command -v ani-cli >/dev/null 2>&1; then ani-cli "$@"; '
+                'elif [ -f "$HOME/bin/ani-cli" ]; then "$HOME/bin/ani-cli" "$@"; '
+                'elif [ -f "/c/Tools/bin/ani-cli" ]; then "/c/Tools/bin/ani-cli" "$@"; '
+                f'elif [ -f "{user_bin}/ani-cli" ]; then "{user_bin}/ani-cli" "$@"; '
+                'else ani-cli "$@"; fi'
+            )
             cmd = [git_bash, "-l", "-c", bash_script, "ani-cli"] + argv[1:]
         else:
             cmd = ["cmd.exe", "/c", "call"] + argv
@@ -833,7 +962,173 @@ def run_bridge_server(token, origin, port, dry_run=False):
         server.server_close()
 
 
-# ── Autostart Management ─────────────────────────────────────────────
+# ── Setup & Autostart Management ─────────────────────────────────────
+def ask_yes_no(prompt, default=True, auto_yes=False):
+    """Prompt user for a yes/no answer or accept default in non-interactive/automated runs."""
+    if auto_yes:
+        sys.stdout.write(f"{prompt} [{'Y/n' if default else 'y/N'}]: Y (auto)\n")
+        return True
+    if not sys.stdin.isatty():
+        return default
+    suffix = " [Y/n]: " if default else " [y/N]: "
+    try:
+        reply = input(prompt + suffix).strip().lower()
+        if not reply:
+            return default
+        return reply in ("y", "yes")
+    except (EOFError, KeyboardInterrupt):
+        sys.stdout.write("\n")
+        return False
+
+
+def run_setup(auto_yes=False):
+    """Interactive first-time setup:
+    1. Checks if bash exists; if not, asks to install Git Bash.
+    2. Checks if ani-cli exists; if not, asks to install ani-cli.
+    3. Checks if mpv exists; if not, asks to install mpv.
+    4. Sets up autostart to launch bridge silently in background on login.
+    """
+    sys.stdout.write("\n=======================================================\n")
+    sys.stdout.write("      Aether Bridge - First-Time Setup Wizard          \n")
+    sys.stdout.write("=======================================================\n\n")
+
+    ensure_windows_player_paths()
+
+    # 1. Check Bash
+    sys.stdout.write("--> [1/4] Checking for Bash...\n")
+    bash_path = find_git_bash()
+    if bash_path:
+        sys.stdout.write(f"    [OK] Bash detected: {bash_path}\n\n")
+    else:
+        sys.stdout.write("    [!] Bash was not found on your system.\n")
+        sys.stdout.write("        ani-cli is a POSIX shell script and requires Bash (Git Bash) on Windows.\n")
+        if ask_yes_no("    Install Git for Windows (includes Git Bash) now?", default=True, auto_yes=auto_yes):
+            installed = False
+            if shutil.which("winget"):
+                sys.stdout.write("    Installing Git via winget...\n")
+                res = subprocess.run([
+                    "winget", "install", "--id", "Git.Git", "-e",
+                    "--source", "winget", "--accept-source-agreements", "--accept-package-agreements"
+                ], check=False)
+                installed = (res.returncode == 0)
+            elif shutil.which("scoop"):
+                sys.stdout.write("    Installing Git via scoop...\n")
+                res = subprocess.run(["scoop", "install", "git"], check=False)
+                installed = (res.returncode == 0)
+
+            ensure_windows_player_paths()
+            bash_path = find_git_bash()
+            if bash_path:
+                sys.stdout.write(f"    [OK] Git Bash installed: {bash_path}\n\n")
+            elif not installed:
+                sys.stdout.write("    [!] Could not install Git automatically.\n")
+                sys.stdout.write("        Please install Git for Windows manually from: https://git-scm.com/download/win\n\n")
+        else:
+            sys.stdout.write("    [-] Skipped Git Bash installation.\n\n")
+
+    # 2. Check ani-cli
+    sys.stdout.write("--> [2/4] Checking for ani-cli...\n")
+    ani_path = find_ani_cli(bash_path=bash_path)
+    if ani_path:
+        sys.stdout.write(f"    [OK] ani-cli detected: {ani_path}\n\n")
+    else:
+        sys.stdout.write("    [!] ani-cli was not found on your system.\n")
+        if ask_yes_no("    Install ani-cli now?", default=True, auto_yes=auto_yes):
+            installed = False
+            if shutil.which("scoop"):
+                sys.stdout.write("    Installing ani-cli via scoop...\n")
+                res = subprocess.run(["scoop", "install", "ani-cli"], check=False)
+                installed = (res.returncode == 0)
+
+            if not installed:
+                user_bin = os.path.expanduser(r"~\bin")
+                os.makedirs(user_bin, exist_ok=True)
+                target_script = os.path.join(user_bin, "ani-cli")
+                sys.stdout.write(f"    Downloading latest ani-cli to {target_script}...\n")
+                try:
+                    import urllib.request
+                    url = "https://raw.githubusercontent.com/pystardust/ani-cli/master/ani-cli"
+                    req = urllib.request.Request(url, headers={"User-Agent": "AetherBridgeSetup/1.0"})
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        content = resp.read()
+                    content = content.replace(b"\r\n", b"\n")
+                    with open(target_script, "wb") as f:
+                        f.write(content)
+
+                    if sys.platform == "win32":
+                        cmd_wrapper = os.path.join(user_bin, "ani-cli.cmd")
+                        bash_target = bash_path or "bash.exe"
+                        with open(cmd_wrapper, "w", encoding="utf-8") as f:
+                            f.write(
+                                '@echo off\r\n'
+                                'setlocal\r\n'
+                                f'set "BASH_EXE={bash_target}"\r\n'
+                                'if not exist "%BASH_EXE%" set "BASH_EXE=bash.exe"\r\n'
+                                '"%BASH_EXE%" -lc "ani-cli %*"\r\n'
+                            )
+                        add_dir_to_user_path(user_bin)
+                    else:
+                        os.chmod(target_script, 0o755)
+
+                    installed = True
+                    sys.stdout.write(f"    [OK] Downloaded and configured ani-cli: {target_script}\n")
+                except Exception as e:
+                    sys.stdout.write(f"    [!] Failed to download ani-cli: {e}\n")
+
+            ensure_windows_player_paths()
+            ani_path = find_ani_cli(bash_path=bash_path)
+            if ani_path:
+                sys.stdout.write(f"    [OK] ani-cli verified: {ani_path}\n\n")
+            else:
+                sys.stdout.write("    [!] Could not verify ani-cli. Please restart your shell.\n\n")
+        else:
+            sys.stdout.write("    [-] Skipped ani-cli installation.\n\n")
+
+    # 3. Check MPV
+    sys.stdout.write("--> [3/4] Checking for video player (mpv)...\n")
+    mpv_path = shutil.which("mpv") or shutil.which("mpv.exe")
+    if mpv_path:
+        sys.stdout.write(f"    [OK] mpv detected: {mpv_path}\n\n")
+    else:
+        sys.stdout.write("    [!] mpv was not found on your system.\n")
+        sys.stdout.write("        mpv is the recommended player for Aether Codex (direct HLS, sound & subtitles).\n")
+        if ask_yes_no("    Install mpv now?", default=True, auto_yes=auto_yes):
+            if sys.platform == "win32":
+                if shutil.which("winget"):
+                    sys.stdout.write("    Installing mpv via winget...\n")
+                    subprocess.run([
+                        "winget", "install", "--id", "shinchiro.mpv", "-e",
+                        "--accept-source-agreements", "--accept-package-agreements"
+                    ], check=False)
+                elif shutil.which("scoop"):
+                    sys.stdout.write("    Installing mpv via scoop...\n")
+                    subprocess.run(["scoop", "install", "mpv"], check=False)
+            elif sys.platform.startswith("linux"):
+                sys.stdout.write("    Please install mpv via: sudo pacman -S mpv (or sudo apt install mpv)\n")
+
+            ensure_windows_player_paths()
+            mpv_path = shutil.which("mpv") or shutil.which("mpv.exe")
+            if mpv_path:
+                sys.stdout.write(f"    [OK] mpv installed: {mpv_path}\n\n")
+        else:
+            sys.stdout.write("    [-] Skipped mpv installation.\n\n")
+
+    # 4. Autostart
+    sys.stdout.write("--> [4/4] Autostart Configuration...\n")
+    if ask_yes_no("    Configure Aether Bridge to launch automatically in background on login?", default=True, auto_yes=auto_yes):
+        install_autostart()
+    else:
+        sys.stdout.write("    [-] Skipped autostart. You can start the bridge manually anytime with: python aether-bridge.py\n\n")
+
+    # Refresh cached capabilities so the running process picks up everything
+    detect_capabilities(force_refresh=True)
+
+    sys.stdout.write("=======================================================\n")
+    sys.stdout.write("          Aether Bridge Setup Complete!                \n")
+    sys.stdout.write("=======================================================\n\n")
+    return 0
+
+
 def install_autostart():
     script_path = os.path.abspath(__file__)
     if sys.platform == "win32":
@@ -965,6 +1260,8 @@ def uninstall_autostart():
 # ── CLI Entrypoint ───────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description="Aether Codex ani-cli Local Bridge")
+    parser.add_argument("--setup", action="store_true", help="Interactive first-time setup: check & install dependencies and autostart")
+    parser.add_argument("-y", "--yes", action="store_true", help="Automatically accept all setup prompts without asking")
     parser.add_argument("--dry-run", action="store_true", help="Report argv without launching terminal")
     parser.add_argument("--port", type=int, default=None, help=f"Listening port (default: {CONFIGURED_PORT})")
     parser.add_argument("--token", type=str, default=None, help="Authentication token override")
@@ -979,7 +1276,21 @@ def main():
         sys.stdout.write(f"aether-bridge {BRIDGE_VERSION}\n")
         return
 
+    if args.setup:
+        code = run_setup(auto_yes=args.yes)
+        sys.exit(code)
+
     if args.install_autostart:
+        # If run interactively and bash or ani-cli is missing, offer setup wizard
+        if sys.stdin.isatty():
+            caps = detect_capabilities()
+            bash_found = bool(find_git_bash())
+            ani_found = bool(caps.get("ani_cli", {}).get("available"))
+            if not bash_found or not ani_found:
+                sys.stdout.write("[!] Missing required dependencies for ani-cli bridge.\n")
+                if ask_yes_no("Run first-time setup wizard to configure dependencies now?", default=True, auto_yes=args.yes):
+                    code = run_setup(auto_yes=args.yes)
+                    sys.exit(code)
         code = install_autostart()
         sys.exit(code)
 

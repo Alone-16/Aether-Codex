@@ -45,7 +45,7 @@ class TestAetherBridge(unittest.TestCase):
 
         # Mock detect_capabilities to return predictable capabilities for unit tests
         cls.original_detect = bridge.detect_capabilities
-        bridge.detect_capabilities = lambda cfg=None: {
+        bridge.detect_capabilities = lambda cfg=None, **kwargs: {
             "ok": True,
             "version": "1.0.0",
             "ani_cli": {
@@ -403,6 +403,27 @@ class TestAetherBridge(unittest.TestCase):
             self.assertIn("not found", body.get("error", ""))
         finally:
             bridge.detect_capabilities = orig
+
+    def test_find_git_bash_and_ani_cli(self):
+        bash = bridge.find_git_bash()
+        if sys.platform == "win32":
+            self.assertTrue(bash is None or isinstance(bash, str))
+            if bash:
+                self.assertTrue(os.path.isfile(bash))
+
+        ani = bridge.find_ani_cli()
+        self.assertTrue(ani is None or isinstance(ani, str))
+        if ani:
+            self.assertTrue(os.path.isfile(ani))
+
+    def test_run_setup_non_interactive(self):
+        orig_install = bridge.install_autostart
+        bridge.install_autostart = lambda: 0
+        try:
+            code = bridge.run_setup(auto_yes=True)
+            self.assertEqual(code, 0)
+        finally:
+            bridge.install_autostart = orig_install
 
 
 if __name__ == "__main__":

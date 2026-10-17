@@ -501,28 +501,21 @@ export function renderSettingsPanel(container, settings, saveFn) {
       <details style="margin-top:14px;background:rgba(255,255,255,0.02);border:1px solid var(--brd);border-radius:8px;padding:10px 14px">
         <summary style="cursor:pointer;font-weight:600;font-size:12px;color:var(--tx)">📖 Windows Setup Instructions (One-Time Setup)</summary>
         <div style="font-size:11px;color:var(--mu);line-height:1.6;margin-top:10px">
-          <b>Prerequisites:</b>
-          <ul style="margin:4px 0 10px 20px">
-            <li>Install Python 3.8+ (from python.org or <code>winget install Python.Python.3</code>)</li>
-            <li>Install ani-cli (via Scoop: <code>scoop install ani-cli</code> or Git Bash)</li>
-            <li>Install mpv (<code>scoop install mpv</code> or winget)</li>
-          </ul>
-          <b>Automatic One-Time Autostart Setup:</b>
-          <p>Run this single command in your terminal. It configures the bridge to launch silently in the background whenever you log in:</p>
-          <pre style="background:var(--surf2);padding:8px 12px;border-radius:6px;overflow-x:auto;margin:6px 0;font-family:monospace">python aether-bridge.py --install-autostart</pre>
-          <p style="font-size:10px;opacity:0.7">To uninstall autostart later: <code>python aether-bridge.py --uninstall-autostart</code></p>
+          <b>Interactive First-Time Setup Wizard:</b>
+          <p>Run this command in your terminal. It checks if Git Bash, ani-cli, and MPV are installed, offers to install any missing tools automatically, and configures silent background autostart:</p>
+          <pre style="background:var(--surf2);padding:8px 12px;border-radius:6px;overflow-x:auto;margin:6px 0;font-family:monospace">python aether-bridge.py --setup</pre>
+          <p style="font-size:10px;opacity:0.7">Or for autostart only: <code>python aether-bridge.py --install-autostart</code> (to remove: <code>--uninstall-autostart</code>)</p>
+          <p style="font-size:10px;opacity:0.7">Prerequisites: Python 3.8+ (from python.org or <code>winget install Python.Python.3</code>)</p>
         </div>
       </details>
 
       <details style="margin-top:8px;background:rgba(255,255,255,0.02);border:1px solid var(--brd);border-radius:8px;padding:10px 14px">
         <summary style="cursor:pointer;font-weight:600;font-size:12px;color:var(--tx)">📖 Arch Linux Setup Instructions (One-Time Setup)</summary>
         <div style="font-size:11px;color:var(--mu);line-height:1.6;margin-top:10px">
-          <b>Prerequisites:</b>
-          <pre style="background:var(--surf2);padding:8px 12px;border-radius:6px;overflow-x:auto;margin:6px 0">sudo pacman -S ani-cli mpv kitty  # or alacritty/foot/wezterm</pre>
-          <b>Automatic One-Time Autostart Setup:</b>
-          <p>Run this command to automatically install and start the systemd user service:</p>
-          <pre style="background:var(--surf2);padding:8px 12px;border-radius:6px;overflow-x:auto;margin:6px 0;font-family:monospace">python aether-bridge.py --install-autostart</pre>
-          <p style="font-size:10px;opacity:0.7">To uninstall autostart later: <code>python aether-bridge.py --uninstall-autostart</code></p>
+          <b>Interactive First-Time Setup Wizard:</b>
+          <p>Run this command to check dependencies and configure the systemd user service:</p>
+          <pre style="background:var(--surf2);padding:8px 12px;border-radius:6px;overflow-x:auto;margin:6px 0;font-family:monospace">python aether-bridge.py --setup</pre>
+          <p style="font-size:10px;opacity:0.7">Prerequisites: <code>sudo pacman -S ani-cli mpv</code></p>
         </div>
       </details>
 
