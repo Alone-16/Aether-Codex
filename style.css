@@ -34,7 +34,7 @@ body{font-family:var(--fb);background:var(--bg);color:var(--tx);font-size:var(--
 [data-density="compact"] .dc{padding:10px 12px}
 [data-density="compact"] .ni{width:40px;height:40px}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--brd2);border-radius:2px}
-button{cursor:pointer;font-family:inherit;border:none;background:none}
+button{cursor:pointer;font-family:inherit;border:none;background:none;color:inherit}
 input,select,textarea{font-family:inherit;color:var(--tx)}
 
 /* ═══ LAYOUT ═══ */
@@ -237,6 +237,22 @@ html[data-section="media"] #content{padding:22px 22px 28px}
 .btn-save{background:linear-gradient(135deg, var(--ac) 0%, var(--ac2) 100%);color:#000;border-radius:6px;padding:9px 24px;font-size:13px;font-weight:800;transition:all .2s cubic-bezier(0.2,0.8,0.2,1);border:none;box-shadow:0 4px 15px rgba(var(--ac-rgb),0.3);cursor:pointer}
 .btn-save:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(var(--ac-rgb),0.4);filter:brightness(1.1)}
 .btn-save:active{transform:translateY(0);box-shadow:0 2px 8px rgba(var(--ac-rgb),0.3);filter:brightness(1)}
+
+/* ── Universal Button Classes ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:rgba(255,255,255,0.05);color:var(--tx);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:all .2s cubic-bezier(0.2,0.8,0.2,1);user-select:none;white-space:nowrap;box-sizing:border-box}
+.btn:hover{background:rgba(255,255,255,0.1);color:#fff;border-color:rgba(255,255,255,0.22);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.25)}
+.btn:active{transform:translateY(0)}
+.btn:disabled{opacity:0.55;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* ── ani-cli Launcher Bridge Buttons ── */
+.btn-ani-test{background:rgba(56,189,248,0.12);color:#38bdf8;border:1px solid rgba(56,189,248,0.32);border-radius:6px;padding:0 16px;height:38px;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.2);cursor:pointer}
+.btn-ani-test:hover:not(:disabled){background:rgba(56,189,248,0.22);color:#ffffff;border-color:rgba(56,189,248,0.6);box-shadow:0 4px 16px rgba(56,189,248,0.25);transform:translateY(-1px)}
+.btn-ani-test:active:not(:disabled){transform:translateY(0);box-shadow:0 1px 4px rgba(0,0,0,0.2)}
+.btn-ani-tool{background:rgba(255,255,255,0.05);color:var(--tx);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:0 13px;height:38px;font-size:12px;font-weight:600;cursor:pointer}
+.btn-ani-tool:hover{background:rgba(255,255,255,0.1);color:#fff;border-color:rgba(255,255,255,0.25);transform:translateY(-1px)}
+.btn-ani-regen{background:rgba(251,113,133,0.08);color:#fb7185;border:1px solid rgba(251,113,133,0.25)}
+.btn-ani-regen:hover{background:rgba(251,113,133,0.18);color:#f43f5e;border-color:rgba(251,113,133,0.45)}
+@keyframes ani-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
 /* ═══ FORM ═══ */
 .form-wrap{padding:20px;flex:1;overflow-y:auto;min-height:0;background:radial-gradient(ellipse at top right, rgba(var(--ac-rgb),0.03) 0%, transparent 60%)}

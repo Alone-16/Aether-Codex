@@ -143,6 +143,8 @@ class TestAetherBridge(unittest.TestCase):
             "http://127.0.0.1:8787",
             "http://localhost",
             "http://127.0.0.1",
+            "null",
+            "file://",
         ]:
             status, headers, body, _ = self.request("GET", "/ping", headers={"Origin": dev_origin})
             self.assertEqual(status, 200, f"Failed for dev origin {dev_origin}")

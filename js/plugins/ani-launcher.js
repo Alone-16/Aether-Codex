@@ -182,12 +182,17 @@ export async function testBridgeConnection(bridgeUrl, token) {
   const authToken = token || activeSettings.token;
 
   try {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 6000) : null;
+
     const pingRes = await fetch(`${url}/ping`, {
       method: 'GET',
       headers: {
         'X-Aether-Token': authToken || '',
       },
+      signal: controller ? controller.signal : undefined,
     });
+    if (timeoutId) clearTimeout(timeoutId);
 
     if (!pingRes.ok) {
       if (pingRes.status === 401) throw new Error('Authentication failed: Invalid token');
@@ -200,10 +205,14 @@ export async function testBridgeConnection(bridgeUrl, token) {
     // Fetch capabilities
     let caps = null;
     try {
+      const capsController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const capsTimeout = capsController ? setTimeout(() => capsController.abort(), 4000) : null;
       const capsRes = await fetch(`${url}/capabilities`, {
         method: 'GET',
         headers: { 'X-Aether-Token': authToken || '' },
+        signal: capsController ? capsController.signal : undefined,
       });
+      if (capsTimeout) clearTimeout(capsTimeout);
       if (capsRes.ok) {
         caps = await capsRes.json();
       }
@@ -215,7 +224,13 @@ export async function testBridgeConnection(bridgeUrl, token) {
     lastConnectionStatus = { ok: true, version: pingData.version, os: pingData.os, capabilities: caps };
     return lastConnectionStatus;
   } catch (err) {
-    lastConnectionStatus = { ok: false, error: err.message || 'Connection failed' };
+    let msg = err.message || 'Connection failed';
+    if (err.name === 'AbortError') {
+      msg = `Connection timed out (bridge not reachable at ${url})`;
+    } else if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
+      msg = `Cannot reach bridge at ${url}. Ensure aether-bridge.py is running`;
+    }
+    lastConnectionStatus = { ok: false, error: msg };
     return lastConnectionStatus;
   }
 }
@@ -399,9 +414,12 @@ export function renderSettingsPanel(container, settings, saveFn) {
       <!-- Bridge URL -->
       <div style="margin-bottom:14px">
         <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--mu);margin-bottom:5px">Bridge URL</label>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;align-items:stretch">
           <input class="fin" id="ani-bridge-url" value="${esc(settings.bridgeUrl || 'http://127.0.0.1:47619')}" style="flex:1" placeholder="http://127.0.0.1:47619">
-          <button class="btn" id="ani-test-btn" style="padding:0 14px;white-space:nowrap;font-size:12px;font-weight:600">Test Connection</button>
+          <button class="btn btn-ani-test" id="ani-test-btn" type="button" style="padding:0 16px;height:38px;white-space:nowrap;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:rgba(56,189,248,0.12);color:#38bdf8;border:1px solid rgba(56,189,248,0.35);border-radius:6px;cursor:pointer;transition:all .2s ease" title="Test connection to bridge">
+            <span class="ani-btn-icon" style="font-size:13px;line-height:1">⚡</span>
+            <span class="ani-btn-text">Test Connection</span>
+          </button>
         </div>
         <div style="font-size:10px;color:var(--mu);margin-top:4px">Binds to local loopback 127.0.0.1 only. Never exposes port to network.</div>
       </div>
@@ -409,11 +427,11 @@ export function renderSettingsPanel(container, settings, saveFn) {
       <!-- Authentication Token -->
       <div style="margin-bottom:14px">
         <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--mu);margin-bottom:5px">Authentication Token</label>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;align-items:stretch">
           <input class="fin" id="ani-token" type="password" value="${esc(settings.token || '')}" style="flex:1;font-family:monospace;letter-spacing:1px" readonly>
-          <button class="btn" id="ani-toggle-token-btn" style="padding:0 10px;font-size:12px" title="Show/Hide Token">👁</button>
-          <button class="btn" id="ani-copy-token-btn" style="padding:0 12px;font-size:12px;font-weight:600">Copy</button>
-          <button class="btn" id="ani-regen-token-btn" style="padding:0 12px;font-size:12px;color:#fb7185" title="Regenerate Token">Regen</button>
+          <button class="btn btn-ani-tool" id="ani-toggle-token-btn" type="button" style="padding:0 12px;height:38px;font-size:13px;background:rgba(255,255,255,0.05);color:var(--tx);border:1px solid rgba(255,255,255,0.12);border-radius:6px;cursor:pointer;transition:all .2s" title="Show/Hide Token">👁</button>
+          <button class="btn btn-ani-tool" id="ani-copy-token-btn" type="button" style="padding:0 14px;height:38px;font-size:12px;font-weight:600;background:rgba(255,255,255,0.05);color:var(--tx);border:1px solid rgba(255,255,255,0.12);border-radius:6px;cursor:pointer;transition:all .2s" title="Copy Token">Copy</button>
+          <button class="btn btn-ani-tool btn-ani-regen" id="ani-regen-token-btn" type="button" style="padding:0 14px;height:38px;font-size:12px;font-weight:600;background:rgba(251,113,133,0.08);color:#fb7185;border:1px solid rgba(251,113,133,0.25);border-radius:6px;cursor:pointer;transition:all .2s" title="Regenerate Token">Regen</button>
         </div>
         <div style="font-size:10px;color:var(--mu);margin-top:4px">Stored locally on this device. Never sent to cloud database or serverless worker.</div>
       </div>
@@ -580,13 +598,25 @@ export function renderSettingsPanel(container, settings, saveFn) {
 
   // Copy token
   copyTokenBtn.onclick = () => {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(tokenInp.value);
+    const val = tokenInp.value;
+    const showCopied = () => {
+      copyTokenBtn.innerHTML = '<span style="color:#4ade80">✓ Copied</span>';
       toast('✓ Token copied to clipboard', '#4ade80');
+      setTimeout(() => {
+        copyTokenBtn.textContent = 'Copy';
+      }, 2000);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(val).then(showCopied).catch(() => {
+        tokenInp.select();
+        document.execCommand('copy');
+        showCopied();
+      });
     } else {
       tokenInp.select();
       document.execCommand('copy');
-      toast('✓ Token copied', '#4ade80');
+      showCopied();
     }
   };
 
@@ -605,23 +635,97 @@ export function renderSettingsPanel(container, settings, saveFn) {
     downloadBridgeScript(activeSettings);
   };
 
+  // Helper to dynamically update capability flags without blowing away the user's form
+  function updateCapabilityUI(caps) {
+    if (!caps) return;
+    const aniFlags = caps.ani_cli?.flags || {};
+    const players = caps.players || {};
+
+    const vlcOpt = container.querySelector('#ani-player option[value="vlc"]');
+    if (vlcOpt) {
+      const vlcSupported = Boolean(aniFlags.vlc && players.vlc);
+      vlcOpt.disabled = !vlcSupported;
+      vlcOpt.textContent = `VLC ${!vlcSupported ? '(Unavailable)' : ''}`;
+    }
+
+    const qualitySelEl = container.querySelector('#ani-quality');
+    if (qualitySelEl) {
+      qualitySelEl.disabled = !aniFlags.quality;
+    }
+
+    const dubOpt = container.querySelector('#ani-audio option[value="dub"]');
+    if (dubOpt) {
+      dubOpt.disabled = !aniFlags.dub;
+      dubOpt.textContent = `Dub (English) ${!aniFlags.dub ? '(Unavailable)' : ''}`;
+    }
+  }
+
+  function resetTestBtn() {
+    testBtn.disabled = false;
+    testBtn.style.opacity = '1';
+    testBtn.style.background = 'rgba(56,189,248,0.12)';
+    testBtn.style.color = '#38bdf8';
+    testBtn.style.borderColor = 'rgba(56,189,248,0.35)';
+    testBtn.innerHTML = `
+      <span class="ani-btn-icon" style="font-size:13px;line-height:1">⚡</span>
+      <span class="ani-btn-text">Test Connection</span>
+    `;
+  }
+
   // Test connection
   testBtn.onclick = async () => {
+    // 1. Sync current inputs so settings are up-to-date and saved
+    update();
+
     testBtn.disabled = true;
-    testBtn.textContent = 'Testing...';
+    testBtn.style.opacity = '0.8';
+    testBtn.innerHTML = `
+      <span style="display:inline-block;animation:ani-spin 1s linear infinite;line-height:1">⟳</span>
+      <span class="ani-btn-text">Testing...</span>
+    `;
+
     const res = await testBridgeConnection(urlInp.value.trim(), tokenInp.value.trim());
-    testBtn.disabled = false;
-    testBtn.textContent = 'Test Connection';
 
     const indicator = container.querySelector('#bridge-status-indicator');
     if (res.ok) {
-      indicator.innerHTML = `<span style="color:#4ade80">● Connected</span> <span style="font-size:10px;opacity:0.6">(v${res.version})</span>`;
+      testBtn.disabled = false;
+      testBtn.style.opacity = '1';
+      testBtn.style.background = 'rgba(74,222,128,0.18)';
+      testBtn.style.color = '#4ade80';
+      testBtn.style.borderColor = 'rgba(74,222,128,0.45)';
+      testBtn.innerHTML = `
+        <span style="line-height:1">✓</span>
+        <span class="ani-btn-text">Connected</span>
+      `;
+
+      if (indicator) {
+        indicator.innerHTML = `<span style="color:#4ade80">● Connected</span> <span style="font-size:10px;opacity:0.6">(v${res.version})</span>`;
+      }
       toast('✓ Bridge connection successful!', '#4ade80');
-      // Re-render settings to reflect any newly discovered capabilities
-      renderSettingsPanel(container, activeSettings, saveFn);
+      updateCapabilityUI(res.capabilities);
+
+      setTimeout(() => {
+        resetTestBtn();
+      }, 2500);
     } else {
-      indicator.innerHTML = `<span style="color:#f87171">● Disconnected</span>`;
+      testBtn.disabled = false;
+      testBtn.style.opacity = '1';
+      testBtn.style.background = 'rgba(248,113,113,0.18)';
+      testBtn.style.color = '#f87171';
+      testBtn.style.borderColor = 'rgba(248,113,113,0.45)';
+      testBtn.innerHTML = `
+        <span style="line-height:1">✕</span>
+        <span class="ani-btn-text">Failed</span>
+      `;
+
+      if (indicator) {
+        indicator.innerHTML = `<span style="color:#f87171">● Disconnected</span>`;
+      }
       toast(`Bridge error: ${res.error}`, '#fb7185');
+
+      setTimeout(() => {
+        resetTestBtn();
+      }, 3000);
     }
   };
 

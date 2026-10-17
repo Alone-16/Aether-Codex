@@ -378,4 +378,42 @@ test.describe('ani-cli Launcher Plugin E2E Tests', () => {
     expect(overhead).toBeLessThan(35);
   });
 
+  test('9. Test Connection button is visible, styled, and interactive', async ({ page }) => {
+    await page.goto('/#/settings');
+    await page.waitForLoadState('networkidle');
+
+    await page.click('button.stab:has-text("Plugins")');
+    await expect(page.locator('text=Plugins & Extensions')).toBeVisible();
+
+    const toggle = page.locator('#toggle-ani-launcher');
+    if (!await toggle.isChecked()) {
+      await toggle.check();
+    }
+    await expect(page.locator('#ani-test-btn')).toBeVisible();
+
+    const testBtn = page.locator('#ani-test-btn');
+    const color = await testBtn.evaluate(el => window.getComputedStyle(el).color);
+    // Ensure text is NOT black (#000 or rgb(0, 0, 0))
+    expect(color).not.toBe('rgb(0, 0, 0)');
+
+    // Mock bridge /ping and /capabilities
+    await page.route('http://127.0.0.1:47619/ping', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, version: '1.0.0', os: 'win32' }),
+      });
+    });
+    await page.route('http://127.0.0.1:47619/capabilities', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, version: '1.0.0', ani_cli: { available: true, flags: {} } }),
+      });
+    });
+
+    await testBtn.click();
+    await expect(page.locator('#bridge-status-indicator')).toContainText('Connected');
+  });
+
 });

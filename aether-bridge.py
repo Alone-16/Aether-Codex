@@ -593,6 +593,10 @@ class AetherBridgeHandler(http.server.BaseHTTPRequestHandler):
         if dev_regex.match(req_origin):
             return req_origin
 
+        # Check local file & null origins
+        if req_origin in ("null", "file://"):
+            return req_origin
+
         return None
 
     def validate_request_security(self, require_token=True):
