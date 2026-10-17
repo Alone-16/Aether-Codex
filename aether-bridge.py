@@ -866,7 +866,28 @@ def install_autostart():
         sys.stdout.write(f"  Startup Launcher: {vbs_path}\n")
         sys.stdout.write(f"  Target Script:    {script_path}\n")
         sys.stdout.write(f"  Interpreter:      {pythonw} (Silent background execution)\n\n")
-        sys.stdout.write("The bridge will now start automatically in the background whenever you log in.\n")
+
+        # Check if bridge is already running, if not launch it immediately
+        port = CONFIGURED_PORT if isinstance(CONFIGURED_PORT, int) else 47619
+        already_running = False
+        try:
+            import urllib.request
+            req = urllib.request.Request(f"http://127.0.0.1:{port}/ping")
+            with urllib.request.urlopen(req, timeout=1):
+                already_running = True
+        except Exception:
+            already_running = False
+
+        if not already_running:
+            try:
+                subprocess.Popen(["wscript.exe", vbs_path])
+                sys.stdout.write("  Status:           Started immediately in background\n")
+            except Exception:
+                pass
+        else:
+            sys.stdout.write("  Status:           Bridge is already running\n")
+
+        sys.stdout.write("\nThe bridge is active and will start automatically in the background whenever you log in.\n")
         sys.stdout.write("To remove autostart later, run: python aether-bridge.py --uninstall-autostart\n")
         return 0
 

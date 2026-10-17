@@ -56,7 +56,7 @@ test('Bridge script generation from template', async (t) => {
   });
 
   await t.test('Compiles and executes cleanly with python', () => {
-    const outPath = path.join(REPO_ROOT, 'aether-bridge.py');
+    const outPath = path.join(REPO_ROOT, 'tests', 'bridge', `temp_test_bridge_${Date.now()}.py`);
     fs.writeFileSync(outPath, generated, 'utf-8');
 
     try {
@@ -67,6 +67,8 @@ test('Bridge script generation from template', async (t) => {
       assert.ok(cfgOut.includes('ani_cli_path'), 'Must output config');
     } catch (err) {
       assert.fail(`Execution failed: ${err.message}`);
+    } finally {
+      try { fs.unlinkSync(outPath); } catch (_) {}
     }
   });
 });

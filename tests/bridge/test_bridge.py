@@ -230,7 +230,7 @@ class TestAetherBridge(unittest.TestCase):
             },
         )
         self.assertEqual(status, 200)
-        expected_argv = ["ani-cli", "-S", "1", "Frieren: Beyond Journey's End"]
+        expected_argv = ["ani-cli", "--no-detach", "-S", "1", "Frieren: Beyond Journey's End"]
         self.assertEqual(body.get("argv"), expected_argv)
 
     def test_full_options_argv(self):
@@ -249,7 +249,10 @@ class TestAetherBridge(unittest.TestCase):
             },
         )
         self.assertEqual(status, 200)
-        expected_argv = ["ani-cli", "-v", "-q", "1080", "--dub", "-S", "1", "-e", "12", "Steins;Gate"]
+        if sys.platform == "win32":
+            expected_argv = ["ani-cli", "--no-detach", "-q", "1080", "--dub", "-S", "1", "-e", "12", "Steins;Gate"]
+        else:
+            expected_argv = ["ani-cli", "-v", "-q", "1080", "--dub", "-S", "1", "-e", "12", "Steins;Gate"]
         self.assertEqual(body.get("argv"), expected_argv)
 
     def test_no_autoselect_argv(self):
@@ -264,7 +267,7 @@ class TestAetherBridge(unittest.TestCase):
             },
         )
         self.assertEqual(status, 200)
-        expected_argv = ["ani-cli", "Cowboy Bebop"]
+        expected_argv = ["ani-cli", "--no-detach", "Cowboy Bebop"]
         self.assertEqual(body.get("argv"), expected_argv)
 
     # ── Input Validation & Hostile Title Payloads ─────────────────────
@@ -284,8 +287,8 @@ class TestAetherBridge(unittest.TestCase):
             argv = body.get("argv", [])
             # Title MUST be the last item and exact string, never split
             self.assertEqual(argv[-1], hostile_title)
-            # Length should be exactly 4: ['ani-cli', '-S', '1', hostile_title]
-            self.assertEqual(len(argv), 4)
+            # Length should be exactly 5: ['ani-cli', '--no-detach', '-S', '1', hostile_title]
+            self.assertEqual(len(argv), 5)
 
     def test_unicode_and_japanese_titles(self):
         japanese_titles = [

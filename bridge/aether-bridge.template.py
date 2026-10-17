@@ -306,13 +306,15 @@ def detect_capabilities(config=None, force_refresh=False):
 
 
 # ── Terminal Launch Execution ────────────────────────────────────────
-def launch_in_terminal(argv, capabilities, config):
+def launch_in_terminal(argv, capabilities, config, extra_env=None):
     term_info = capabilities.get("terminal", {})
     term_name = term_info.get("detected")
     custom_cmd = config.get("terminal_command")
 
     if custom_cmd:
         popen_kwargs = {"env": os.environ.copy()}
+        if extra_env:
+            popen_kwargs["env"].update(extra_env)
         if sys.platform == "win32":
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -717,9 +719,38 @@ class AetherBridgeHandler(http.server.BaseHTTPRequestHandler):
             # Construct argv
             argv = [ani_path]
 
+            # On Windows, use our HLS proxy wrapper for VLC instead of -v flag
+            # VLC can't forward --http-referrer to HLS segment requests (403 errors)
+            # Our wrapper starts a local proxy that adds proper Referer headers
+            vlc_extra_env = None
             if player == "vlc":
-                argv.append("-v")
-            elif player == "mpv":
+                if sys.platform == "win32":
+                    # Use ANI_CLI_PLAYER to point to our custom VLC wrapper
+                    bridge_dir = os.path.dirname(os.path.abspath(__file__))
+                    wrapper_path = os.path.join(bridge_dir, "bridge", "aether-vlc-player.sh")
+                    if not os.path.isfile(wrapper_path):
+                        # Try sibling directory layout
+                        wrapper_path = os.path.join(bridge_dir, "aether-vlc-player.sh")
+                    if os.path.isfile(wrapper_path):
+                        # Convert to MSYS path for Git Bash
+                        msys_wrapper = wrapper_path.replace("\\", "/")
+                        # Replace drive letter: C:/... -> /c/...
+                        if len(msys_wrapper) >= 2 and msys_wrapper[1] == ":":
+                            msys_wrapper = "/" + msys_wrapper[0].lower() + msys_wrapper[2:]
+                        vlc_extra_env = {
+                            "ANI_CLI_PLAYER": msys_wrapper,
+                            "AETHER_HLS_PROXY": os.path.join(os.path.dirname(wrapper_path), "hls_proxy.py"),
+                        }
+                        # Don't pass -v: it would override ANI_CLI_PLAYER back to "vlc.exe".
+                        # ani-cli's *vlc* case matches because our wrapper path contains "vlc".
+                    else:
+                        # Fallback: use -v directly (may get 403 on HLS)
+                        sys.stderr.write(f"[WARN] VLC wrapper not found at {wrapper_path}, using -v flag directly\n")
+                        argv.append("-v")
+                else:
+                    argv.append("-v")
+
+            if player == "mpv":
                 argv.append("--no-detach")
 
             if quality != "auto" and flags.get("quality"):
@@ -759,7 +790,7 @@ class AetherBridgeHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             try:
-                launch_in_terminal(argv, caps, self.server.config)
+                launch_in_terminal(argv, caps, self.server.config, extra_env=vlc_extra_env)
             except Exception as e:
                 self.send_json({"ok": False, "error": f"Failed to launch terminal: {e}"}, status=500)
                 return
@@ -835,7 +866,28 @@ def install_autostart():
         sys.stdout.write(f"  Startup Launcher: {vbs_path}\n")
         sys.stdout.write(f"  Target Script:    {script_path}\n")
         sys.stdout.write(f"  Interpreter:      {pythonw} (Silent background execution)\n\n")
-        sys.stdout.write("The bridge will now start automatically in the background whenever you log in.\n")
+
+        # Check if bridge is already running, if not launch it immediately
+        port = CONFIGURED_PORT if isinstance(CONFIGURED_PORT, int) else 47619
+        already_running = False
+        try:
+            import urllib.request
+            req = urllib.request.Request(f"http://127.0.0.1:{port}/ping")
+            with urllib.request.urlopen(req, timeout=1):
+                already_running = True
+        except Exception:
+            already_running = False
+
+        if not already_running:
+            try:
+                subprocess.Popen(["wscript.exe", vbs_path])
+                sys.stdout.write("  Status:           Started immediately in background\n")
+            except Exception:
+                pass
+        else:
+            sys.stdout.write("  Status:           Bridge is already running\n")
+
+        sys.stdout.write("\nThe bridge is active and will start automatically in the background whenever you log in.\n")
         sys.stdout.write("To remove autostart later, run: python aether-bridge.py --uninstall-autostart\n")
         return 0
 
