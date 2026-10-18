@@ -131,7 +131,10 @@ export async function apiReq(endpoint, opts = {}, retries = 3, backoffMs = 500) 
           continue;
         }
         setSyncStatus('error');
-        throw new Error(msg);
+        const err = new Error(msg);
+        err.status = res.status;
+        err.code = json.error?.code;
+        throw err;
       }
 
       hideErrorBanner();
@@ -142,6 +145,10 @@ export async function apiReq(endpoint, opts = {}, retries = 3, backoffMs = 500) 
       return json.data !== undefined ? json.data : json;
     } catch (err) {
       lastError = err;
+      // Do not retry client errors (4xx) such as duplicate conflicts or validation errors
+      if (err.status && err.status < 500) {
+        break;
+      }
       if (attempt < retries && err.name !== 'AbortError' && err.message !== 'Network offline') {
         showErrorBanner(`⚠ Request failed. Retrying (${attempt}/${retries})...`);
         await new Promise(r => setTimeout(r, backoffMs * Math.pow(2, attempt - 1)));
@@ -151,7 +158,7 @@ export async function apiReq(endpoint, opts = {}, retries = 3, backoffMs = 500) 
 
   setSyncStatus('error');
   const errText = lastError?.message || '';
-  if (errText && !errText.includes('Authentication required') && !errText.includes('401')) {
+  if (errText && !errText.includes('Authentication required') && !errText.includes('401') && (!lastError?.status || lastError.status >= 500)) {
     showErrorBanner(`⚠ Unable to connect to Cloud API. ${errText}`);
   }
   throw lastError || new Error('Request failed after retries');

@@ -129,20 +129,37 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
     const coverImage = body.cover_image || body.coverImage || null;
     const watchUrl = body.watch_url || body.watchUrl || null;
 
-    await env.DB.prepare(`
-      INSERT INTO media (id, user_id, genre_id, title, title_en, title_jp, status, score, ep_cur, ep_tot, ep_duration, start_date, end_date, airing_day, airing_time, release_date, release_date_source, release_date_updated_at, cover_image, watch_url, mal_id, linked_group_id, linked_group_order, notes, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch());
-    `).bind(
-      id, userId, genreId, title,
-      sanitizeString(body.title_en || body.titleEn, 300) || null,
-      sanitizeString(body.title_jp || body.titleJp, 300) || null,
-      status, score, epCur, epTot, epDuration,
-      startDate, endDate, airingDay, airingTime, releaseDate, releaseDateSource, releaseDateUpdatedAt, coverImage, watchUrl,
-      malId,
-      body.linked_group_id || body.linkedGroupId || null,
-      body.linked_group_order || body.linkedGroupOrder || null,
-      notes || null
-    ).run();
+    // Check if an anime with the same MyAnimeList ID already exists in this genre
+    if (malId) {
+      const existing = await env.DB.prepare(
+        'SELECT id, title FROM media WHERE user_id = ? AND genre_id = ? AND mal_id = ? LIMIT 1;'
+      ).bind(userId, genreId, malId).first();
+      if (existing) {
+        return errorResponse('DUPLICATE_ENTRY', `An anime with this MyAnimeList ID already exists in your library: "${existing.title}" (MAL #${malId})`, requestId, 409);
+      }
+    }
+
+    try {
+      await env.DB.prepare(`
+        INSERT INTO media (id, user_id, genre_id, title, title_en, title_jp, status, score, ep_cur, ep_tot, ep_duration, start_date, end_date, airing_day, airing_time, release_date, release_date_source, release_date_updated_at, cover_image, watch_url, mal_id, linked_group_id, linked_group_order, notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch());
+      `).bind(
+        id, userId, genreId, title,
+        sanitizeString(body.title_en || body.titleEn, 300) || null,
+        sanitizeString(body.title_jp || body.titleJp, 300) || null,
+        status, score, epCur, epTot, epDuration,
+        startDate, endDate, airingDay, airingTime, releaseDate, releaseDateSource, releaseDateUpdatedAt, coverImage, watchUrl,
+        malId,
+        body.linked_group_id || body.linkedGroupId || null,
+        body.linked_group_order || body.linkedGroupOrder || null,
+        notes || null
+      ).run();
+    } catch (err) {
+      if (err.message && (err.message.includes('UNIQUE constraint') || err.message.includes('SQLITE_CONSTRAINT'))) {
+        return errorResponse('DUPLICATE_ENTRY', 'An item with this MyAnimeList ID already exists in your library.', requestId, 409);
+      }
+      throw err;
+    }
 
     await updateFTSIndex(env.DB, userId, id, 'media', title, notes);
 
@@ -186,7 +203,19 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
     }
     if (body.cover_image !== undefined || body.coverImage !== undefined) { updates.push('cover_image = ?'); params.push(body.cover_image ?? body.coverImage ?? null); }
     if (body.watch_url !== undefined || body.watchUrl !== undefined) { updates.push('watch_url = ?'); params.push(body.watch_url ?? body.watchUrl ?? null); }
-    if (body.mal_id !== undefined || body.malId !== undefined) { updates.push('mal_id = ?'); params.push(body.mal_id ? parseInt(body.mal_id) : (body.malId ? parseInt(body.malId) : null)); }
+    if (body.mal_id !== undefined || body.malId !== undefined) {
+      const parsedMalId = body.mal_id ? parseInt(body.mal_id) : (body.malId ? parseInt(body.malId) : null);
+      if (parsedMalId) {
+        const existing = await env.DB.prepare(
+          'SELECT id, title FROM media WHERE user_id = ? AND genre_id = (SELECT genre_id FROM media WHERE id = ? AND user_id = ?) AND mal_id = ? AND id != ? LIMIT 1;'
+        ).bind(userId, id, userId, parsedMalId, id).first();
+        if (existing) {
+          return errorResponse('DUPLICATE_ENTRY', `An anime with this MyAnimeList ID already exists in your library: "${existing.title}" (MAL #${parsedMalId})`, requestId, 409);
+        }
+      }
+      updates.push('mal_id = ?');
+      params.push(parsedMalId);
+    }
     if (body.notes !== undefined) { updates.push('notes = ?'); params.push(sanitizeString(body.notes, 5000)); }
     if (body.pinned !== undefined) { updates.push('pinned = ?'); params.push(body.pinned ? 1 : 0); }
 
@@ -195,8 +224,15 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
     updates.push('updated_at = unixepoch()');
     params.push(id, userId);
 
-    const res = await env.DB.prepare(`UPDATE media SET ${updates.join(', ')} WHERE id = ? AND user_id = ?;`).bind(...params).run();
-    if (res.meta.changes === 0) return errorResponse('NOT_FOUND', 'Media item not found', requestId, 404);
+    try {
+      const res = await env.DB.prepare(`UPDATE media SET ${updates.join(', ')} WHERE id = ? AND user_id = ?;`).bind(...params).run();
+      if (res.meta.changes === 0) return errorResponse('NOT_FOUND', 'Media item not found', requestId, 404);
+    } catch (err) {
+      if (err.message && (err.message.includes('UNIQUE constraint') || err.message.includes('SQLITE_CONSTRAINT'))) {
+        return errorResponse('DUPLICATE_ENTRY', 'An item with this MyAnimeList ID already exists in your library.', requestId, 409);
+      }
+      throw err;
+    }
 
     const updated = await env.DB.prepare('SELECT * FROM media WHERE id = ? AND user_id = ?;').bind(id, userId).first();
     await updateFTSIndex(env.DB, userId, id, 'media', updated.title, updated.notes);

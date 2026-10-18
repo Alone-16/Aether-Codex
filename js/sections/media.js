@@ -1678,6 +1678,47 @@ function saveEntry(eid) {
 
   const selectedGenre = g('f-genre');
   const isAnimeOrManga = selectedGenre === 'anime' || selectedGenre === 'manga';
+  const rawMalId = isAnimeOrManga ? (document.getElementById('f-malid')?.value || existing?.malId || null) : null;
+  const cleanMalId = rawMalId ? String(rawMalId).trim() : null;
+
+  // ── Duplicate Checks ──
+  // 1. Strict duplicate check on MyAnimeList ID
+  if (cleanMalId) {
+    const dupMal = DATA.find(x =>
+      x.id !== (eid || '') &&
+      x.genreId === selectedGenre &&
+      String(x.malId || '').trim() === cleanMalId
+    );
+    if (dupMal) {
+      const statusLabel = dupMal.status ? dupMal.status.replace(/_/g, ' ').toUpperCase() : 'IN LIBRARY';
+      showAlert(
+        `An anime with this MyAnimeList ID already exists in your library:\n\n` +
+        `"${dupMal.title}" (${statusLabel})\n` +
+        `MAL ID: #${cleanMalId}\n\n` +
+        `You cannot add the same anime twice.`,
+        { title: 'Anime Already Exists' }
+      );
+      return;
+    }
+  }
+
+  // 2. Duplicate check by title in same genre
+  const dupTitle = DATA.find(x =>
+    x.id !== (eid || '') &&
+    x.genreId === selectedGenre &&
+    x.title.trim().toLowerCase() === title.toLowerCase()
+  );
+  if (dupTitle) {
+    if (!cleanMalId || !dupTitle.malId || String(dupTitle.malId).trim() === cleanMalId) {
+      const statusLabel = dupTitle.status ? dupTitle.status.replace(/_/g, ' ').toUpperCase() : 'IN LIBRARY';
+      showAlert(
+        `"${dupTitle.title}" already exists in your ${selectedGenre} list (${statusLabel}).\n\n` +
+        `Please edit the existing entry instead of adding a duplicate.`,
+        { title: 'Anime Already Exists' }
+      );
+      return;
+    }
+  }
 
   const inputRelDate = document.getElementById('f-releasedate')?.value?.trim() || null;
   const initialRelDate = existing?.releaseDate || existing?.release_date || null;
@@ -1708,7 +1749,7 @@ function saveEntry(eid) {
     upcomingDate: inputRelDate,
     notes:g('f-notes'),
     watchUrl:document.getElementById('f-url')?.value?.trim()||null,
-    malId: isAnimeOrManga ? (document.getElementById('f-malid')?.value || existing?.malId || null) : null,
+    malId: cleanMalId,
     coverImage:document.getElementById('f-malimg')?.value || existing?.coverImage || null,
     linkedGroupId,
     linkedGroupOrder,
@@ -1735,7 +1776,12 @@ function saveEntry(eid) {
     const i = DATA.findIndex(x => x.id === eid);
     const prevEntry = DATA[i];
     DATA[i] = entry;
-    mediaApi.patch(eid, entry).catch(err => console.warn('[saveEntry Sync Fail]', err));
+    mediaApi.patch(eid, entry).catch(err => {
+      console.warn('[saveEntry Sync Fail]', err);
+      if (err.status === 409 || err.code === 'DUPLICATE_ENTRY' || (err.message && (err.message.includes('already exists') || err.message.includes('UNIQUE constraint')))) {
+        showAlert(err.message || 'An item with this MyAnimeList ID already exists in your library.', { title: 'Anime Already Exists' });
+      }
+    });
     saveData(DATA); closePanel();
     // If the card's section and genre didn't change, patch in place instead of full rebuild.
     if (prevEntry && prevEntry.status === entry.status && prevEntry.genreId === entry.genreId && MEDIA_PAGE === 'list') {
@@ -1746,7 +1792,19 @@ function saveEntry(eid) {
     toast('✓ Saved');
   } else {
     DATA.unshift(entry);
-    mediaApi.create(entry).catch(err => console.warn('[createEntry Sync Fail]', err));
+    mediaApi.create(entry).catch(err => {
+      console.warn('[createEntry Sync Fail]', err);
+      if (err.status === 409 || err.code === 'DUPLICATE_ENTRY' || (err.message && (err.message.includes('already exists') || err.message.includes('UNIQUE constraint')))) {
+        // Roll back optimistic add from DATA
+        const idx = DATA.findIndex(x => x.id === entry.id);
+        if (idx !== -1) {
+          DATA.splice(idx, 1);
+          saveData(DATA);
+          renderMediaBody();
+        }
+        showAlert(err.message || 'An item with this MyAnimeList ID already exists in your library.', { title: 'Anime Already Exists' });
+      }
+    });
     saveData(DATA); closePanel(); renderMediaBody(); toast('✓ Saved');
   }
   if (entry.malId) {
@@ -3141,6 +3199,10 @@ function _malRenderDropdown(results = [], directMatch = null) {
     return;
   }
 
+  const curGenre = document.getElementById('f-genre')?.value || 'anime';
+  const currentEditingId = (typeof PEDIT !== 'undefined' && PEDIT) ? PEDIT : null;
+  const mediaList = typeof DATA !== 'undefined' ? DATA : (globalThis.DATA || []);
+
   let html = '';
 
   if (directMatch) {
@@ -3155,11 +3217,16 @@ function _malRenderDropdown(results = [], directMatch = null) {
       ? `<img src="${esc(r.image)}" style="width:36px;height:50px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display='none'">`
       : `<div style="width:36px;height:50px;background:var(--surf3);border-radius:4px;flex-shrink:0"></div>`;
     const payload = esc(JSON.stringify(r));
+    const dmInLib = mediaList.find(x =>
+      x.id !== currentEditingId &&
+      x.genreId === curGenre &&
+      String(x.malId || '').trim() === String(r.id)
+    );
 
     html += `
       <div style="padding:6px 11px 4px;font-size:10px;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;color:var(--ac);background:rgba(var(--ac-rgb),0.07);border-bottom:1px solid rgba(var(--ac-rgb),0.15);display:flex;align-items:center;justify-content:space-between">
         <span>⚡ Exact MAL ID Match (#${r.id})</span>
-        <span style="font-size:9px;color:var(--mu);font-weight:600">Click or press Enter to autofill</span>
+        ${dmInLib ? `<span style="font-size:9px;background:rgba(251,113,133,0.18);color:#fb7185;border:1px solid rgba(251,113,133,0.35);font-weight:700;padding:1px 6px;border-radius:3px">Already in Library (${dmInLib.status.toUpperCase()})</span>` : `<span style="font-size:9px;color:var(--mu);font-weight:600">Click or press Enter to autofill</span>`}
       </div>
       <div style="display:flex;align-items:center;gap:10px;padding:9px 11px;cursor:pointer;border-bottom:1px solid var(--brd);background:rgba(var(--ac-rgb),0.03);transition:background .15s"
         onmouseenter="this.style.background='rgba(var(--ac-rgb),0.1)'"
@@ -3200,6 +3267,12 @@ function _malRenderDropdown(results = [], directMatch = null) {
         ? `<img src="${esc(r.image)}" style="width:32px;height:44px;object-fit:cover;border-radius:3px;flex-shrink:0" onerror="this.style.display='none'">`
         : `<div style="width:32px;height:44px;background:var(--surf3);border-radius:3px;flex-shrink:0"></div>`;
       const payload = esc(JSON.stringify(r));
+      const inLib = mediaList.find(x =>
+        x.id !== currentEditingId &&
+        x.genreId === curGenre &&
+        String(x.malId || '').trim() === String(r.id)
+      );
+
       return `<div style="display:flex;align-items:center;gap:9px;padding:8px 11px;cursor:pointer;border-bottom:1px solid var(--brd);transition:background .1s"
         onmouseenter="this.style.background='var(--surf3)'"
         onmouseleave="this.style.background='transparent'"
@@ -3207,7 +3280,10 @@ function _malRenderDropdown(results = [], directMatch = null) {
         onclick="_malSelect(this.dataset.payload)">
         ${thumb}
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(displayTitle)}</div>
+          <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px">
+            <span style="overflow:hidden;text-overflow:ellipsis">${esc(displayTitle)}</span>
+            ${inLib ? `<span style="font-size:9px;background:rgba(251,113,133,0.18);color:#fb7185;border:1px solid rgba(251,113,133,0.35);font-weight:700;padding:1px 5px;border-radius:3px;flex-shrink:0">In Library</span>` : ''}
+          </div>
           ${hasAltTitle ? `<div style="font-size:10px;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${esc(r.title)}</div>` : ''}
           ${meta ? `<div style="font-size:10px;color:var(--mu);margin-top:2px">${esc(meta)}</div>` : ''}
         </div>
@@ -3307,6 +3383,20 @@ function syncManualMalId(val) {
   const hiddenId = document.getElementById('f-malid');
   if (hiddenId) hiddenId.value = cleanId;
   const curGenre = document.getElementById('f-genre')?.value || 'anime';
+  const currentEditingId = (typeof PEDIT !== 'undefined' && PEDIT) ? PEDIT : null;
+  const mediaList = typeof DATA !== 'undefined' ? DATA : (globalThis.DATA || []);
+
+  if (cleanId && (curGenre === 'anime' || curGenre === 'manga')) {
+    const existing = mediaList.find(x =>
+      x.id !== currentEditingId &&
+      x.genreId === curGenre &&
+      String(x.malId || '').trim() === cleanId
+    );
+    if (existing) {
+      toast(`⚠ MAL #${cleanId} already in your library ("${existing.title}")`, '#fb7185');
+    }
+  }
+
   _renderMalBadge(cleanId, curGenre);
 }
 
@@ -3320,6 +3410,30 @@ async function fetchMalFromManualId() {
     return;
   }
   const curGenre = document.getElementById('f-genre')?.value || 'anime';
+  const currentEditingId = (typeof PEDIT !== 'undefined' && PEDIT) ? PEDIT : null;
+  const mediaList = typeof DATA !== 'undefined' ? DATA : (globalThis.DATA || []);
+
+  if (cleanId && (curGenre === 'anime' || curGenre === 'manga')) {
+    const existing = mediaList.find(x =>
+      x.id !== currentEditingId &&
+      x.genreId === curGenre &&
+      String(x.malId || '').trim() === cleanId
+    );
+    if (existing) {
+      const statusLabel = existing.status ? existing.status.replace(/_/g, ' ').toUpperCase() : 'IN LIBRARY';
+      if (typeof showAlert === 'function') {
+        showAlert(
+          `"${existing.title}" is already in your library!\n\n` +
+          `• Status: ${statusLabel}\n` +
+          `• MAL ID: #${cleanId}\n\n` +
+          `You cannot add the same anime twice.`,
+          { title: 'Anime Already Exists' }
+        );
+      }
+      return;
+    }
+  }
+
   toast(`Fetching MAL ID #${cleanId}…`);
   try {
     const anime = await fetchAnimeByMalId(cleanId, curGenre);
@@ -3346,6 +3460,32 @@ function _malSelect(rJson) {
   const r = typeof rJson === 'string' ? JSON.parse(rJson) : rJson;
   const dd = document.getElementById('mal-dropdown');
   if (dd) dd.style.display = 'none';
+
+  const selectedMalId = String(r.id || '').trim();
+  const curGenre = document.getElementById('f-genre')?.value || 'anime';
+  const currentEditingId = (typeof PEDIT !== 'undefined' && PEDIT) ? PEDIT : null;
+  const mediaList = typeof DATA !== 'undefined' ? DATA : (globalThis.DATA || []);
+
+  if (selectedMalId && (curGenre === 'anime' || curGenre === 'manga')) {
+    const existing = mediaList.find(x =>
+      x.id !== currentEditingId &&
+      x.genreId === curGenre &&
+      String(x.malId || '').trim() === selectedMalId
+    );
+    if (existing) {
+      const statusLabel = existing.status ? existing.status.replace(/_/g, ' ').toUpperCase() : 'IN LIBRARY';
+      if (typeof showAlert === 'function') {
+        showAlert(
+          `"${existing.title}" is already in your library!\n\n` +
+          `• Status: ${statusLabel}\n` +
+          `• MAL ID: #${selectedMalId}\n\n` +
+          `You cannot add the same anime twice.`,
+          { title: 'Anime Already Exists' }
+        );
+      }
+      return;
+    }
+  }
 
   const displayTitle = r.title_en || r.title;
   const searchInp = document.getElementById('mal-search-inp');
@@ -3444,7 +3584,6 @@ function _malSelect(rJson) {
   }
 
   // 5. Update MAL Linked Badge
-  const curGenre = document.getElementById('f-genre')?.value || 'anime';
   _renderMalBadge(r.id, curGenre);
 
   if (typeof toast === 'function') toast(`✓ Autofilled: ${displayTitle}`);
