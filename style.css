@@ -2275,3 +2275,154 @@ textarea.fin{resize:vertical;min-height:70px}
   }
 }
 
+/* ── UNSEEN EPISODES BADGE & READY TO WATCH DASHBOARD PANEL ── */
+.m-unseen-badge {
+  background: rgba(56, 189, 248, 0.14);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  letter-spacing: 0.3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.15);
+  transition: opacity 0.2s ease, transform 0.15s ease;
+  vertical-align: middle;
+}
+.m-unseen-badge.is-stale {
+  opacity: 0.45;
+  filter: grayscale(30%);
+}
+
+.m-dash-ready-section {
+  margin-bottom: 24px;
+}
+.m-dash-ready-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.m-dash-ready-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.m-dash-ready-cnt {
+  font-size: 11px;
+  padding: 2px 7px;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 10px;
+  color: #38bdf8;
+  font-weight: 700;
+}
+.m-dash-ready-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.m-dash-ready-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surf2);
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 10px;
+  padding: 10px 14px;
+  gap: 12px;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.m-dash-ready-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 6px 20px rgba(56, 189, 248, 0.12);
+}
+.m-dash-ready-info {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.m-dash-ready-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+.m-dash-ready-sub {
+  font-size: 11px;
+  color: #38bdf8;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.m-dash-ready-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.m-dash-ep-btn {
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.m-dash-ep-btn:hover {
+  background: #38bdf8;
+  color: #030712;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+}
+
+.m-dash-backlog-wrap {
+  margin-top: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.m-dash-backlog-summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+.m-dash-backlog-summary:hover {
+  color: #fff;
+}
+.m-dash-backlog-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.m-dash-backlog-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.m-dash-backlog-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+

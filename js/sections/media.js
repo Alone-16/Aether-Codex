@@ -26,12 +26,76 @@ function _mediaStatusClass(s) {
 }
 
 function _airBadge(e) {
+  if (e.status !== 'watching') return '';
+  const isAiring = (e.shikiStatus === 'ongoing' || isMediaAiring(e) || e.source === 'calendar' || e.cacheSource === 'calendar');
+  if (!isAiring) return '';
+
+  const nextEpAt = Number(e.nextEpAt || e.next_ep_at || 0);
+  if (nextEpAt > 0) {
+    const targetDate = new Date(nextEpAt * 1000);
+    const nowDate = new Date();
+    const diffSec = nextEpAt - Math.floor(Date.now() / 1000);
+
+    const isSameDay = targetDate.getDate() === nowDate.getDate() &&
+                      targetDate.getMonth() === nowDate.getMonth() &&
+                      targetDate.getFullYear() === nowDate.getFullYear();
+    const tomorrow = new Date(nowDate);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const isTomorrow = targetDate.getDate() === tomorrow.getDate() &&
+                       targetDate.getMonth() === tomorrow.getMonth() &&
+                       targetDate.getFullYear() === tomorrow.getFullYear();
+
+    let lbl, col;
+    if (isSameDay || (diffSec <= 0 && diffSec > -86400)) {
+      lbl = 'Airs Today!';
+      col = '#4ade80';
+    } else if (isTomorrow) {
+      lbl = 'Tomorrow';
+      col = '#fbbf24';
+    } else if (diffSec > 0) {
+      const days = Math.max(1, Math.ceil((targetDate - nowDate) / 86400000));
+      lbl = `in ${days}d`;
+      col = days <= 2 ? '#fbbf24' : 'rgba(255,255,255,.3)';
+    } else {
+      return '';
+    }
+
+    const timeStr = targetDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateStr = targetDate.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    const epPrefix = e.nextEpNo ? `Ep ${e.nextEpNo} airs ` : 'Next ep airs ';
+    return `<span class="m-air-badge" style="color:${col}" title="${esc(`${epPrefix}${dateStr} at ${timeStr}`)}">📺 ${lbl}</span>`;
+  }
+
+  // Fallback to stored schedule if available
   if (!isMediaAiring(e)) return '';
   const dNum = parseInt(e.airingDay, 10);
   const diff = (dNum - new Date().getDay() + 7) % 7;
   const lbl  = diff === 0 ? 'Airs Today!' : diff === 1 ? 'Tomorrow' : `in ${diff}d`;
   const col  = diff === 0 ? '#4ade80'     : diff === 1 ? '#fbbf24'  : 'rgba(255,255,255,.3)';
   return `<span class="m-air-badge" style="color:${col}">📺 ${lbl}</span>`;
+}
+
+function _unseenBadge(e) {
+  if (e.status !== 'watching') return '';
+  // Scope: Airing titles only (in calendar, or shiki_status 'ongoing' or active broadcast schedule)
+  const isAiring = (e.shikiStatus === 'ongoing' || isMediaAiring(e) || e.source === 'calendar' || e.cacheSource === 'calendar');
+  if (!isAiring) return '';
+
+  const released = Number.isFinite(Number(e.releasedEps)) ? Number(e.releasedEps) : 0;
+  const watched = Number.isFinite(Number(e.epCur)) ? Number(e.epCur) : 0;
+  const unseen = Math.max(0, released - watched);
+  if (unseen <= 0) return '';
+
+  const displayTxt = unseen > 99 ? '+99' : `+${unseen} new`;
+  const tooltip = `${unseen} unseen released episode${unseen > 1 ? 's' : ''} you haven't watched (Released: ${released}, Watched: ${watched})`;
+
+  // Staleness: if the last successful sync for a title is older than 24 hours, dim the badge
+  const checkedAt = Number(e.cacheCheckedAt || e.checked_at || 0);
+  const isStale = checkedAt > 0 && ((Date.now() / 1000) - checkedAt) > 86400;
+  const staleCls = isStale ? ' is-stale' : '';
+  const staleNotice = isStale ? ' (Sync older than 24h)' : '';
+
+  return `<span class="m-unseen-badge${staleCls}" id="unseen-badge-${e.id}" title="${esc(tooltip + staleNotice)}">✨ ${displayTxt}</span>`;
 }
 
 function _releaseBadge(e) {
@@ -95,6 +159,7 @@ function _renderFilterChips() {
   const chips = [
     { val:'',          lbl:'All',       col:'rgba(255,255,255,.45)' },
     { val:'watching',  lbl:'Watching',  col:'#7dd3fc' },
+    { val:'unseen',    lbl:'Unseen',    col:'#38bdf8' },
     { val:'completed', lbl:'Completed', col:'#4ade80' },
     { val:'plan',      lbl:'Planned',   col:'#a78bfa' },
     { val:'on_hold',   lbl:'On Hold',   col:'#fbbf24' },
@@ -537,20 +602,44 @@ function filteredData() {
   const fst = _mediaListStatusFilter();
   const fs  = document.getElementById('fsort')?.value || 'title';
 
+  const sortFn = (list) => {
+    if (fs === 'added') {
+      return [...list].sort((a,b) => (b.addedAt||0)-(a.addedAt||0));
+    }
+    if (fs === 'unseen') {
+      return [...list].sort((a,b) => {
+        const uA = (a.status === 'watching' && (a.shikiStatus === 'ongoing' || isMediaAiring(a) || a.source === 'calendar' || a.cacheSource === 'calendar'))
+          ? Math.max(0, (a.releasedEps ?? 0) - (a.epCur || 0)) : 0;
+        const uB = (b.status === 'watching' && (b.shikiStatus === 'ongoing' || isMediaAiring(b) || b.source === 'calendar' || b.cacheSource === 'calendar'))
+          ? Math.max(0, (b.releasedEps ?? 0) - (b.epCur || 0)) : 0;
+        return uB - uA || a.title.localeCompare(b.title);
+      });
+    }
+    return [...list].sort((a,b) => a.title.localeCompare(b.title));
+  };
+
   if (SEARCH) {
     d = d.filter(e => e.title.toLowerCase().includes(SEARCH));
-    d = fs === 'added' ? [...d].sort((a,b) => (b.addedAt||0)-(a.addedAt||0)) : [...d].sort((a,b) => a.title.localeCompare(b.title));
-    return { data:d, fst:'' };
+    return { data: sortFn(d), fst:'' };
   }
 
-  d = fs === 'added' ? [...d].sort((a,b) => (b.addedAt||0)-(a.addedAt||0)) : [...d].sort((a,b) => a.title.localeCompare(b.title));
-  return { data:d, fst };
+  if (fst === 'unseen') {
+    d = d.filter(e => {
+      if (e.status !== 'watching') return false;
+      const isAiring = (e.shikiStatus === 'ongoing' || isMediaAiring(e) || e.source === 'calendar' || e.cacheSource === 'calendar');
+      if (!isAiring) return false;
+      const unseen = Math.max(0, (e.releasedEps ?? 0) - (e.epCur || 0));
+      return unseen > 0;
+    });
+  }
+
+  return { data: sortFn(d), fst };
 }
 
 function expandRows(entries, fst) {
   const rows = [];
   entries.forEach(e => {
-    if (!fst || e.status === fst) {
+    if (!fst || fst === 'unseen' || e.status === fst) {
       rows.push({ kind:'entry', e, status:e.status, pinned: e.pinned });
     }
   });
@@ -563,7 +652,7 @@ function renderList(c) {
   const flat    = expandRows(data, fst);
   const pCount  = flat.length;
   const sortVal = document.getElementById('fsort')?.value || 'title';
-  const sortLbl = sortVal === 'added' ? 'Recently added' : 'A → Z';
+  const sortLbl = sortVal === 'added' ? 'Recently added' : sortVal === 'unseen' ? 'Unseen first' : 'A → Z';
 
   let html = `
     <div class="m-sort-add-row">
@@ -575,6 +664,7 @@ function renderList(c) {
           </button>
           <div class="m-dd-menu" id="m-sort-menu" role="listbox">
             <button type="button" class="m-dd-opt${sortVal === 'title' ? ' active' : ''}" role="option" aria-selected="${sortVal === 'title' ? 'true' : 'false'}" onclick="event.stopPropagation();setMediaSort('title')">A → Z</button>
+            <button type="button" class="m-dd-opt${sortVal === 'unseen' ? ' active' : ''}" role="option" aria-selected="${sortVal === 'unseen' ? 'true' : 'false'}" onclick="event.stopPropagation();setMediaSort('unseen')">Unseen first</button>
             <button type="button" class="m-dd-opt${sortVal === 'added' ? ' active' : ''}" role="option" aria-selected="${sortVal === 'added' ? 'true' : 'false'}" onclick="event.stopPropagation();setMediaSort('added')">Recently added</button>
           </div>
         </div>
@@ -608,7 +698,7 @@ function renderList(c) {
 
   SO.forEach(s => {
     const rows = byS[s]; if (!rows?.length) return;
-    const meta = STATUS_META[s] || { lbl:s, cls:'not_started' };
+    const meta = (fst === 'unseen' && s === 'watching') ? { lbl:'Unseen Episodes', cls:'watching' } : (STATUS_META[s] || { lbl:s, cls:'not_started' });
     const coll = COLLAPSED[GACTIVE + '_' + s];
     // Generate slots instead of full card HTML
     const slotHtmls = rows.map((r, i) => {
@@ -669,6 +759,24 @@ function linkedPartIsComplete(e) {
 // Keep for backward compat — returns null for flat entries
 function activeSeason(e) { return null; }
 
+/* ── Watch / Launcher hook ── */
+function _renderCardLauncherHook(e) {
+  let out = '';
+  try {
+    const isAnime = (e.genreId || e.genre_id) === 'anime' || (e.type || '').toLowerCase() === 'anime';
+    const isDesktop = typeof window.AetherPlugins?.isDesktopEnvironment === 'function'
+      ? window.AetherPlugins.isDesktopEnvironment()
+      : (typeof navigator !== 'undefined' && !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent) && (window.innerWidth || 0) >= 768);
+    if (isAnime && isDesktop && window.AetherPlugins?.isPluginEnabled?.('aniLauncher')) {
+      out += `<button class="m-act-btn m-act-terminal m-act-ani-launcher" data-id="${e.id}" data-action="ani-launcher" title="Watch in terminal"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg></button>`;
+    }
+  } catch (err) {}
+  if (e.status === 'watching' && e.watchUrl) {
+    out += `<button class="m-act-btn m-act-play" onclick="event.stopPropagation();window.open('${esc(e.watchUrl)}','_blank')" title="Watch">▶</button>`;
+  }
+  return out;
+}
+
 /* ── Card rows ── */
 function rowHtml(e, idx = 0) {
   const isA    = PANEL && PEDIT === e.id;
@@ -703,6 +811,7 @@ function rowHtml(e, idx = 0) {
           ${rewBadge}
           ${grpBadge}
           ${_airBadge(e)}
+          ${_unseenBadge(e)}
           ${_releaseBadge(e)}
           ${(e.genreId === 'anime' && !e.malId) ? `<span class="m-badge-unlinked" title="Anime not linked to MAL/AniList — click to link" onclick="event.stopPropagation();quickLinkMal('${e.id}')" style="font-size:9px;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.25);border-radius:3px;padding:1px 4px;cursor:pointer">⚠️ Unlinked</span>` : ''}
         </div>
@@ -720,20 +829,7 @@ function rowHtml(e, idx = 0) {
           </div>` : ''}
           <button class="m-act-btn m-act-more" onclick="openEdit('${e.id}')" title="Edit">⋯</button>
           <button class="m-act-btn m-act-del" onclick="askDel('${e.id}')" title="Delete">✕</button>
-          ${(() => {
-            try {
-              const isAnime = (e.genreId || e.genre_id) === 'anime' || (e.type || '').toLowerCase() === 'anime';
-              const isDesktop = typeof window.AetherPlugins?.isDesktopEnvironment === 'function'
-                ? window.AetherPlugins.isDesktopEnvironment()
-                : (typeof navigator !== 'undefined' && !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent) && (window.innerWidth || 0) >= 768);
-              if (isAnime && isDesktop && window.AetherPlugins?.isPluginEnabled?.('aniLauncher')) {
-                return `<button class="m-act-btn m-act-terminal m-act-ani-launcher" data-id="${e.id}" data-action="ani-launcher" title="Watch in terminal"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg></button>`;
-              }
-            } catch (err) {}
-            return '';
-          })()}
-          ${e.status === 'watching' && e.watchUrl
-            ? `<button class="m-act-btn m-act-play" onclick="event.stopPropagation();window.open('${esc(e.watchUrl)}','_blank')" title="Watch">▶</button>` : ''}
+          ${_renderCardLauncherHook(e)}
         </div>
       </div>
     </div>
@@ -780,10 +876,14 @@ function quickTlEp(eid, idx, delta) { quickEp(eid, delta); }
 /**
  * _patchCardInPlace(e)
  * Surgically updates only the parts of card #row-{e.id} that quickEp changes:
- * episode counter text, progress bar width, and status colour / class.
+ * episode counter text, progress bar width, status colour / class, and unseen badge.
+ * Also surgically updates dashboard ready-to-watch and backlog panels in place.
  * Never touches any other card. Never triggers a staggered CSS re-animation.
  */
 function _patchCardInPlace(e) {
+  // Always update Dashboard ready-to-watch / backlog panel if elements are in DOM
+  _patchDashReadyRowInPlace(e);
+
   const card = document.getElementById('row-' + e.id);
   if (!card) return; // card is in an unloaded slot — slot will render fresh when scrolled into view
 
@@ -813,6 +913,111 @@ function _patchCardInPlace(e) {
   // Update status tag text/class
   const stag = card.querySelector('.m-stag');
   if (stag) stag.outerHTML = _mstag(e.status);
+
+  // Update air badge if present
+  const existingAirBadge = card.querySelector('.m-air-badge');
+  const newAirBadgeHtml = _airBadge(e);
+  if (existingAirBadge) {
+    if (newAirBadgeHtml) {
+      existingAirBadge.outerHTML = newAirBadgeHtml;
+    } else {
+      existingAirBadge.remove();
+    }
+  }
+
+  // Update or remove unseen badge
+  const existingBadge = card.querySelector('.m-unseen-badge');
+  const newBadgeHtml = _unseenBadge(e);
+  if (existingBadge) {
+    if (newBadgeHtml) {
+      existingBadge.outerHTML = newBadgeHtml;
+    } else {
+      existingBadge.remove();
+    }
+  } else if (newBadgeHtml) {
+    const meta = card.querySelector('.m-card-meta');
+    if (meta) {
+      const airBadge = meta.querySelector('.m-air-badge');
+      if (airBadge && airBadge.nextSibling) {
+        airBadge.insertAdjacentHTML('afterend', newBadgeHtml);
+      } else {
+        meta.insertAdjacentHTML('beforeend', newBadgeHtml);
+      }
+    }
+  }
+}
+
+/**
+ * _patchDashReadyRowInPlace(e)
+ * Surgically updates ready-to-watch and backlog rows on the Anime dashboard without a full re-render.
+ */
+function _patchDashReadyRowInPlace(e) {
+  const readyRow = document.getElementById('dash-ready-row-' + e.id);
+  if (readyRow) {
+    const released = Number(readyRow.dataset.released || e.releasedEps || 0);
+    const watched = Number(e.epCur || 0);
+    const unseen = Math.max(0, released - watched);
+
+    if (unseen <= 0) {
+      readyRow.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+      readyRow.style.opacity = '0';
+      readyRow.style.transform = 'scale(0.95)';
+      setTimeout(() => {
+        readyRow.remove();
+        const cntEl = document.getElementById('dash-ready-cnt');
+        if (cntEl) {
+          const count = Math.max(0, (parseInt(cntEl.textContent, 10) || 1) - 1);
+          cntEl.textContent = count;
+          if (count === 0) {
+            const grid = document.getElementById('dash-ready-grid');
+            if (grid) grid.innerHTML = '<div style="color:var(--mu);font-size:12px;grid-column:1/-1">All caught up on airing shows!</div>';
+          }
+        }
+      }, 200);
+    } else {
+      const startEp = watched + 1;
+      const displayCount = unseen > 99 ? '+99' : `${unseen} new`;
+      const rangeTxt = startEp === released ? `ep ${released}` : `ep ${startEp} to ${released}`;
+      const epSpan = document.getElementById('dash-ready-ep-' + e.id);
+      if (epSpan) {
+        epSpan.textContent = `✨ ${displayCount} (${rangeTxt})`;
+      }
+      const btn = readyRow.querySelector('.m-dash-ep-btn');
+      if (btn) btn.title = `Mark episode ${startEp} watched`;
+    }
+  }
+
+  const backlogRow = document.getElementById('dash-backlog-row-' + e.id);
+  if (backlogRow) {
+    const released = Number(backlogRow.dataset.released || e.releasedEps || e.epTot || 0);
+    const watched = Number(e.epCur || 0);
+    const behind = Math.max(0, released - watched);
+
+    if (behind <= 0) {
+      backlogRow.style.transition = 'opacity 0.2s ease';
+      backlogRow.style.opacity = '0';
+      setTimeout(() => {
+        backlogRow.remove();
+        const summaryEl = document.getElementById('dash-backlog-summary');
+        const listEl = document.getElementById('dash-backlog-list');
+        if (summaryEl && listEl) {
+          const remaining = listEl.querySelectorAll('.m-dash-backlog-row').length;
+          if (remaining > 0) {
+            summaryEl.textContent = `Backlog (${remaining})`;
+          } else {
+            document.getElementById('dash-backlog-wrap')?.remove();
+          }
+        }
+      }, 200);
+    } else {
+      const epSpan = document.getElementById('dash-backlog-ep-' + e.id);
+      if (epSpan) {
+        epSpan.textContent = `${behind} behind (${watched}/${released} eps)`;
+      }
+      const btn = backlogRow.querySelector('.m-dash-ep-btn');
+      if (btn) btn.title = `Mark episode ${watched + 1} watched`;
+    }
+  }
 }
 
 /**
@@ -862,6 +1067,101 @@ function _patchCardFull(e) {
 /* ═══════════════════════════════
    DASHBOARD
 ═══════════════════════════════ */
+function _renderReadyToWatchSection(d) {
+  if (GACTIVE !== 'anime') return '';
+
+  const watchingList = d.filter(e => e.status === 'watching');
+  const airingReady = [];
+  const backlogItems = [];
+
+  watchingList.forEach(e => {
+    const isAiring = (e.shikiStatus === 'ongoing' || isMediaAiring(e) || e.source === 'calendar' || e.cacheSource === 'calendar');
+    const released = Number.isFinite(Number(e.releasedEps)) ? Number(e.releasedEps) : (Number.isFinite(Number(e.epTot)) ? Number(e.epTot) : 0);
+    const watched = Number.isFinite(Number(e.epCur)) ? Number(e.epCur) : 0;
+    const unseen = Math.max(0, released - watched);
+
+    if (unseen > 0) {
+      if (isAiring) {
+        airingReady.push({ entry: e, unseen, released, watched });
+      } else {
+        backlogItems.push({ entry: e, unseen, released, watched });
+      }
+    }
+  });
+
+  // Sort airing by smallest backlog first so catch-up-able ones surface first
+  airingReady.sort((a, b) => a.unseen - b.unseen || a.entry.title.localeCompare(b.entry.title));
+  backlogItems.sort((a, b) => a.unseen - b.unseen || a.entry.title.localeCompare(b.entry.title));
+
+  if (!airingReady.length && !backlogItems.length) return '';
+
+  const readyCardsHtml = airingReady.map(({ entry: e, unseen, released, watched }) => {
+    const startEp = watched + 1;
+    const displayCount = unseen > 99 ? '+99' : `${unseen} new`;
+    const rangeTxt = startEp === released ? `ep ${released}` : `ep ${startEp} to ${released}`;
+    const fullTooltip = `${unseen} unseen released episode${unseen > 1 ? 's' : ''} (Watched: ${watched}, Released: ${released})`;
+
+    const checkedAt = Number(e.cacheCheckedAt || e.checked_at || 0);
+    const isStale = checkedAt > 0 && ((Date.now() / 1000) - checkedAt) > 86400;
+
+    return `
+      <div class="m-dash-ready-card" id="dash-ready-row-${e.id}" data-id="${e.id}" data-released="${released}">
+        <div class="m-dash-ready-info" onclick="openDetail('${e.id}')">
+          <div class="m-dash-ready-name" title="${esc(e.title)}">${esc(e.title)}</div>
+          <div class="m-dash-ready-sub" title="${esc(fullTooltip)}">
+            <span id="dash-ready-ep-${e.id}">✨ ${displayCount} (${rangeTxt})</span>
+            ${isStale ? '<span class="m-unseen-badge is-stale" style="font-size:9px;padding:0 4px">stale</span>' : ''}
+          </div>
+        </div>
+        <div class="m-dash-ready-actions" onclick="event.stopPropagation()">
+          <button class="m-dash-ep-btn" onclick="quickEp('${e.id}', 1)" title="Mark episode ${watched + 1} watched">+1</button>
+          ${_renderCardLauncherHook(e)}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const backlogRowsHtml = backlogItems.map(({ entry: e, unseen, released, watched }) => {
+    const fullTooltip = `${unseen} episode${unseen > 1 ? 's' : ''} behind (Watched: ${watched}/${released})`;
+    return `
+      <div class="m-dash-backlog-row" id="dash-backlog-row-${e.id}" data-id="${e.id}" data-released="${released}">
+        <div class="m-dash-ready-info" onclick="openDetail('${e.id}')">
+          <div class="m-dash-ready-name" title="${esc(e.title)}">${esc(e.title)}</div>
+          <div class="m-dash-ready-sub" style="color:var(--mu)" title="${esc(fullTooltip)}">
+            <span id="dash-backlog-ep-${e.id}">${unseen} behind (${watched}/${released} eps)</span>
+          </div>
+        </div>
+        <div class="m-dash-ready-actions" onclick="event.stopPropagation()">
+          <button class="m-dash-ep-btn" onclick="quickEp('${e.id}', 1)" title="Mark episode ${watched + 1} watched">+1</button>
+          ${_renderCardLauncherHook(e)}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="m-dash-ready-section" id="dash-ready-section">
+      <div class="m-dash-ready-header">
+        <div class="m-dash-ready-title">
+          <span>⚡ Ready to Watch</span>
+          <span class="m-dash-ready-cnt" id="dash-ready-cnt">${airingReady.length}</span>
+        </div>
+      </div>
+      <div class="m-dash-ready-grid" id="dash-ready-grid">
+        ${readyCardsHtml || '<div style="color:var(--mu);font-size:12px;grid-column:1/-1">All caught up on airing shows!</div>'}
+      </div>
+      ${backlogItems.length ? `
+        <details class="m-dash-backlog-wrap" id="dash-backlog-wrap">
+          <summary class="m-dash-backlog-summary" id="dash-backlog-summary">Backlog (${backlogItems.length})</summary>
+          <div class="m-dash-backlog-list" id="dash-backlog-list">
+            ${backlogRowsHtml}
+          </div>
+        </details>
+      ` : ''}
+    </div>
+  `;
+}
+
 function renderDash(c) {
   const d   = DATA.filter(e => e.genreId === GACTIVE);
   const cnt = {}; d.forEach(e => { cnt[e.status] = (cnt[e.status]||0)+1; });
@@ -904,6 +1204,7 @@ function renderDash(c) {
     <div class="m-dash-grid">
       ${stats.map((s,i) => `<div class="m-dash-stat m-card-lazy m-card-visible" style="--card-glow:rgba(var(--ac-rgb),0.5);animation-delay:${i * 0.03}s" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')"><div class="m-dash-stat-v">${s.v}</div><div class="m-dash-stat-l">${s.l}</div></div>`).join('')}
     </div>
+    ${_renderReadyToWatchSection(d)}
     <div class="m-dash-time-row">
       <div class="m-dash-tc m-card-lazy m-card-visible" style="--card-glow:rgba(var(--ac-rgb),0.5);animation-delay:0.25s" onmousemove="_throttledTilt(this,event)" onmouseleave="this.style.setProperty('--rot-x','0deg');this.style.setProperty('--rot-y','0deg')">
         <div class="m-dash-tc-v">${fmtMin(totalMin)}</div>

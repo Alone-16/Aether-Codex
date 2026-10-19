@@ -5,6 +5,7 @@
 import { successResponse, errorResponse } from '../utils/response.js';
 import { sanitizeString, validateRating, validateInt, validateEnum, ALLOWED_MEDIA_STATUSES } from '../utils/validation.js';
 import { updateFTSIndex, removeFTSIndex } from '../services/d1.js';
+import { syncAiringCache, refreshAiringCacheForMalId } from '../services/airing_cache.js';
 
 export async function handleMediaRoutes(request, env, ctx, requestId, pathname, claims) {
   const method = request.method;
@@ -13,7 +14,18 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
   // ── GET /v1/media — Fetch all media entries for user ──
   if (method === 'GET' && pathname === '/v1/media') {
     const { results } = await env.DB.prepare(
-      `SELECT * FROM media WHERE user_id = ? ORDER BY updated_at DESC;`
+      `SELECT m.*,
+              ac.released_eps,
+              ac.total_eps AS cache_total_eps,
+              ac.next_ep_no,
+              ac.next_ep_at,
+              ac.shiki_status,
+              ac.source AS cache_source,
+              ac.checked_at AS cache_checked_at
+       FROM media m
+       LEFT JOIN airing_cache ac ON (m.genre_id = 'anime' AND m.mal_id = ac.mal_id)
+       WHERE m.user_id = ? 
+       ORDER BY m.updated_at DESC;`
     ).bind(userId).all();
 
     // Fetch rewatches for user's media
@@ -54,51 +66,22 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
       addedAt: m.created_at,
       updatedAt: m.updated_at,
       rewatches: rewatchMap[m.id] || [],
+      // Airing Cache fields
+      releasedEps: m.released_eps ?? null,
+      nextEpNo: m.next_ep_no ?? null,
+      nextEpAt: m.next_ep_at ?? null,
+      shikiStatus: m.shiki_status ?? null,
+      cacheSource: m.cache_source ?? null,
+      cacheCheckedAt: m.cache_checked_at ?? null,
     }));
 
     return successResponse(items, requestId);
   }
 
-  // ── POST /v1/media/sync-airing — Check and update airing statuses from MAL ──
-  if (method === 'POST' && pathname === '/v1/media/sync-airing') {
-    const { results } = await env.DB.prepare(
-      `SELECT id, title, status, ep_cur, ep_tot, airing_day, airing_time, mal_id 
-       FROM media 
-       WHERE user_id = ? AND genre_id = 'anime' AND mal_id IS NOT NULL 
-         AND (airing_day IS NOT NULL AND airing_day != 'finished');`
-    ).bind(userId).all();
-
-    const updated = [];
-    const malClientId = env.MAL_CLIENT_ID || '97959fe7356ea8135f3b19db28cb941f';
-
-    for (const item of (results || [])) {
-      try {
-        const numericId = String(item.mal_id).replace(/\D/g, '');
-        if (!numericId) continue;
-
-        const malRes = await fetch(
-          `https://api.myanimelist.net/v2/anime/${numericId}?fields=id,status,num_episodes,end_date`,
-          { headers: { 'X-MAL-CLIENT-ID': malClientId } }
-        );
-        if (!malRes.ok) continue;
-
-        const data = await malRes.json();
-        if (data && data.status === 'finished_airing') {
-          const newEpTot = (!item.ep_tot || item.ep_tot === 0 || item.ep_tot === '0') && data.num_episodes ? String(data.num_episodes) : item.ep_tot;
-          const newEndDate = !item.end_date && data.end_date ? data.end_date : item.end_date;
-
-          await env.DB.prepare(
-            `UPDATE media SET airing_day = 'finished', airing_time = NULL, ep_tot = ?, end_date = ?, updated_at = unixepoch() WHERE id = ? AND user_id = ?;`
-          ).bind(newEpTot, newEndDate, item.id, userId).run();
-
-          updated.push({ id: item.id, title: item.title, status: data.status });
-        }
-      } catch (e) {
-        console.warn(`[Sync-Airing Worker Error for ${item.title}]`, e.message);
-      }
-    }
-
-    return successResponse({ checked: (results || []).length, updated }, requestId);
+  // ── POST /v1/airing/sync — Trigger Shikimori Airing Cache sync (manual / cron / test) ──
+  if (method === 'POST' && (pathname === '/v1/airing/sync' || pathname === '/v1/media/sync-airing')) {
+    const syncRes = await syncAiringCache(env, { forceBatch: true });
+    return successResponse(syncRes, requestId);
   }
 
   // ── POST /v1/media — Create new media entry ──
@@ -163,8 +146,42 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
 
     await updateFTSIndex(env.DB, userId, id, 'media', title, notes);
 
-    const item = await env.DB.prepare('SELECT * FROM media WHERE id = ? AND user_id = ?;').bind(id, userId).first();
-    return successResponse(item, requestId, 201);
+    const item = await env.DB.prepare(`
+      SELECT m.*,
+             ac.released_eps,
+             ac.total_eps AS cache_total_eps,
+             ac.next_ep_no,
+             ac.next_ep_at,
+             ac.shiki_status,
+             ac.source AS cache_source,
+             ac.checked_at AS cache_checked_at
+      FROM media m
+      LEFT JOIN airing_cache ac ON (m.genre_id = 'anime' AND m.mal_id = ac.mal_id)
+      WHERE m.id = ? AND m.user_id = ?;
+    `).bind(id, userId).first();
+
+    if (genreId === 'anime' && status === 'watching' && malId && ctx && typeof ctx.waitUntil === 'function') {
+      ctx.waitUntil(refreshAiringCacheForMalId(env, malId));
+    }
+
+    const mappedItem = item ? {
+      ...item,
+      genreId: item.genre_id,
+      titleEn: item.title_en,
+      titleJp: item.title_jp,
+      epCur: item.ep_cur,
+      epTot: item.ep_tot,
+      epDuration: item.ep_duration,
+      malId: item.mal_id,
+      releasedEps: item.released_eps ?? null,
+      nextEpNo: item.next_ep_no ?? null,
+      nextEpAt: item.next_ep_at ?? null,
+      shikiStatus: item.shiki_status ?? null,
+      cacheSource: item.cache_source ?? null,
+      cacheCheckedAt: item.cache_checked_at ?? null,
+    } : null;
+
+    return successResponse(mappedItem, requestId, 201);
   }
 
   // ── PATCH /v1/media/:id — Partial update ──
@@ -234,10 +251,43 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
       throw err;
     }
 
-    const updated = await env.DB.prepare('SELECT * FROM media WHERE id = ? AND user_id = ?;').bind(id, userId).first();
+    const updated = await env.DB.prepare(`
+      SELECT m.*,
+             ac.released_eps,
+             ac.total_eps AS cache_total_eps,
+             ac.next_ep_no,
+             ac.next_ep_at,
+             ac.shiki_status,
+             ac.source AS cache_source,
+             ac.checked_at AS cache_checked_at
+      FROM media m
+      LEFT JOIN airing_cache ac ON (m.genre_id = 'anime' AND m.mal_id = ac.mal_id)
+      WHERE m.id = ? AND m.user_id = ?;
+    `).bind(id, userId).first();
     await updateFTSIndex(env.DB, userId, id, 'media', updated.title, updated.notes);
 
-    return successResponse(updated, requestId);
+    if (updated.genre_id === 'anime' && updated.status === 'watching' && updated.mal_id && ctx && typeof ctx.waitUntil === 'function') {
+      ctx.waitUntil(refreshAiringCacheForMalId(env, updated.mal_id));
+    }
+
+    const mappedUpdated = updated ? {
+      ...updated,
+      genreId: updated.genre_id,
+      titleEn: updated.title_en,
+      titleJp: updated.title_jp,
+      epCur: updated.ep_cur,
+      epTot: updated.ep_tot,
+      epDuration: updated.ep_duration,
+      malId: updated.mal_id,
+      releasedEps: updated.released_eps ?? null,
+      nextEpNo: updated.next_ep_no ?? null,
+      nextEpAt: updated.next_ep_at ?? null,
+      shikiStatus: updated.shiki_status ?? null,
+      cacheSource: updated.cache_source ?? null,
+      cacheCheckedAt: updated.cache_checked_at ?? null,
+    } : null;
+
+    return successResponse(mappedUpdated, requestId);
   }
 
   // ── DELETE /v1/media/:id — Delete media entry ──

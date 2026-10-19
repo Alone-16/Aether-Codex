@@ -16,4 +16,5 @@ import_data.sql
 __pycache__/
 *.pyc
 restart-bridge.*
-
+scripts/feasibility/
+scripts/unseen/

@@ -19,6 +19,7 @@ import { handleHealthRoute } from './routes/health.js';
 import { handlePublicShareRoutes } from './routes/public_share.js';
 import { handleNotificationsRoutes } from './routes/notifications.js';
 import { runUpcomingSyncCron } from './services/cron.js';
+import { syncAiringCache } from './services/airing_cache.js';
 import { upsertUser } from './services/d1.js';
 import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
 import manifestJSON from '__STATIC_CONTENT_MANIFEST';
@@ -370,7 +371,21 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(runUpcomingSyncCron(env));
+    ctx.waitUntil((async () => {
+      // 1. Run Shikimori Airing Cache sync
+      try {
+        await syncAiringCache(env);
+      } catch (err) {
+        console.error('[Scheduled Airing Sync Error]', err);
+      }
+
+      // 2. Run Sequel Discovery & Date Sync cron
+      try {
+        await runUpcomingSyncCron(env);
+      } catch (err) {
+        console.error('[Scheduled Upcoming Cron Error]', err);
+      }
+    })());
   },
 };
 
