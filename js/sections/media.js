@@ -858,8 +858,26 @@ function quickEp(id, delta) {
 
   // ── Targeted DOM patch: avoid rebuilding the entire list ──
   // If status changed the card moves to a different section → full rebuild.
+  // When filtering by 'unseen' and unseen drops to 0 → smooth removal.
   // Otherwise patch only the affected card's text and progress bar in place.
-  if (e.status !== prevStatus) {
+  const fstEff = _mediaListStatusFilter();
+  const unseenNow = (e.status === 'watching' && (e.shikiStatus === 'ongoing' || isMediaAiring(e) || e.source === 'calendar' || e.cacheSource === 'calendar'))
+    ? Math.max(0, (e.releasedEps ?? 0) - (e.epCur || 0)) : 0;
+
+  if (fstEff === 'unseen' && unseenNow <= 0) {
+    const card = document.getElementById('row-' + e.id);
+    const slot = card?.closest('.m-card-slot') || card?.parentElement || document.getElementById('slot-' + e.id);
+    if (slot) {
+      slot.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+      slot.style.opacity = '0';
+      slot.style.transform = 'scale(0.95)';
+      setTimeout(() => {
+        renderMediaBody();
+      }, 200);
+    } else {
+      renderMediaBody();
+    }
+  } else if (e.status !== prevStatus) {
     renderMediaBody();
   } else {
     _patchCardInPlace(e);
@@ -877,6 +895,7 @@ function quickTlEp(eid, idx, delta) { quickEp(eid, delta); }
  * _patchCardInPlace(e)
  * Surgically updates only the parts of card #row-{e.id} that quickEp changes:
  * episode counter text, progress bar width, status colour / class, and unseen badge.
+ * Also keeps the virtual-scroll _slotCache in sync so scrolling never restores stale HTML.
  * Also surgically updates dashboard ready-to-watch and backlog panels in place.
  * Never touches any other card. Never triggers a staggered CSS re-animation.
  */
@@ -885,7 +904,14 @@ function _patchCardInPlace(e) {
   _patchDashReadyRowInPlace(e);
 
   const card = document.getElementById('row-' + e.id);
-  if (!card) return; // card is in an unloaded slot — slot will render fresh when scrolled into view
+  const slot = card ? (card.closest('.m-card-slot') || card.parentElement || document.getElementById('slot-' + e.id)) : document.getElementById('slot-' + e.id);
+
+  if (!card) {
+    if (slot) {
+      _slotCache.set(slot, { html: rowHtml(e, 0), height: _slotCache.get(slot)?.height ?? 62 });
+    }
+    return; // card is in an unloaded slot — cache updated for when it scrolls into view
+  }
 
   const rCur = parseInt(e.epCur || 0);
   const rTot = parseInt(e.epTot || 0);
@@ -944,6 +970,12 @@ function _patchCardInPlace(e) {
         meta.insertAdjacentHTML('beforeend', newBadgeHtml);
       }
     }
+  }
+
+  // ── SYNC VIRTUAL SCROLL CACHE ──
+  // Ensure that when the card scrolls out of view and back in, the slot re-hydrates with the updated HTML!
+  if (slot) {
+    _slotCache.set(slot, { html: rowHtml(e, 0), height: _slotCache.get(slot)?.height ?? slot.offsetHeight ?? 62 });
   }
 }
 
