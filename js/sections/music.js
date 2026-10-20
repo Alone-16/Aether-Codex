@@ -615,13 +615,28 @@ function openSongDetail(id) {
 
 function delSong(id) {
   showConfirm('Remove this song from your library?', () => {
-    const _mdel=MDATA.find(x=>x.id===id);
+    const _mdel = MDATA.find(x => x.id === id);
     MDATA = MDATA.filter(x => x.id !== id);
-    if(_mdel && typeof addLog === 'function') addLog('music','Removed',_mdel.title,_mdel.artist||null);
+    if (_mdel && typeof addLog === 'function') addLog('music', 'Removed', _mdel.title, _mdel.artist || null);
     saveMusic(MDATA);
     closePanel();
     renderMusicBody();
-    if(_mdel) toastWithUndo(_mdel.title,()=>{MDATA.push(_mdel);saveMusic(MDATA);renderMusicBody();});
+
+    const api = typeof musicApi !== 'undefined' ? musicApi : window.musicApi;
+    if (typeof api?.delete === 'function') {
+      api.delete(id).catch(err => console.warn('[delSong Sync Fail]', err));
+    }
+
+    if (_mdel) {
+      toastWithUndo(_mdel.title, () => {
+        MDATA.push(_mdel);
+        saveMusic(MDATA);
+        if (typeof api?.create === 'function') {
+          api.create(_mdel).catch(err => console.warn('[undoSong Sync Fail]', err));
+        }
+        renderMusicBody();
+      });
+    }
   }, { title: 'Remove Song?', okLabel: 'Remove' });
 }
 

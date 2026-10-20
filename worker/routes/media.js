@@ -292,9 +292,11 @@ export async function handleMediaRoutes(request, env, ctx, requestId, pathname, 
 
   // ── DELETE /v1/media/:id — Delete media entry ──
   if (method === 'DELETE' && pathname.startsWith('/v1/media/')) {
-    const id = pathname.split('/')[3];
+    const rawId = pathname.split('/')[3];
+    const id = rawId ? decodeURIComponent(rawId) : null;
     if (!id) return errorResponse('INVALID_INPUT', 'Media ID required', requestId, 400);
 
+    await env.DB.prepare('DELETE FROM rewatches WHERE media_id = ? AND user_id = ?;').bind(id, userId).run().catch(() => {});
     const res = await env.DB.prepare('DELETE FROM media WHERE id = ? AND user_id = ?;').bind(id, userId).run();
     if (res.meta.changes === 0) return errorResponse('NOT_FOUND', 'Media item not found', requestId, 404);
 

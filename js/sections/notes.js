@@ -13,8 +13,8 @@ import {
 const NOTES_KEY     = 'ac_v4_notes';
 const NOTES_ENC_KEY = 'ac_v4_notes_enc';
 
-function loadNotes()  { return window.NDATA || []; }
-function saveNotes(d) { NDATA = d; window.NDATA = d; }
+function loadNotes()  { return (window.NDATA && window.NDATA.length) ? window.NDATA : (typeof ls !== 'undefined' && ls.get ? ls.get(NOTES_KEY) : null) || window.NDATA || []; }
+function saveNotes(d) { NDATA = d; window.NDATA = d; if (typeof ls !== 'undefined' && ls.set) ls.set(NOTES_KEY, d); }
 
 let NDATA          = loadNotes();
 window.NDATA = NDATA;
@@ -483,6 +483,10 @@ function quickNoteDelete(id) {
       document.getElementById('poverlay').classList.remove('show');
       document.getElementById('content').classList.remove('pushed');
       document.getElementById('poverlay').onclick = closePanel;
+    }
+    const api = typeof notesApi !== 'undefined' ? notesApi : window.notesApi;
+    if (typeof api?.delete === 'function') {
+      api.delete(id).catch(err => console.warn('[deleteNote Sync Fail]', err));
     }
     renderNotesBody();
   }, {title:'Delete Note?', okLabel:'Delete'});

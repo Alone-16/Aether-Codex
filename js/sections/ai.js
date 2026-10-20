@@ -247,6 +247,14 @@ function handleAIAction(action) {
       showConfirm(`Delete "${e.title}" permanently?`, () => {
         DATA = DATA.filter(x => x.id !== e.id);
         saveData(DATA);
+        const api = typeof mediaApi !== 'undefined' ? mediaApi : window.mediaApi;
+        if (typeof api?.delete === 'function') {
+          api.delete(e.id).catch(err => console.warn('[AI deleteEntry Sync Fail]', err));
+        }
+        if (e.malId && typeof window._deleteMALListEntry === 'function') {
+          window._deleteMALListEntry(e, true).catch(() => {});
+        }
+        if (typeof addLog === 'function') addLog('media', 'Deleted', e.title);
         if (CURRENT === 'media') render();
         appendAIMessage('assistant', `✓ "${e.title}" has been deleted.`);
       }, { title: 'Delete Entry?', okLabel: 'Delete' });

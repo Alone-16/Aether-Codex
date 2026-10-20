@@ -520,6 +520,10 @@ function askDelLink(id) {
     if (fromPublic) {
       VDATA_PUBLIC = VDATA_PUBLIC.filter(l => l.id !== id);
       saveVaultPublic(VDATA_PUBLIC);
+      const api = typeof vaultApi !== 'undefined' ? vaultApi : window.vaultApi;
+      if (typeof api?.delete === 'function') {
+        api.delete(id).catch(err => console.warn('[deleteVault Sync Fail]', err));
+      }
     } else if (fromPrivate) {
       VDATA_PRIVATE = VDATA_PRIVATE.filter(l => l.id !== id);
       if (VAULT_CRYPTO_KEY) saveVaultEncrypted(VDATA_PRIVATE);
@@ -534,6 +538,10 @@ function askDelLink(id) {
       if (fromPublic) {
         VDATA_PUBLIC.push(_vdel);
         saveVaultPublic(VDATA_PUBLIC);
+        const api = typeof vaultApi !== 'undefined' ? vaultApi : window.vaultApi;
+        if (typeof api?.create === 'function') {
+          api.create(_vdel).catch(err => console.warn('[undoVault Sync Fail]', err));
+        }
       } else {
         VDATA_PRIVATE.push(_vdel);
         if (VAULT_CRYPTO_KEY) saveVaultEncrypted(VDATA_PRIVATE);

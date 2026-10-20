@@ -6,7 +6,7 @@ import {
   toast, showConfirm, showAlert, closePanel,
   _cardSlot, _hydrateSlots, _observeCardVisibility, _throttledTilt, _slotCache
 } from '../shared/ui.js';
-import { esc } from '../shared/utils.js';
+import { esc, setDATA, saveData, DATA, MEDIA_PAGE, ls, SO, COLLAPSED, GACTIVE, gbyid, K, PANEL, PEDIT, setPANEL, setPEDIT } from '../shared/utils.js';
 import { mediaApi } from '../shared/api.js';
 import { isMediaAiring } from '../shared/airing_sync.js';
 import { parseReleaseDate, localDay, daysUntil, formatReleaseDate } from '../shared/date_utils.js';
@@ -1349,7 +1349,7 @@ function renderIncomplete(c) {
    PANEL MANAGEMENT
 ═══════════════════════════════ */
 function openPanel(mode, id) {
-  PANEL = mode; PEDIT = id;
+  setPANEL(mode); setPEDIT(id);
   document.getElementById('rpanel')?.classList.add('open');
   document.getElementById('poverlay')?.classList.add('show');
   document.getElementById('content')?.classList.add('pushed');
@@ -2223,6 +2223,53 @@ async function _syncMALListEntry(entry, silent = false) {
   return data.updated || json.success || false;
 }
 
+async function _deleteMALListEntry(entry, silent = true) {
+  if (!entry?.malId) return false;
+  if (!_isMALGenre(entry)) return false;
+  if (!window.SETTINGS?.malRefreshToken) return false;
+
+  const malId = String(entry.malId);
+  const gid = (entry.genreId || '').toLowerCase();
+  const isManga = gid.includes('manga') || gid.includes('manhwa');
+
+  const payload = {
+    access_token:  window.SETTINGS?.malAccessToken || null,
+    refresh_token: window.SETTINGS?.malRefreshToken || null,
+    type: isManga ? 'manga' : 'anime',
+  };
+
+  try {
+    const workerUrl = (typeof window !== 'undefined' && window._WORKER) ? String(window._WORKER).replace(/\/$/, '') : 'https://aether-codex.nadeempubgmobile2-0.workers.dev';
+    const res = await fetch(`${workerUrl}/mal/list/${encodeURIComponent(malId)}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok && res.status !== 404) {
+      const errData = await res.json().catch(() => null);
+      throw new Error(errData?.error_description || errData?.error?.message || errData?.error || 'MAL deletion failed');
+    }
+    const json = await res.json().catch(() => ({}));
+    const data = json.data || json;
+    if (data.access_token && window.SETTINGS) {
+      window.SETTINGS.malAccessToken = data.access_token;
+      if (data.expires_in) window.SETTINGS.malTokenExpiry = String(Date.now() + (data.expires_in - 60) * 1000);
+    }
+    if (data.refresh_token && window.SETTINGS) {
+      window.SETTINGS.malRefreshToken = data.refresh_token;
+    }
+    if (typeof window.saveSettings === 'function' && window.SETTINGS) {
+      window.saveSettings(window.SETTINGS);
+    }
+    if (!silent) toast(`✓ Removed from MAL: ${entry.title}`, 'var(--ac)');
+    return true;
+  } catch (err) {
+    console.warn('[MAL] delete error:', err);
+    if (!silent) toast(`MAL removal failed: ${err.message}`, '#fb7185');
+    return false;
+  }
+}
+
 function _malSyncQuiet(e) {
   if (!e?.malId || !window.SETTINGS?.malRefreshToken) return;
   if (!_isMALGenre(e)) return;
@@ -2306,13 +2353,67 @@ async function syncMediaEntryFromMal(id) {
 }
 
 function askDel(id) {
-  showConfirm('This entry will be permanently deleted.',()=>{
-    const _del=DATA.find(x=>x.id===id);
-    DATA=DATA.filter(x=>x.id!==id);
-    if(_del) addLog('media','Deleted',_del.title);
-    saveData(DATA); closePanel(); renderMediaBody();
-    if(_del) toastWithUndo(_del.title,()=>{DATA.push(_del);saveData(DATA);renderMediaBody();});
-  },{title:'Delete Entry?',okLabel:'Delete'});
+  showConfirm('This entry will be permanently deleted.', () => {
+    const list = (typeof window !== 'undefined' && window.DATA) || DATA;
+    const _del = list.find(x => x.id === id);
+    const updated = list.filter(x => x.id !== id);
+    setDATA(updated);
+    if (_del && typeof addLog === 'function') addLog('media', 'Deleted', _del.title);
+
+    // If deleting an entry that was part of a linked group with only 1 remaining member, ungroup that member
+    if (_del?.linkedGroupId) {
+      const remaining = updated.filter(e => e.linkedGroupId === _del.linkedGroupId);
+      if (remaining.length === 1) {
+        remaining[0].linkedGroupId = null;
+        remaining[0].linkedGroupOrder = null;
+        remaining[0].updatedAt = Date.now();
+        const api = (typeof window !== 'undefined' && window.mediaApi) || mediaApi;
+        if (typeof api?.patch === 'function') {
+          api.patch(remaining[0].id, { linked_group_id: null, linked_group_order: null, linkedGroupId: null, linkedGroupOrder: null }).catch(() => {});
+        }
+      }
+    }
+
+    saveData(updated);
+    closePanel();
+    renderMediaBody();
+
+    // Persist deletion to Cloudflare backend API
+    const api = (typeof window !== 'undefined' && window.mediaApi) || mediaApi;
+    if (typeof api?.delete === 'function') {
+      api.delete(id).catch(err => {
+        console.warn('[deleteEntry Sync Fail]', err);
+      });
+    }
+
+    // Automatically remove from MyAnimeList if linked and MAL is connected
+    if (_del?.malId) {
+      _deleteMALListEntry(_del, false).catch(err => {
+        console.warn('[MAL Auto Delete Fail]', err);
+      });
+    }
+
+    if (_del) {
+      toastWithUndo(_del.title, () => {
+        const cur = (typeof window !== 'undefined' && window.DATA) || DATA;
+        cur.push(_del);
+        setDATA(cur);
+        saveData(cur);
+        if (typeof api?.create === 'function') {
+          api.create(_del).catch(err => {
+            console.warn('[undoDelete Sync Fail]', err);
+          });
+        }
+        // If restored via Undo and linked to MAL, re-sync back to MyAnimeList
+        if (_del.malId) {
+          _syncMALListEntry(_del, true).catch(err => {
+            console.warn('[MAL Undo Restore Fail]', err);
+          });
+        }
+        renderMediaBody();
+      });
+    }
+  }, { title: 'Delete Entry?', okLabel: 'Delete' });
 }
 
 /* ═══════════════════════════════
@@ -3797,7 +3898,7 @@ function _malSelect(rJson) {
   const selectedMalId = String(r.id || '').trim();
   const curGenre = document.getElementById('f-genre')?.value || 'anime';
   const currentEditingId = (typeof PEDIT !== 'undefined' && PEDIT) ? PEDIT : null;
-  const mediaList = typeof DATA !== 'undefined' ? DATA : (globalThis.DATA || []);
+  const mediaList = (typeof globalThis !== 'undefined' && Array.isArray(globalThis.DATA)) ? globalThis.DATA : ((typeof window !== 'undefined' && Array.isArray(window.DATA)) ? window.DATA : (typeof DATA !== 'undefined' ? DATA : []));
 
   if (selectedMalId && (curGenre === 'anime' || curGenre === 'manga')) {
     const existing = mediaList.find(x =>
@@ -3982,7 +4083,7 @@ if (typeof window !== 'undefined') {
 
   // MAL
   malBulkSyncAll, malSearchInput, malSearchKeydown, clearMalSearchInput,
-  fetchMalFromInput, fetchAnimeByMalId, _syncMALListEntry, syncMediaEntryFromMal,
+  fetchMalFromInput, fetchAnimeByMalId, _syncMALListEntry, _deleteMALListEntry, syncMediaEntryFromMal,
   runLinkedMigrationV3, _malSelect, toggleMalSearchByGenre,
   toggleManualMalId, syncManualMalId, fetchMalFromManualId, unlinkMalId,
   _buildMalBadgeHtml, _renderMalBadge,
@@ -4009,5 +4110,7 @@ export {
   _observeCardVisibility,
   _throttledTilt,
   _slotCache,
+  askDel,
+  _deleteMALListEntry,
 };
 

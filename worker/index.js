@@ -298,6 +298,96 @@ export default {
         }, requestId);
       }
 
+      // 4.6 MAL User List Status Delete Proxy (DELETE /mal/list/:id)
+      if (request.method === 'DELETE' && pathname.startsWith('/mal/list/')) {
+        const malId = pathname.split('/mal/list/')[1];
+        if (!malId || isNaN(Number(malId))) return errorResponse('INVALID_ID', 'Provide numeric MAL ID', requestId, 400);
+
+        let body = {};
+        try { body = await request.json(); } catch (e) { }
+
+        let accessToken = body.access_token || '';
+        let refreshToken = body.refresh_token || '';
+
+        // If access token missing or expired, attempt auto-refresh
+        if (!accessToken && refreshToken) {
+          const formParams = new URLSearchParams({
+            client_id: malClientId,
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token'
+          });
+          if (malClientSecret) formParams.append('client_secret', malClientSecret);
+
+          const refreshRes = await fetch('https://myanimelist.net/v1/oauth2/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formParams
+          });
+          if (refreshRes.ok) {
+            const refData = await refreshRes.json();
+            accessToken = refData.access_token;
+            refreshToken = refData.refresh_token || refreshToken;
+          }
+        }
+
+        if (!accessToken) {
+          return errorResponse('MAL_AUTH_REQUIRED', 'Access token required to delete MAL entry', requestId, 401);
+        }
+
+        const isManga = body.type === 'manga' || body.is_manga === true;
+        const targetUrl = isManga
+          ? `https://api.myanimelist.net/v2/manga/${malId}/my_list_status`
+          : `https://api.myanimelist.net/v2/anime/${malId}/my_list_status`;
+
+        let malRes = await fetch(targetUrl, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          }
+        });
+
+        // Retry with auto-refreshed token if 401 Unauthorized
+        if (malRes.status === 401 && refreshToken) {
+          const refreshParams = new URLSearchParams({
+            client_id: malClientId,
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token'
+          });
+          if (malClientSecret) refreshParams.append('client_secret', malClientSecret);
+
+          const refreshRes = await fetch('https://myanimelist.net/v1/oauth2/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: refreshParams
+          });
+          if (refreshRes.ok) {
+            const refData = await refreshRes.json();
+            accessToken = refData.access_token;
+            refreshToken = refData.refresh_token || refreshToken;
+
+            malRes = await fetch(targetUrl, {
+              method: 'DELETE',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+              }
+            });
+          }
+        }
+
+        // 404 indicates item was not in user's list on MAL, which is treated as success (already removed)
+        if (!malRes.ok && malRes.status !== 404) {
+          const malData = await malRes.json().catch(() => ({}));
+          return errorResponse('MAL_DELETE_ERROR', malData.message || malData.error || 'MAL delete failed', requestId, malRes.status);
+        }
+
+        return successResponse({
+          deleted: true,
+          mal_id: malId,
+          access_token: accessToken,
+          refresh_token: refreshToken
+        }, requestId);
+      }
+
       // 5. Gemini AI Generate Endpoint (Preserved)
       if (request.method === 'POST' && (pathname === '/ai/generate' || pathname === '/gemini_ai')) {
         if (!env.GEMINI_API_KEY) return errorResponse('NO_KEY', 'Gemini API key not configured on Worker', requestId, 500);

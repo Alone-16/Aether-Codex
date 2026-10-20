@@ -1374,7 +1374,22 @@ function askDelGame(id) {
     GPANEL = null; GPEDIT = null;
     closePanel();
     renderGamesBody();
-    if (_gdel) toastWithUndo(_gdel.title, () => { GDATA.push(_gdel); saveGames(GDATA); renderGamesBody(); });
+
+    const api = typeof gamesApi !== 'undefined' ? gamesApi : window.gamesApi;
+    if (typeof api?.delete === 'function') {
+      api.delete(id).catch(err => console.warn('[deleteGame Sync Fail]', err));
+    }
+
+    if (_gdel) {
+      toastWithUndo(_gdel.title, () => {
+        GDATA.push(_gdel);
+        saveGames(GDATA);
+        if (typeof api?.create === 'function') {
+          api.create(_gdel).catch(err => console.warn('[undoGame Sync Fail]', err));
+        }
+        renderGamesBody();
+      });
+    }
   }, { title: 'Delete Game?', okLabel: 'Delete' });
 }
 

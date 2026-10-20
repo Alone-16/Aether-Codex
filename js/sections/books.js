@@ -479,7 +479,22 @@ function askDelBook(id) {
     BPANEL = null; BPEDIT = null;
     closePanel();
     renderBooksBody();
-    if (_bdel) toastWithUndo(_bdel.title, () => { BDATA.push(_bdel); saveBooks(BDATA); renderBooksBody(); });
+
+    const api = typeof booksApi !== 'undefined' ? booksApi : window.booksApi;
+    if (typeof api?.delete === 'function') {
+      api.delete(id).catch(err => console.warn('[deleteBook Sync Fail]', err));
+    }
+
+    if (_bdel) {
+      toastWithUndo(_bdel.title, () => {
+        BDATA.push(_bdel);
+        saveBooks(BDATA);
+        if (typeof api?.create === 'function') {
+          api.create(_bdel).catch(err => console.warn('[undoBook Sync Fail]', err));
+        }
+        renderBooksBody();
+      });
+    }
   }, { title: 'Delete Book?', okLabel: 'Delete' });
 }
 

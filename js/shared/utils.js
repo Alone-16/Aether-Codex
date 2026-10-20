@@ -102,9 +102,9 @@ export function setFDRG(v)         { FDRG       = v; window.FDRG       = v; }
 
 export function saveData(d) {
   setDATA(d);
-  debounce('save_media', async () => {
-    // Media section mutations handled via mediaApi in media.js
-  }, 800);
+  ls.set(K.DATA, d);
+  ls.setStr(K.SAVED, String(Date.now()));
+  scheduleDriveSync('media');
 }
 
 export function saveGenres(g) {

@@ -226,16 +226,52 @@ async function boot() {
   if (getAccessToken()) {
     try {
       await Promise.all([
-        mediaApi.getAll().then(d => { if (Array.isArray(d)) (typeof window.setDATA === 'function' ? window.setDATA(d) : window.DATA = d); }).catch(() => {}),
-        gamesApi.getAll().then(d => { if (Array.isArray(d)) (typeof window.setGDATA === 'function' ? window.setGDATA(d) : window.GDATA = d); }).catch(() => {}),
-        booksApi.getAll().then(d => { if (Array.isArray(d)) (typeof window.setBDATA === 'function' ? window.setBDATA(d) : window.BDATA = d); }).catch(() => {}),
-        musicApi.getAll().then(d => {
-          if (d.tracks) (typeof window.setMDATA === 'function' ? window.setMDATA(d.tracks) : window.MDATA = d.tracks);
-          if (d.playlists) (typeof window.setMPLAYLISTS === 'function' ? window.setMPLAYLISTS(d.playlists) : window.MPLAYLISTS = d.playlists);
+        mediaApi.getAll().then(d => {
+          if (Array.isArray(d)) {
+            (typeof window.setDATA === 'function' ? window.setDATA(d) : window.DATA = d);
+            if (typeof ls !== 'undefined' && ls.set) ls.set(K.DATA, d);
+          }
         }).catch(() => {}),
-        notesApi.getAll().then(d => { if (Array.isArray(d)) (typeof window.setNDATA === 'function' ? window.setNDATA(d) : window.NDATA = d); }).catch(() => {}),
-        vaultApi.getAll().then(d => { if (Array.isArray(d)) (typeof window.setVDATA_PUBLIC === 'function' ? window.setVDATA_PUBLIC(d) : window.VDATA_PUBLIC = d); }).catch(() => {}),
-        logsApi.getAll().then(d => { if (Array.isArray(d)) window.LDATA = d; }).catch(() => {}),
+        gamesApi.getAll().then(d => {
+          if (Array.isArray(d)) {
+            (typeof window.setGDATA === 'function' ? window.setGDATA(d) : window.GDATA = d);
+            if (typeof ls !== 'undefined' && ls.set) ls.set('ac_v4_games', d);
+          }
+        }).catch(() => {}),
+        booksApi.getAll().then(d => {
+          if (Array.isArray(d)) {
+            (typeof window.setBDATA === 'function' ? window.setBDATA(d) : window.BDATA = d);
+            if (typeof ls !== 'undefined' && ls.set) ls.set('ac_v4_books', d);
+          }
+        }).catch(() => {}),
+        musicApi.getAll().then(d => {
+          if (d.tracks) {
+            (typeof window.setMDATA === 'function' ? window.setMDATA(d.tracks) : window.MDATA = d.tracks);
+            if (typeof ls !== 'undefined' && ls.set) ls.set('ac_v4_music', d.tracks);
+          }
+          if (d.playlists) {
+            (typeof window.setMPLAYLISTS === 'function' ? window.setMPLAYLISTS(d.playlists) : window.MPLAYLISTS = d.playlists);
+            if (typeof ls !== 'undefined' && ls.set) ls.set('ac_v4_music_playlists', d.playlists);
+          }
+        }).catch(() => {}),
+        notesApi.getAll().then(d => {
+          if (Array.isArray(d)) {
+            (typeof window.setNDATA === 'function' ? window.setNDATA(d) : window.NDATA = d);
+            if (typeof ls !== 'undefined' && ls.set) ls.set('ac_v4_notes', d);
+          }
+        }).catch(() => {}),
+        vaultApi.getAll().then(d => {
+          if (Array.isArray(d)) {
+            (typeof window.setVDATA_PUBLIC === 'function' ? window.setVDATA_PUBLIC(d) : window.VDATA_PUBLIC = d);
+            if (typeof ls !== 'undefined' && ls.set) ls.set('ac_v4_vault_public', d);
+          }
+        }).catch(() => {}),
+        logsApi.getAll().then(d => {
+          if (Array.isArray(d)) {
+            window.LDATA = d;
+            if (typeof ls !== 'undefined' && ls.set) ls.set('ac_v4_log', d);
+          }
+        }).catch(() => {}),
         settingsApi.get().then(d => {
           if (d.settings) {
             const curLocal = (typeof window.ls?.get === 'function' ? window.ls.get('ac_v4_settings') : null) || {};
